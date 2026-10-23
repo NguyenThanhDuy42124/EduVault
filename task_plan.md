@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 3: Thiết lập Cấu trúc Thư mục & Môi trường Dự án (ĐÃ HOÀN TẤT VÀ KIỂM THỬ THÀNH CÔNG)
+Phase 4: Triển khai Smart Contract & EVM Testing
 
 ---
 
@@ -31,15 +31,15 @@ Phase 3: Thiết lập Cấu trúc Thư mục & Môi trường Dự án (ĐÃ HO
 ---
 
 ### Phase 2: Thiết kế Kiến trúc & Đặc tả Kỹ thuật (Tập trung trong `findings.md`)
-- [x] Task 2.1: Sơ đồ kiến trúc Mermaid và luồng thành phần (Mục 2 trong `findings.md`).
-- [x] Task 2.2: Ranh giới dữ liệu và nguồn dữ liệu chuẩn - Source of Truth (Mục 3 trong `findings.md`).
-- [x] Task 2.3: Mô hình ký giao dịch Web2.5 Custodial Relayer / Admin Signer (Mục 4 trong `findings.md`).
-- [x] Task 2.4: Tiền cọc mô phỏng & Quy tắc phạt quá hạn rõ ràng (Mục 5 trong `findings.md`).
-- [x] Task 2.5: Xử lý cạnh tranh & Chống đặt trùng với MySQL Pessimistic Lock (Mục 6 trong `findings.md`).
-- [x] Task 2.6: Xử lý Dual-write & Background Reconciliation Worker (Mục 7 trong `findings.md`).
-- [x] Task 2.7: Cấu trúc CSDL MySQL DDL chi tiết 5 bảng (Mục 8 trong `findings.md`).
-- [x] Task 2.8: Đặc tả Smart Contract `EquipmentLending.sol` (Mục 9 trong `findings.md`).
-- [x] Task 2.9: Danh mục REST API endpoints cốt lõi (Mục 10 trong `findings.md`).
+- [x] Task 2.1: Sơ đồ kiến trúc Mermaid và luồng thành phần (Mục 3 trong `findings.md`).
+- [x] Task 2.2: Ranh giới dữ liệu và nguồn dữ liệu chuẩn - Source of Truth (Mục 4 trong `findings.md`).
+- [x] Task 2.3: Mô hình ký giao dịch Web2.5 Custodial Relayer / Admin Signer (Mục 5 trong `findings.md`).
+- [x] Task 2.4: Tiền cọc mô phỏng & Quy tắc phạt quá hạn rõ ràng (Mục 6 trong `findings.md`).
+- [x] Task 2.5: Xử lý cạnh tranh & Chống đặt trùng với MySQL Pessimistic Lock (Mục 7 trong `findings.md`).
+- [x] Task 2.6: Xử lý Dual-write & Background Reconciliation Worker (Mục 8 trong `findings.md`).
+- [x] Task 2.7: Cấu trúc CSDL MySQL DDL chi tiết 5 bảng (Mục 9 trong `findings.md`).
+- [x] Task 2.8: Đặc tả Smart Contract `EquipmentLending.sol` (Mục 10 trong `findings.md`).
+- [x] Task 2.9: Danh mục REST API endpoints cốt lõi (Mục 11 trong `findings.md`).
 - **Status:** complete
 
 ---
@@ -55,79 +55,88 @@ Phase 3: Thiết lập Cấu trúc Thư mục & Môi trường Dự án (ĐÃ HO
 ---
 
 ### Phase 4: Triển khai Smart Contract & EVM Testing
-- [ ] Task 4.1: Viết Smart Contract `EquipmentLending.sol` hoàn chỉnh (OpenZeppelin Ownable, Simulated Deposit Accounting).
-- [ ] Task 4.2: Viết Hardhat test suite (kiểm thử 100% case: duyệt, bàn giao, trả máy, hủy đơn, phạt quá hạn, từ chối trái phép).
-- [ ] Task 4.3: Viết script deploy và seed dữ liệu mẫu trên local EVM.
-- [ ] Task 4.4: Export ABI sang backend.
-- **Status:** pending
-
----
-
-### Phase 4: Triển khai Smart Contract & EVM Testing
-- [ ] Task 4.1: Viết Smart Contract `EquipmentLending.sol` (OpenZeppelin Ownable, Simulated Deposit).
-- [ ] Task 4.2: Viết Hardhat test suite (kiểm thử 100% case: duyệt, bàn giao, trả máy, hủy đơn, phạt quá hạn, từ chối trái phép).
-- [ ] Task 4.3: Viết script deploy và seed dữ liệu mẫu trên local EVM.
-- [ ] Task 4.4: Export ABI sang backend.
+- [ ] Task 4.1: Hoàn thiện Smart Contract `EquipmentLending.sol` (OpenZeppelin Ownable, Simulated Deposit Accounting, Mutex khóa thiết bị `activeEquipmentLoan`, sự kiện đầy đủ, logic phạt tự động).
+- [ ] Task 4.2: Xây dựng Hardhat test suite toàn diện (kiểm thử 100% case: Deployment & Ownership, Standard On-time Return, Overdue 10%/50%, Damaged/Lost 100% Forfeit, Cancellation Submitted/Approved, Revert khi Active, Mutex chống đặt trùng, Revert khi trùng Loan ID).
+- [ ] Task 4.3: Viết script deploy contract `scripts/deploy.cjs` và lưu địa chỉ contract sau khi deploy lên Hardhat local node.
+- [ ] Task 4.4: Export ABI và Contract Address sang backend (`backend/app/core/contracts/`).
 - **Status:** pending
 
 ---
 
 ### Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
-- [ ] Task 5.1: Xây dựng Model SQLAlchemy và Alembic migration trên MySQL.
-- [ ] Task 5.2: Triển khai Auth Service (JWT, bcrypt, phân quyền ADMIN / BORROWER).
-- [ ] Task 5.3: Triển khai Equipment CRUD với Pessimistic Lock (`SELECT ... FOR UPDATE`).
-- [ ] Task 5.4: Triển khai Web3.py Blockchain Service (gọi contract, ký giao dịch, kiểm tra receipt).
-- [ ] Task 5.5: Triển khai các API mượn trả (Request, Approve, Handover, Return, Cancel).
-- [ ] Task 5.6: Triển khai API kiểm toán và Background Reconciliation Worker.
-- [ ] Task 5.7: Viết automated test Pytest cho API backend.
+- [ ] Task 5.1: Xây dựng Model SQLAlchemy hoàn chỉnh (5 bảng: `User`, `Equipment`, `LendingRequest`, `BlockchainTransaction`, `AuditLog`) bao gồm các cột an toàn `failed_login_count`, `locked_until`, `updated_at`.
+- [ ] Task 5.2: Khởi tạo và chạy Alembic migration để tạo bảng thực tế trên MySQL database `equipment_lending_db`.
+- [ ] Task 5.3: Triển khai Auth Service: băm mật khẩu `bcrypt`, sinh JWT HS256 (30 phút), kiểm soát đăng nhập sai (khóa 15 phút sau 5 lần sai), cơ chế RBAC với `Depends(require_role)`.
+- [ ] Task 5.4: Triển khai API quản lý tài khoản: `POST /api/v1/auth/login`, `GET /api/v1/users/me`, `POST /api/v1/admin/users`, `GET /api/v1/admin/users`.
+- [ ] Task 5.5: Triển khai Equipment CRUD với cơ chế khóa dòng MySQL Pessimistic Lock (`SELECT ... FOR UPDATE`) chống tranh chấp mượn.
+- [ ] Task 5.6: Triển khai Web3.py Blockchain Service: kết nối Hardhat RPC, ký giao dịch với Custodial Relayer, đọc trạng thái contract, bắt sự kiện và xử lý receipt.
+- [ ] Task 5.7: Triển khai đầy đủ API vòng đời mượn trả:
+  - `POST /api/v1/loans/request` (Sinh viên gửi đơn)
+  - `POST /api/v1/loans/{id}/approve` (Admin duyệt + đẩy on-chain)
+  - `POST /api/v1/loans/{id}/reject` (Admin từ chối)
+  - `POST /api/v1/loans/{id}/handover` (Admin bàn giao + khóa cọc on-chain)
+  - `POST /api/v1/loans/{id}/return` (Admin nhận lại máy + tính phạt/cọc on-chain)
+  - `POST /api/v1/loans/{id}/cancel` (Hủy đơn + giải phóng Mutex on-chain)
+- [ ] Task 5.8: Triển khai Background Reconciliation Worker và API `/api/v1/audit/reconcile` tự động đối soát và khôi phục lệch trạng thái giữa MySQL và Smart Contract.
+- [ ] Task 5.9: Viết script `scripts/seed.py` nạp dữ liệu mẫu ban đầu (1 Admin, 3 Sinh viên, 8 Thiết bị thuộc các danh mục khác nhau).
+- [ ] Task 5.10: Xây dựng bộ kiểm thử tự động Pytest cho toàn bộ API Backend.
 - **Status:** pending
 
 ---
 
 ### Phase 6: Triển khai Frontend (React + TypeScript + Vite)
-- [ ] Task 6.1: Dựng API Client, Auth Context và Protected Route.
-- [ ] Task 6.2: Giao diện Đăng nhập & Chuyển đổi vai trò demo.
-- [ ] Task 6.3: Giao diện Danh mục thiết bị & Chi tiết.
-- [ ] Task 6.4: Giao diện Sinh viên (Form mượn, danh sách thiết bị đang mượn, lịch sử, cọc).
-- [ ] Task 6.5: Giao diện Quản lý kho (Duyệt đơn, xác nhận bàn giao, kiểm tra máy khi trả).
-- [ ] Task 6.6: Giao diện Tra cứu Blockchain Audit (xem transaction hash, trạng thái xác thực).
+- [ ] Task 6.1: Cấu hình Axios Client (kèm interceptor tự động gán Bearer Token), Auth Context quản lý trạng thái đăng nhập và Protected Route theo quyền (ADMIN / BORROWER).
+- [ ] Task 6.2: Xây dựng Layout chuẩn (Header, Navigation, nút chuyển đổi nhanh tài khoản demo Admin/Sinh viên, hiển thị thông tin người dùng).
+- [ ] Task 6.3: Giao diện Đăng nhập (`/login`) với form chuẩn và 2 nút Quick Fill tài khoản demo.
+- [ ] Task 6.4: Giao diện Danh mục thiết bị (`/` hoặc `/equipment`): tìm kiếm, bộ lọc theo danh mục và trạng thái, thẻ hiển thị cấu hình, tiền cọc, nút đăng ký mượn.
+- [ ] Task 6.5: Giao diện Modal/Form đăng ký mượn: chọn ngày bàn giao dự kiến, hạn trả, hiển thị tóm tắt quy định tiền cọc và phạt trễ hạn.
+- [ ] Task 6.6: Giao diện Sinh viên (`/my-loans`): danh sách đơn mượn cá nhân, Stepper tiến trình mượn trả trực quan, trạng thái tiền cọc, nút hủy đơn khi chưa nhận máy.
+- [ ] Task 6.7: Giao diện Quản lý kho (`/admin/loans`): bảng điều khiển phân tab (Chờ duyệt, Đang mượn, Đã hoàn tất), modal duyệt đơn, modal xác nhận bàn giao, modal trả máy kèm đánh giá tình trạng và tính phạt tức thì.
+- [ ] Task 6.8: Giao diện Quản trị kho thiết bị (`/admin/inventory`): thêm thiết bị mới, chuyển trạng thái bảo trì/sẵn sàng.
+- [ ] Task 6.9: Giao diện Kiểm toán Blockchain (`/audit`): bảng theo dõi block và transaction hash, công cụ đối soát tính toàn vẹn (Verify Loan) so khớp giữa MySQL và Smart Contract, nút kích hoạt đối soát tự động.
 - **Status:** pending
 
 ---
 
 ### Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ
-- [ ] Task 7.1: Chạy quy trình mẫu mượn trả hoàn chỉnh end-to-end.
-- [ ] Task 7.2: Kiểm thử các trường hợp biên (cạnh tranh đặt trùng, hủy đơn, trả quá hạn, phạt hỏng máy).
-- [ ] Task 7.3: Kiểm thử cơ chế phục hồi khi node EVM hoặc MySQL gặp gián đoạn.
+- [ ] Task 7.1: Chạy kịch bản luồng mượn trả chuẩn từ A-Z (Sinh viên tạo đơn -> Admin duyệt -> Bàn giao -> Trả đúng hạn -> Hoàn cọc 100%).
+- [ ] Task 7.2: Kiểm thử các kịch bản ngoại lệ:
+  - Trả máy trễ hạn <= 24h (khấu trừ phạt 10%).
+  - Trả máy trễ hạn > 24h (khấu trừ phạt 50%).
+  - Báo hỏng thiết bị (khấu trừ 100% cọc vào quỹ trường).
+  - Báo mất thiết bị (khấu trừ 100% cọc + khóa tài khoản).
+  - Cạnh tranh đặt trùng cùng thiết bị (kiểm tra MySQL lock & Smart Contract Mutex).
+  - Hủy đơn khi đã duyệt (kiểm tra giải phóng Mutex on-chain).
+- [ ] Task 7.3: Kiểm thử cơ chế phục hồi (Crash Simulation): giả lập server tắt đột ngột khi giao dịch on-chain đã gửi, chạy reconciliation worker kiểm tra khả năng tự đồng bộ MySQL.
 - **Status:** pending
 
 ---
 
 ### Phase 8: Kiểm thử QA & Rà soát Bảo mật
-- [ ] Task 8.1: Chạy toàn bộ test suites (Contract tests + Backend Pytest).
-- [ ] Task 8.2: Rà soát bảo mật Smart Contract & Backend API.
-- [ ] Task 8.3: Báo cáo kết quả kiểm thử.
+- [ ] Task 8.1: Chạy toàn bộ test suites tự động (Smart Contract Hardhat tests + Backend Pytest).
+- [ ] Task 8.2: Rà soát bảo mật: kiểm tra chống lộ private key, kiểm tra phân quyền JWT, kiểm tra bảo vệ brute-force đăng nhập, kiểm tra reentrancy và quyền onlyOwner trên Smart Contract.
+- [ ] Task 8.3: Lập báo cáo kết quả kiểm thử QA & Bảo mật chi tiết.
 - **Status:** pending
 
 ---
 
 ### Phase 9: Đóng gói Triển khai & Hướng dẫn Cài đặt
-- [ ] Task 9.1: Cấu hình file `.env.example` hoàn chỉnh.
-- [ ] Task 9.2: Viết script khởi chạy một chạm (PowerShell / Bash).
-- [ ] Task 9.3: Hướng dẫn cài đặt từng bước từ clean checkout.
+- [ ] Task 9.1: Hoàn thiện file cấu hình mẫu `.env.example` với đầy đủ chú thích tham số.
+- [ ] Task 9.2: Viết script khởi chạy một chạm `scripts/start_all.ps1` (chạy song song Hardhat node, FastAPI backend và Vite frontend).
+- [ ] Task 9.3: Viết tài liệu hướng dẫn cài đặt từng bước từ clean checkout (`README.md`).
 - **Status:** pending
 
 ---
 
 ### Phase 10: Tài liệu Học thuật & Kịch bản Báo cáo
-- [ ] Task 10.1: Bản thuyết minh đồ án tổng hợp (Tiếng Việt).
-- [ ] Task 10.2: Kịch bản demo 5-10 phút cho giảng viên.
-- [ ] Task 10.3: Bộ câu hỏi bảo vệ đồ án kèm câu trả lời chuẩn kỹ thuật.
+- [ ] Task 10.1: Soạn thảo bản thuyết minh đồ án tổng hợp bằng Tiếng Việt (Tổng quan đề tài, Kiến trúc hệ thống, Thiết kế CSDL & Smart Contract, Phân tích tính an toàn).
+- [ ] Task 10.2: Soạn thảo kịch bản demo 5 bước (5-7 phút) cho buổi báo cáo trước hội đồng.
+- [ ] Task 10.3: Tổng hợp bộ 10 câu hỏi phản biện của giảng viên và câu trả lời kỹ thuật chuẩn xác.
 - **Status:** pending
 
 ---
 
 ### Phase 11: Nghiệm thu Cuối cùng
-- [ ] Task 11.1: Đối chiếu sản phẩm thực tế với Acceptance Criteria.
-- [ ] Task 11.2: Báo cáo tổng kết dự án.
+- [ ] Task 11.1: Đối chiếu sản phẩm thực tế với Acceptance Criteria đã cam kết.
+- [ ] Task 11.2: Bàn giao toàn bộ source code, cơ sở dữ liệu mẫu và tài liệu đồ án cho người dùng.
 - **Status:** pending

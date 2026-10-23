@@ -65,6 +65,24 @@
 
 ---
 
+### Bổ sung thiết kế: Toàn diện Hóa Bản Kế hoạch & Kiến trúc Dự án (Full Blueprint Finalization)
+- **Status:** complete
+- **Session:** 2026-10-23
+- **Actions taken:**
+  - Hoàn tất 100% tài liệu thiết kế và thuật toán chi tiết trong `findings.md`, không để sót bất kỳ vùng xám nào trước khi triển khai:
+    - **Mục 11**: Thiết kế Xác thực & Phân quyền (Auth & RBAC), băm mật khẩu `bcrypt`, JWT HS256, chống brute-force (khóa 15 phút sau 5 lần sai), seed data mẫu, 3 endpoint bổ sung (`POST /admin/users`, `GET /admin/users`, `GET /users/me`).
+    - **Mục 12**: Chi tiết 5 thuật toán vòng đời mượn trả (`Request`, `Approve`, `Handover`, `Return`, `Cancel`) với đầy đủ điều kiện kiểm tra, khóa dòng MySQL `FOR UPDATE` và tương tác Smart Contract.
+    - **Mục 13**: Thuật toán Worker tự đối soát và tự phục hồi (Background Reconciliation Worker) giải quyết dứt điểm bài toán Dual-Write lệch dữ liệu giữa MySQL và Blockchain.
+    - **Mục 14**: Thiết kế chi tiết UX/UI Frontend (hệ thống màu Slate/Indigo/Emerald/Rose, icon `lucide-react`, bản đồ màn hình từ `/login`, `/equipment`, `/my-loans`, `/admin/loans`, `/admin/inventory` tới `/audit`).
+    - **Mục 15**: Kịch bản bảo vệ đồ án (Kịch bản demo 5 bước 5-7 phút trước hội đồng & Bộ câu hỏi phản biện kỹ thuật chuẩn).
+  - Chi tiết hóa toàn bộ danh mục nhiệm vụ từ Phase 4 đến Phase 11 trong `task_plan.md` với các tiêu chí nghiệm thu rõ ràng.
+- **Files modified:**
+  - `findings.md` (bổ sung đầy đủ Mục 11, 12, 13, 14, 15)
+  - `task_plan.md` (làm mịn chi tiết các task từ Phase 4 đến Phase 11)
+  - `progress.md` (cập nhật nhật ký tiến độ)
+
+---
+
 ## Bảng Kết quả Kiểm thử Thực tế (Phase 3 Verification Matrix)
 
 | Hạng mục kiểm thử | Lệnh thực thi thực tế | Kết quả mong đợi | Kết quả thực tế | Trạng thái |
@@ -87,14 +105,4 @@
 | **Đã học được gì?** | Cần ghim `eth-account<0.11.0` trên Python 3.13 Windows để tránh thiếu C compiler; MySQL trên Windows cần dùng `127.0.0.1` để tránh nghẽn IPv6 `localhost`. |
 | **Đã làm được gì?** | Khởi tạo xong toàn bộ nền móng dự án; MySQL kết nối thành công; Smart contract test pass; Frontend build pass; Backend health test pass. |
 
----
 
-## 5-Question Reboot Check
-
-| Câu hỏi | Câu trả lời |
-| :--- | :--- |
-| **Đang ở đâu?** | Đã hoàn thành 100% Phase 2. Toàn bộ thiết kế kiến trúc, CSDL MySQL, Smart Contract, API, quy tắc phạt và đồng bộ được tập trung đầy đủ trong `findings.md`. |
-| **Sắp đi đâu?** | Phase 3: Khởi tạo cấu trúc dự án (`backend`, `frontend`, `contracts`, `.env.example`, script test kết nối MySQL). |
-| **Mục tiêu là gì?** | Hệ thống mượn trả thiết bị học tập hoàn chỉnh, kiểm thử được, dùng React, FastAPI, MySQL và Hardhat EVM. |
-| **Đã học được gì?** | Giữ mọi tài liệu thiết kế tập trung trong 3 file chính (`findings.md`, `task_plan.md`, `progress.md`) giúp dự án gọn gàng, liền mạch và dễ theo dõi. |
-| **Đã làm được gì?** | Hoàn thành và đồng bộ tuyệt đối cả 3 file kế hoạch; giải quyết dứt điểm 5 vấn đề kiến trúc quan trọng. |
