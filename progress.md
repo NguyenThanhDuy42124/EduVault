@@ -1,4 +1,4 @@
-# Progress Log: Educational Equipment Lending System
+# Progress Log: EduVault - Educational Equipment Lending System
 
 ## Session: 2026-10-23
 

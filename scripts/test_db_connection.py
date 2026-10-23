@@ -13,7 +13,7 @@ from backend.app.db.session import check_db_connection
 
 def main():
     print("=" * 60)
-    print("MySQL Database Connection Diagnostic Tool")
+    print("EduVault - MySQL Database Connection Diagnostic Tool")
     print("=" * 60)
     print(f"Target Host     : {settings.MYSQL_HOST}:{settings.MYSQL_PORT}")
     print(f"Target Database : {settings.MYSQL_DATABASE}")

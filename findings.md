@@ -1,4 +1,4 @@
-# Findings & Technical Knowledge Base
+# Findings & Technical Knowledge Base (EduVault)
 
 ## 1. Môi trường & Khảo sát ban đầu (Environment Discovery)
 

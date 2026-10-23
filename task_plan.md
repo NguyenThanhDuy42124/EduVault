@@ -1,7 +1,7 @@
-# Task Plan: Smart Contract-Based Educational Equipment Lending Management System
+# Task Plan: EduVault - Smart Contract-Based Educational Equipment Lending Management System
 
 ## Goal
-Xây dựng, kiểm thử và tài liệu hóa hệ thống quản lý mượn trả thiết bị học tập sử dụng React + TypeScript, Python FastAPI, **MySQL** (lưu trữ quan hệ) và Smart Contract Solidity trên Local Hardhat EVM (ghi nhận trạng thái bất biến, tiền cọc mô phỏng và nhật ký kiểm toán).
+Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quản lý mượn trả thiết bị học tập sử dụng React + TypeScript, Python FastAPI, **MySQL** (lưu trữ quan hệ) và Smart Contract Solidity trên Local Hardhat EVM (ghi nhận trạng thái bất biến, tiền cọc mô phỏng và nhật ký kiểm toán).
 
 ---
 

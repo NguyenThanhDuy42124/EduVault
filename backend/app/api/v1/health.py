@@ -10,7 +10,7 @@ def health_check():
     """System liveness health check."""
     return {
         "status": "healthy",
-        "service": "educational-equipment-lending-api",
+        "service": "eduvault-api",
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0"
     }

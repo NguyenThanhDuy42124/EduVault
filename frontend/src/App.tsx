@@ -56,10 +56,15 @@ export default function App() {
                 <Boxes className="w-7 h-7" />
               </span>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-                  Educational Equipment Lending
-                </h1>
-                <p className="text-sm text-slate-400">
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                    Edu<span className="text-indigo-400">Vault</span>
+                  </h1>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    Web3
+                  </span>
+                </div>
+                <p className="text-sm text-slate-400 mt-0.5">
                   Smart Contract Audited • MySQL Off-Chain Ledger • FastAPI Relayer
                 </p>
               </div>

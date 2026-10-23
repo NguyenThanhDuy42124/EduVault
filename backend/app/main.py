@@ -4,8 +4,8 @@ from backend.app.core.config import settings
 from backend.app.api.v1.health import router as health_router
 
 app = FastAPI(
-    title="Educational Equipment Lending API",
-    description="Smart Contract-Based Educational Equipment Lending Management System API",
+    title="EduVault API",
+    description="EduVault: Smart Contract-Based Educational Equipment Lending Management System API",
     version="1.0.0",
     debug=settings.DEBUG,
 )
@@ -26,7 +26,7 @@ app.include_router(health_router, prefix="/api/v1")
 @app.get("/")
 def root():
     return {
-        "message": "Smart Contract-Based Educational Equipment Lending API is online",
+        "message": "EduVault API is online",
         "docs_url": "/docs",
         "health_check": "/api/v1/health"
     }

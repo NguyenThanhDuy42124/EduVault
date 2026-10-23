@@ -16,7 +16,7 @@ def test_health_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["service"] == "educational-equipment-lending-api"
+    assert data["service"] == "eduvault-api"
 
 
 def test_health_db_endpoint():
