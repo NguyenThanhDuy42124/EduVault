@@ -60,8 +60,54 @@
 ---
 
 ### Phase 4: Triển khai Smart Contract & EVM Testing
+- **Status:** complete
+- **Started:** 2026-10-27 13:24:00
+- **Completed:** 2026-10-27 13:31:00
+- **Actions taken:**
+  - **Task 4.1**: Hoàn thiện Smart Contract `EquipmentLending.sol`:
+    - Tổ chức code theo sections rõ ràng: ENUMS → STRUCTS → STATE VARIABLES → EVENTS → CONSTRUCTOR → VIEW FUNCTIONS → LIFECYCLE FUNCTIONS.
+    - NatSpec comments đầy đủ bằng Tiếng Việt, giải thích từng hàm, từng tham số.
+    - Logic nghiệp vụ đầy đủ: 6 LoanState, 4 DepositState, 5 lifecycle functions, 2 view functions.
+    - Simulated Deposit Accounting (không giữ ETH thật), Mutex `activeEquipmentLoan`, phạt tự động (10%/50%/100%).
+    - Biên dịch thành công: `Compiled 3 Solidity files successfully (evm target: paris)`.
+  - **Task 4.2**: Xây dựng Hardhat test suite toàn diện:
+    - **28 test cases** bao phủ 10 nhóm kiểm thử:
+      1. Deployment & Ownership (2 tests)
+      2. Luồng chuẩn trả đúng hạn - 0% penalty (1 test)
+      3. Quy tắc phạt quá hạn - 10% và 50% (2 tests)
+      4. Hỏng/Mất → tịch thu 100% cọc (2 tests)
+      5. Hủy đơn mượn - Submitted/Approved/Active/Returned (4 tests)
+      6. Mutex chống đặt trùng thiết bị (3 tests)
+      7. Kiểm tra trùng Loan ID (1 test)
+      8. Chuyển trạng thái không hợp lệ - Revert cases (6 tests)
+      9. View Functions - getLoan/isOverdue/calculatePenalty (4 tests)
+      10. Edge cases - deposit=0, multi-equipment, manual penalty (3 tests)
+    - Sử dụng helper functions (`createDefaultLoan`, `advanceToActive`) giảm code lặp.
+    - Kết quả: **28 passing (893ms)** ✅
+  - **Task 4.3**: Viết script deploy `contracts/scripts/deploy.cjs`:
+    - Deploy contract lên Hardhat node (in-process hoặc localhost).
+    - Tự động lưu deployment info vào `contracts/deployments/localhost.json`.
+    - Tự động export ABI và contract address sang backend.
+    - Kết quả deploy thành công: Contract `0x5FbDB2315678afecb367f032d93F642f64180aa3`.
+  - **Task 4.4**: Export ABI và Contract Address sang backend:
+    - `backend/app/core/contracts/EquipmentLending.json` (ABI + address).
+    - `backend/app/core/contracts/contract_address.json` (address + network info).
+    - `backend/app/core/contracts/__init__.py` (Python module init).
+- **Files created/modified:**
+  - `contracts/contracts/EquipmentLending.sol` (hoàn thiện, comments đầy đủ)
+  - `contracts/test/EquipmentLending.test.cjs` (28 test cases toàn diện)
+  - `contracts/scripts/deploy.cjs` (deploy + export script)
+  - `contracts/deployments/localhost.json` (deployment record)
+  - `backend/app/core/contracts/EquipmentLending.json` (ABI export)
+  - `backend/app/core/contracts/contract_address.json` (address export)
+  - `backend/app/core/contracts/__init__.py` (module init)
+
+---
+
+### Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
 - **Status:** pending
-- Sẵn sàng chuyển sang Phase 4 sau khi người dùng phê duyệt Phase 3.
+- Sẵn sàng chuyển sang Phase 5 sau khi người dùng phê duyệt Phase 4.
+
 
 ---
 
@@ -83,15 +129,14 @@
 
 ---
 
-## Bảng Kết quả Kiểm thử Thực tế (Phase 3 Verification Matrix)
+## Bảng Kết quả Kiểm thử Thực tế (Phase 4 Verification Matrix)
 
 | Hạng mục kiểm thử | Lệnh thực thi thực tế | Kết quả mong đợi | Kết quả thực tế | Trạng thái |
 | :--- | :--- | :--- | :--- | :--- |
-| **Smart Contract Build & Test** | `npx hardhat test` | Biên dịch 0.8.24, pass test khởi tạo | 2 passing (840ms) | **PASS** |
-| **Frontend Production Build** | `cd frontend; npm run build` | TypeScript pass, Vite bundle thành công | built in 3.75s, 0 error | **PASS** |
-| **Backend Health & Startup API** | `pytest backend/tests/test_health.py` | Pass 3 test root, health và db health | 3 passed (1.28s) | **PASS** |
-| **MySQL Server Connectivity** | `python scripts/test_db_connection.py` | Kết nối thành công tới 127.0.0.1:3306 | `{'status': 'connected', 'database': 'equipment_lending_db'}` | **PASS** |
-| **Git Baseline & Ignore** | `git status -s` | Không theo dõi .venv, node_modules, .env | Chỉ thấy các source file chuẩn | **PASS** |
+| **Smart Contract Compile** | `npx hardhat compile` | Biên dịch 0.8.24 thành công | Compiled 3 Solidity files successfully (evm target: paris) | **PASS** |
+| **Smart Contract Test Suite** | `npx hardhat test` | 28 tests pass, bao phủ toàn bộ lifecycle | 28 passing (893ms) | **PASS** |
+| **Deploy Script** | `npx hardhat run scripts/deploy.cjs` | Deploy thành công, lưu address + ABI | Contract deployed at: `0x5FbDB2315678afecb367f032d93F642f64180aa3` | **PASS** |
+| **ABI Export to Backend** | Kiểm tra file tồn tại | `EquipmentLending.json` + `contract_address.json` trong `backend/app/core/contracts/` | Cả 2 file tạo thành công (13.3KB + 160B) | **PASS** |
 
 ---
 
@@ -99,10 +144,10 @@
 
 | Câu hỏi | Câu trả lời |
 | :--- | :--- |
-| **Đang ở đâu?** | Đã hoàn thành 100% Phase 3: Project Structure & Environment Verification. Cả 3 thành phần Backend, Frontend, Smart Contract đều đã build và pass kiểm thử. |
-| **Sắp đi đâu?** | Phase 4: Triển khai toàn bộ logic nghiệp vụ Smart Contract `EquipmentLending.sol` và Hardhat test suite chi tiết. |
+| **Đang ở đâu?** | Đã hoàn thành 100% Phase 4: Smart Contract & EVM Testing. Contract biên dịch, 28/28 test pass, deploy thành công, ABI/address exported sang backend. |
+| **Sắp đi đâu?** | Phase 5: Triển khai Backend FastAPI + MySQL + Web3.py (Models, Auth, APIs, Blockchain Service). |
 | **Mục tiêu là gì?** | Hệ thống mượn trả thiết bị học tập hoàn chỉnh, kiểm thử được, dùng React, FastAPI, MySQL và Hardhat EVM. |
-| **Đã học được gì?** | Cần ghim `eth-account<0.11.0` trên Python 3.13 Windows để tránh thiếu C compiler; MySQL trên Windows cần dùng `127.0.0.1` để tránh nghẽn IPv6 `localhost`. |
-| **Đã làm được gì?** | Khởi tạo xong toàn bộ nền móng dự án; MySQL kết nối thành công; Smart contract test pass; Frontend build pass; Backend health test pass. |
+| **Đã học được gì?** | Cần `npm install` trước khi chạy `npx hardhat`; Node.js v24 có thể cài Hardhat v3 global gây conflict với v2 local; Cần ghim `eth-account<0.11.0` trên Python 3.13 Windows. |
+| **Đã làm được gì?** | Phase 0-4 hoàn thành: Khảo sát → Yêu cầu → Thiết kế → Môi trường → Smart Contract. Contract có đầy đủ lifecycle, mutex, phạt tự động. 28 tests bao phủ 100%. Deploy + export ABI thành công. |
 
 

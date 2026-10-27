@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 4: Triển khai Smart Contract & EVM Testing
+Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
 
 ---
 
@@ -55,11 +55,11 @@ Phase 4: Triển khai Smart Contract & EVM Testing
 ---
 
 ### Phase 4: Triển khai Smart Contract & EVM Testing
-- [ ] Task 4.1: Hoàn thiện Smart Contract `EquipmentLending.sol` (OpenZeppelin Ownable, Simulated Deposit Accounting, Mutex khóa thiết bị `activeEquipmentLoan`, sự kiện đầy đủ, logic phạt tự động).
-- [ ] Task 4.2: Xây dựng Hardhat test suite toàn diện (kiểm thử 100% case: Deployment & Ownership, Standard On-time Return, Overdue 10%/50%, Damaged/Lost 100% Forfeit, Cancellation Submitted/Approved, Revert khi Active, Mutex chống đặt trùng, Revert khi trùng Loan ID).
-- [ ] Task 4.3: Viết script deploy contract `scripts/deploy.cjs` và lưu địa chỉ contract sau khi deploy lên Hardhat local node.
-- [ ] Task 4.4: Export ABI và Contract Address sang backend (`backend/app/core/contracts/`).
-- **Status:** pending
+- [x] Task 4.1: Hoàn thiện Smart Contract `EquipmentLending.sol` (OpenZeppelin Ownable, Simulated Deposit Accounting, Mutex khóa thiết bị `activeEquipmentLoan`, sự kiện đầy đủ, logic phạt tự động).
+- [x] Task 4.2: Xây dựng Hardhat test suite toàn diện (kiểm thử 100% case: Deployment & Ownership, Standard On-time Return, Overdue 10%/50%, Damaged/Lost 100% Forfeit, Cancellation Submitted/Approved, Revert khi Active, Mutex chống đặt trùng, Revert khi trùng Loan ID). **28/28 tests passed.**
+- [x] Task 4.3: Viết script deploy contract `scripts/deploy.cjs` và lưu địa chỉ contract sau khi deploy lên Hardhat local node.
+- [x] Task 4.4: Export ABI và Contract Address sang backend (`backend/app/core/contracts/`).
+- **Status:** complete
 
 ---
 
