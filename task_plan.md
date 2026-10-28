@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
+Phase 6: Triển khai Frontend (React + TypeScript + Vite)
 
 ---
 
@@ -64,23 +64,23 @@ Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
 ---
 
 ### Phase 5: Triển khai Backend (FastAPI + MySQL + Web3.py)
-- [ ] Task 5.1: Xây dựng Model SQLAlchemy hoàn chỉnh (5 bảng: `User`, `Equipment`, `LendingRequest`, `BlockchainTransaction`, `AuditLog`) bao gồm các cột an toàn `failed_login_count`, `locked_until`, `updated_at`.
-- [ ] Task 5.2: Khởi tạo và chạy Alembic migration để tạo bảng thực tế trên MySQL database `equipment_lending_db`.
-- [ ] Task 5.3: Triển khai Auth Service: băm mật khẩu `bcrypt`, sinh JWT HS256 (30 phút), kiểm soát đăng nhập sai (khóa 15 phút sau 5 lần sai), cơ chế RBAC với `Depends(require_role)`.
-- [ ] Task 5.4: Triển khai API quản lý tài khoản: `POST /api/v1/auth/login`, `GET /api/v1/users/me`, `POST /api/v1/admin/users`, `GET /api/v1/admin/users`.
-- [ ] Task 5.5: Triển khai Equipment CRUD với cơ chế khóa dòng MySQL Pessimistic Lock (`SELECT ... FOR UPDATE`) chống tranh chấp mượn.
-- [ ] Task 5.6: Triển khai Web3.py Blockchain Service: kết nối Hardhat RPC, ký giao dịch với Custodial Relayer, đọc trạng thái contract, bắt sự kiện và xử lý receipt.
-- [ ] Task 5.7: Triển khai đầy đủ API vòng đời mượn trả:
+- [x] Task 5.1: Xây dựng Model SQLAlchemy hoàn chỉnh (5 bảng: `User`, `Equipment`, `LendingRequest`, `BlockchainTransaction`, `AuditLog`) bao gồm các cột an toàn `failed_login_count`, `locked_until`, `updated_at`.
+- [x] Task 5.2: Khởi tạo và chạy Alembic migration để tạo bảng thực tế trên MySQL database `equipment_lending_db`.
+- [x] Task 5.3: Triển khai Auth Service: băm mật khẩu `bcrypt`, sinh JWT HS256 (30 phút), kiểm soát đăng nhập sai (khóa 15 phút sau 5 lần sai), cơ chế RBAC với `Depends(require_role)`.
+- [x] Task 5.4: Triển khai API quản lý tài khoản: `POST /api/v1/auth/login`, `GET /api/v1/users/me`, `POST /api/v1/admin/users`, `GET /api/v1/admin/users`.
+- [x] Task 5.5: Triển khai Equipment CRUD với cơ chế khóa dòng MySQL Pessimistic Lock (`SELECT ... FOR UPDATE`) chống tranh chấp mượn.
+- [x] Task 5.6: Triển khai Web3.py Blockchain Service: kết nối Hardhat RPC, ký giao dịch với Custodial Relayer, đọc trạng thái contract, bắt sự kiện và xử lý receipt.
+- [x] Task 5.7: Triển khai đầy đủ API vòng đời mượn trả:
   - `POST /api/v1/loans/request` (Sinh viên gửi đơn)
   - `POST /api/v1/loans/{id}/approve` (Admin duyệt + đẩy on-chain)
   - `POST /api/v1/loans/{id}/reject` (Admin từ chối)
   - `POST /api/v1/loans/{id}/handover` (Admin bàn giao + khóa cọc on-chain)
   - `POST /api/v1/loans/{id}/return` (Admin nhận lại máy + tính phạt/cọc on-chain)
   - `POST /api/v1/loans/{id}/cancel` (Hủy đơn + giải phóng Mutex on-chain)
-- [ ] Task 5.8: Triển khai Background Reconciliation Worker và API `/api/v1/audit/reconcile` tự động đối soát và khôi phục lệch trạng thái giữa MySQL và Smart Contract.
-- [ ] Task 5.9: Viết script `scripts/seed.py` nạp dữ liệu mẫu ban đầu (1 Admin, 3 Sinh viên, 8 Thiết bị thuộc các danh mục khác nhau).
-- [ ] Task 5.10: Xây dựng bộ kiểm thử tự động Pytest cho toàn bộ API Backend.
-- **Status:** pending
+- [x] Task 5.8: Triển khai Background Reconciliation Worker và API `/api/v1/audit/reconcile` tự động đối soát và khôi phục lệch trạng thái giữa MySQL và Smart Contract.
+- [x] Task 5.9: Viết script `scripts/seed.py` nạp dữ liệu mẫu ban đầu (1 Admin, 3 Sinh viên, 8 Thiết bị thuộc các danh mục khác nhau).
+- [x] Task 5.10: Xây dựng bộ kiểm thử tự động Pytest cho toàn bộ API Backend (56/56 tests passing).
+- **Status:** complete
 
 ---
 
