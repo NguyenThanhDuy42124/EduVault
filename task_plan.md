@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 6: Triển khai Frontend (React + TypeScript + Vite)
+Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ
 
 ---
 
@@ -85,16 +85,16 @@ Phase 6: Triển khai Frontend (React + TypeScript + Vite)
 ---
 
 ### Phase 6: Triển khai Frontend (React + TypeScript + Vite)
-- [ ] Task 6.1: Cấu hình Axios Client (kèm interceptor tự động gán Bearer Token), Auth Context quản lý trạng thái đăng nhập và Protected Route theo quyền (ADMIN / BORROWER).
-- [ ] Task 6.2: Xây dựng Layout chuẩn (Header, Navigation, nút chuyển đổi nhanh tài khoản demo Admin/Sinh viên, hiển thị thông tin người dùng).
-- [ ] Task 6.3: Giao diện Đăng nhập (`/login`) với form chuẩn và 2 nút Quick Fill tài khoản demo.
-- [ ] Task 6.4: Giao diện Danh mục thiết bị (`/` hoặc `/equipment`): tìm kiếm, bộ lọc theo danh mục và trạng thái, thẻ hiển thị cấu hình, tiền cọc, nút đăng ký mượn.
-- [ ] Task 6.5: Giao diện Modal/Form đăng ký mượn: chọn ngày bàn giao dự kiến, hạn trả, hiển thị tóm tắt quy định tiền cọc và phạt trễ hạn.
-- [ ] Task 6.6: Giao diện Sinh viên (`/my-loans`): danh sách đơn mượn cá nhân, Stepper tiến trình mượn trả trực quan, trạng thái tiền cọc, nút hủy đơn khi chưa nhận máy.
-- [ ] Task 6.7: Giao diện Quản lý kho (`/admin/loans`): bảng điều khiển phân tab (Chờ duyệt, Đang mượn, Đã hoàn tất), modal duyệt đơn, modal xác nhận bàn giao, modal trả máy kèm đánh giá tình trạng và tính phạt tức thì.
-- [ ] Task 6.8: Giao diện Quản trị kho thiết bị (`/admin/inventory`): thêm thiết bị mới, chuyển trạng thái bảo trì/sẵn sàng.
-- [ ] Task 6.9: Giao diện Kiểm toán Blockchain (`/audit`): bảng theo dõi block và transaction hash, công cụ đối soát tính toàn vẹn (Verify Loan) so khớp giữa MySQL và Smart Contract, nút kích hoạt đối soát tự động.
-- **Status:** pending
+- [x] Task 6.1: Cấu hình Axios Client (kèm interceptor tự động gán Bearer Token), Auth Context quản lý trạng thái đăng nhập và Protected Route theo quyền (ADMIN / BORROWER).
+- [x] Task 6.2: Xây dựng Layout chuẩn (Header, Navigation, nút chuyển đổi nhanh tài khoản demo Admin/Sinh viên, hiển thị thông tin người dùng).
+- [x] Task 6.3: Giao diện Đăng nhập (`/login`) với form chuẩn và 2 nút Quick Fill tài khoản demo.
+- [x] Task 6.4: Giao diện Danh mục thiết bị (`/` hoặc `/equipment`): tìm kiếm, bộ lọc theo danh mục và trạng thái, thẻ hiển thị cấu hình, tiền cọc, nút đăng ký mượn.
+- [x] Task 6.5: Giao diện Modal/Form đăng ký mượn: chọn ngày bàn giao dự kiến, hạn trả, hiển thị tóm tắt quy định tiền cọc và phạt trễ hạn.
+- [x] Task 6.6: Giao diện Sinh viên (`/my-loans`): danh sách đơn mượn cá nhân, Stepper tiến trình mượn trả trực quan, trạng thái tiền cọc, nút hủy đơn khi chưa nhận máy.
+- [x] Task 6.7: Giao diện Quản lý kho (`/admin/loans`): bảng điều khiển phân tab (Chờ duyệt, Đang mượn, Đã hoàn tất), modal duyệt đơn, modal xác nhận bàn giao, modal trả máy kèm đánh giá tình trạng và tính phạt tức thì.
+- [x] Task 6.8: Giao diện Quản trị kho thiết bị (`/admin/inventory`): thêm thiết bị mới, chuyển trạng thái bảo trì/sẵn sàng.
+- [x] Task 6.9: Giao diện Kiểm toán Blockchain (`/audit`): bảng theo dõi block và transaction hash, công cụ đối soát tính toàn vẹn (Verify Loan) so khớp giữa MySQL và Smart Contract, nút kích hoạt đối soát tự động.
+- **Status:** complete
 
 ---
 
