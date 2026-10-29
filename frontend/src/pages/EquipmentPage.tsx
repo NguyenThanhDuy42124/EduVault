@@ -15,6 +15,12 @@ import {
   FileText,
   ShieldAlert,
   SlidersHorizontal,
+  Laptop,
+  Tablet,
+  Tv,
+  Activity,
+  Cpu,
+  Package,
 } from 'lucide-react';
 
 export const EquipmentPage: React.FC = () => {
@@ -41,7 +47,7 @@ export const EquipmentPage: React.FC = () => {
       const data = await equipmentService.getAll();
       setEquipmentList(data);
     } catch {
-      // Handled silently
+      // Handled gracefully
     } finally {
       setLoading(false);
     }
@@ -60,15 +66,15 @@ export const EquipmentPage: React.FC = () => {
   // Filter items
   const filteredItems = useMemo(() => {
     return equipmentList.filter((item) => {
-      const matchSearch =
+      const matchesSearch =
         item.name.toLowerCase().includes(search.toLowerCase()) ||
         item.serial_number.toLowerCase().includes(search.toLowerCase()) ||
         (item.specifications && item.specifications.toLowerCase().includes(search.toLowerCase()));
 
-      const matchCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
-      const matchStatus = selectedStatus === 'ALL' || item.status === selectedStatus;
+      const matchesCat = selectedCategory === 'ALL' || item.category === selectedCategory;
+      const matchesStat = selectedStatus === 'ALL' || item.status === selectedStatus;
 
-      return matchSearch && matchCategory && matchStatus;
+      return matchesSearch && matchesCat && matchesStat;
     });
   }, [equipmentList, search, selectedCategory, selectedStatus]);
 
@@ -133,40 +139,57 @@ export const EquipmentPage: React.FC = () => {
     }
   };
 
+  const renderCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'LAPTOP':
+        return <Laptop className="w-10 h-10 text-slate-300" />;
+      case 'TABLET':
+        return <Tablet className="w-10 h-10 text-slate-300" />;
+      case 'PROJECTOR':
+        return <Tv className="w-10 h-10 text-slate-300" />;
+      case 'LAB_TOOL':
+        return <Activity className="w-10 h-10 text-slate-300" />;
+      case 'EMBEDDED_KIT':
+        return <Cpu className="w-10 h-10 text-slate-300" />;
+      default:
+        return <Package className="w-10 h-10 text-slate-300" />;
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Danh mục thiết bị</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Tra cứu thiết bị thực hành sẵn có, cấu hình kỹ thuật và mức ký quỹ mô phỏng bảo toàn trên Blockchain
+          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
+            Tra cứu cấu hình thiết bị và mức ký quỹ bảo toàn trên Blockchain.
           </p>
         </div>
 
-        {/* Global Summary Badge */}
+        {/* Global Summary Badges */}
         <div className="flex items-center space-x-3 text-xs">
-          <div className="px-3 py-1.5 bg-white border border-slate-200/80 rounded-xl shadow-sm flex items-center space-x-2">
+          <div className="px-3.5 py-2 bg-white border border-slate-200 rounded-lg shadow-xs flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="text-slate-600 font-medium">
               Sẵn sàng:{' '}
-              <strong className="text-slate-900">
+              <strong className="text-slate-900 font-semibold">
                 {equipmentList.filter((e) => e.status === 'AVAILABLE').length}
               </strong>
             </span>
           </div>
-          <div className="px-3 py-1.5 bg-white border border-slate-200/80 rounded-xl shadow-sm flex items-center space-x-2">
+          <div className="px-3.5 py-2 bg-white border border-slate-200 rounded-lg shadow-xs flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-indigo-500" />
             <span className="text-slate-600 font-medium">
               Tổng số:{' '}
-              <strong className="text-slate-900">{equipmentList.length}</strong>
+              <strong className="text-slate-900 font-semibold">{equipmentList.length}</strong>
             </span>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
         {/* Search Input */}
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -174,20 +197,20 @@ export const EquipmentPage: React.FC = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo tên máy, serial (ví dụ: DELL-XPS, CAM-SONY)..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+            placeholder="Tìm theo tên máy, mã serial..."
+            className="w-full pl-9 pr-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-lg bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-colors"
           />
         </div>
 
         {/* Category Chips */}
-        <div className="flex items-center space-x-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
@@ -198,10 +221,11 @@ export const EquipmentPage: React.FC = () => {
 
         {/* Status Dropdown */}
         <div className="flex items-center space-x-1.5 border-l border-slate-200 pl-3">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+          <SlidersHorizontal className="w-4 h-4 text-slate-500" />
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
+            aria-label="Lọc theo trạng thái"
             className="text-xs font-medium text-slate-700 bg-transparent border-none focus:outline-none focus:ring-0 cursor-pointer"
           >
             <option value="ALL">Tất cả trạng thái</option>
@@ -215,7 +239,7 @@ export const EquipmentPage: React.FC = () => {
 
       {/* Equipment Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
@@ -235,7 +259,7 @@ export const EquipmentPage: React.FC = () => {
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => {
             const isAvailable = item.status === 'AVAILABLE';
             const depositVND = Number(item.deposit_amount).toLocaleString('vi-VN');
@@ -243,38 +267,66 @@ export const EquipmentPage: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 p-5 shadow-sm transition-all flex flex-col justify-between group"
+                className="bg-white rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition-all flex flex-col justify-between group overflow-hidden"
               >
                 <div>
-                  {/* Top Bar: Category & Status */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase bg-slate-100 px-2.5 py-0.5 rounded-md font-mono">
-                      {item.category}
-                    </span>
-                    <StatusBadge status={item.status} />
+                  {/* Product Image Frame */}
+                  <div className="relative w-full aspect-[16/10] bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100">
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fb = e.currentTarget.parentElement?.querySelector(
+                            '.img-fallback'
+                          ) as HTMLElement | null;
+                          if (fb) fb.style.display = 'flex';
+                        }}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                    <div
+                      className={`img-fallback w-full h-full flex flex-col items-center justify-center bg-slate-50 ${
+                        item.image_url ? 'hidden' : 'flex'
+                      }`}
+                    >
+                      {renderCategoryIcon(item.category)}
+                    </div>
                   </div>
 
-                  {/* Device Header */}
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight line-clamp-1">
-                    {item.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                    Serial: {item.serial_number}
-                  </p>
+                  {/* Card Content Body */}
+                  <div className="p-5">
+                    {/* Category & Status Bar */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-mono">
+                        {item.category}
+                      </span>
+                      <StatusBadge status={item.status} />
+                    </div>
 
-                  {/* Specifications */}
-                  <div className="mt-3.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                    {item.specifications || 'Không có mô tả thông số kỹ thuật đặc thù.'}
+                    <h2 className="text-base font-bold text-slate-900 group-hover:text-slate-700 transition-colors tracking-tight line-clamp-1">
+                      {item.name}
+                    </h2>
+                    <p className="text-xs font-mono font-medium text-slate-600 mt-1">
+                      Serial: {item.serial_number}
+                    </p>
+
+                    {/* Specifications */}
+                    <p className="mt-3 text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                      {item.specifications || 'Không có mô tả thông số kỹ thuật đặc thù.'}
+                    </p>
                   </div>
                 </div>
 
                 {/* Bottom Details & Action */}
-                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
                   <div>
-                    <span className="text-[10px] text-slate-500 font-medium block">
+                    <span className="text-xs font-medium text-slate-600 block">
                       Ký quỹ mô phỏng
                     </span>
-                    <span className="text-sm font-bold text-slate-900 font-mono">
+                    <span className="text-base font-bold text-slate-900 font-mono">
                       {depositVND} đ
                     </span>
                   </div>
@@ -283,7 +335,7 @@ export const EquipmentPage: React.FC = () => {
                     <button
                       onClick={() => handleOpenBorrowModal(item)}
                       disabled={!isAvailable}
-                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all shadow-sm active:scale-[0.98] ${
+                      className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] cursor-pointer ${
                         isAvailable
                           ? 'bg-slate-900 text-white hover:bg-slate-800'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
@@ -292,7 +344,7 @@ export const EquipmentPage: React.FC = () => {
                       {isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
                     </button>
                   ) : (
-                    <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">
                       Quản lý kho
                     </span>
                   )}
@@ -314,103 +366,113 @@ export const EquipmentPage: React.FC = () => {
         {actionSuccess ? (
           <div className="py-6 text-center space-y-3">
             <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-            <h4 className="text-base font-bold text-slate-900">Gửi yêu cầu mượn thành công!</h4>
+            <h3 className="text-base font-bold text-slate-900">Gửi yêu cầu mượn thành công!</h3>
             <p className="text-xs text-slate-600 max-w-sm mx-auto">{actionSuccess}</p>
           </div>
         ) : (
           <form onSubmit={handleBorrowSubmit} className="space-y-4">
             {actionError && (
-              <div className="p-3 bg-rose-50 border border-rose-200/80 rounded-xl flex items-start space-x-2 text-xs text-rose-700">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2 text-xs text-rose-700">
                 <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
                 <span>{actionError}</span>
               </div>
             )}
 
-            {/* Dates row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {selectedEquipment && (
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-600 font-medium">Mức tiền ký quỹ quy định:</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {Number(selectedEquipment.deposit_amount).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-600 font-medium">Cơ chế quản lý tiền cọc:</span>
+                  <span className="text-slate-800 font-semibold bg-slate-100 px-2.5 py-0.5 rounded text-xs font-mono">
+                    Smart Contract Custodial Relayer
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Ngày nhận dự kiến
+                  Thời gian nhận máy dự kiến <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
                   <input
                     type="datetime-local"
                     value={expectedHandover}
                     onChange={(e) => setExpectedHandover(e.target.value)}
                     required
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Hạn chót trả lại máy
+                  Hạn trả thiết bị quy định <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
                   <input
                     type="datetime-local"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                     required
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Notes */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Mục đích sử dụng / Ghi chú đề xuất
+                Ghi chú mục đích sử dụng / Đề xuất thêm
               </label>
-              <div className="relative">
-                <FileText className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+              <div className="relative rounded-lg shadow-xs">
+                <div className="absolute top-2.5 left-3 pointer-events-none text-slate-400">
+                  <FileText className="w-4 h-4" />
+                </div>
                 <textarea
-                  rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ví dụ: Phục vụ đồ án tốt nghiệp, bài tập lớn môn Lập trình Mạng..."
-                  className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={3}
+                  placeholder="Ví dụ: Dùng thực hành môn Hệ nhúng, cần mượn thêm dây nạp ST-Link..."
+                  className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
                 />
               </div>
             </div>
 
-            {/* Simulated Deposit & Penalty Rules Summary */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 space-y-2">
-              <div className="flex items-center justify-between font-semibold text-slate-900 border-b border-slate-200/60 pb-1.5">
-                <span>Số tiền ký quỹ mô phỏng:</span>
-                <span className="font-mono text-indigo-700 text-xs">
-                  {selectedEquipment ? Number(selectedEquipment.deposit_amount).toLocaleString('vi-VN') : 0} VNĐ
-                </span>
-              </div>
-              <div className="flex items-start space-x-1.5 text-slate-500">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-indigo-500" />
-                <p>
-                  Tiền cọc mô phỏng được khóa tự động trên Smart Contract khi nhận bàn giao máy.
-                  Hoàn trả 100% khi trả máy đúng hạn và nguyên vẹn. Trễ &le; 24h phạt 10%, trễ &gt; 24h phạt 50%.
-                </p>
-              </div>
+            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-lg flex items-start space-x-2 text-xs text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>
+                Lưu ý: Sau khi gửi, đơn mượn sẽ ở trạng thái Chờ duyệt. Khi Quản trị viên bàn giao thiết bị, trạng thái ký quỹ sẽ tự động khóa trên Smart Contract.
+              </span>
             </div>
 
-            {/* Actions */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+            <div className="flex justify-end space-x-2.5 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setBorrowModalOpen(false)}
                 disabled={submitting}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm active:scale-[0.98] disabled:opacity-50"
+                className="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-xs cursor-pointer disabled:opacity-50"
               >
-                {submitting ? 'Đang gửi...' : 'Xác nhận đăng ký mượn'}
+                {submitting ? 'Đang gửi...' : 'Xác nhận gửi đơn mượn'}
               </button>
             </div>
           </form>
@@ -419,3 +481,4 @@ export const EquipmentPage: React.FC = () => {
     </div>
   );
 };
+export default EquipmentPage;

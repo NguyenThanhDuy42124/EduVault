@@ -571,3 +571,36 @@ flowchart TD
 
 - **Câu hỏi 4: Backend giữ Private Key thì có rủi ro bị tấn công tập trung không?**
   - *Trả lời*: Đây là mô hình Custodial Relayer phổ biến trong các ứng dụng Web2.5 để đơn giản hóa trải nghiệm người dùng. Trong đồ án, key được cô lập hoàn toàn trong biến môi trường server `.env`, không lộ ở client. Trong môi trường doanh nghiệp thực tế, khóa này sẽ được lưu trữ trong AWS KMS hoặc HashiCorp Vault có chính sách ký đa chữ ký (Multi-sig).
+
+---
+
+## 17. Đặc tả Kiến trúc Dashboard Giới thiệu Hệ thống (EduVault Interactive Showcase with GSAP 3D)
+
+### 17.1 Mục tiêu Thiết kế
+Trang Showcase đóng vai trò giao diện trực quan hóa cao cấp (High-Tech Overview & Live Monitoring) nhằm giới thiệu tổng quan kiến trúc hệ thống, dòng chảy Web2.5 và stream trực tiếp các block/giao dịch sinh ra từ Hardhat EVM phục vụ buổi báo cáo đồ án.
+
+### 17.2 Cấu trúc 4 Phân vùng Chính (Layout Architecture)
+1. **Zone 1: Hero Section & Khối 3D Vault Tương tác:**
+   - Khối hình học 3D "The Digital Vault" được xây dựng bằng CSS 3D Transforms / WebGL nhẹ kết hợp GSAP `quickTo` bắt tọa độ chuột (`clientX`, `clientY`) tạo góc nhìn xoay đa chiều mượt mà ($\pm 15^\circ$).
+   - 3 Counter số liệu sống (Live Metrics Counter) ứng dụng GSAP `countUp` nhảy từ 0 khi tải trang (Tổng thiết bị sẵn sàng, Giao dịch on-chain đã duyệt, Tỷ lệ bảo toàn quỹ cọc 100%).
+2. **Zone 2: Visual Pipeline - Dòng chảy Web2.5:**
+   - 4 trạm dừng tương tác có hiệu ứng GSAP ScrollTrigger và luồng sáng năng lượng (Pulse Light Beam):
+     - *Trạm 1 (Off-Chain):* Sinh viên gửi đơn $\rightarrow$ MySQL thực thi Khóa dòng (`SELECT ... FOR UPDATE`).
+     - *Trạm 2 (Custodial Relayer):* FastAPI Backend ký số bằng Admin Private Key (`web3.py`).
+     - *Trạm 3 (Smart Contract):* Khóa tiền cọc mô phỏng & Kích hoạt Mutex `EquipmentLocked`.
+     - *Trạm 4 (Nghiệm thu):* Hoàn cọc 100% hoặc Khấu trừ phạt tự động theo biên bản trả máy.
+3. **Zone 3: Live On-Chain Transaction Terminal:**
+   - Console màu tối chuyên nghiệp (`bg-slate-950 text-emerald-400 font-mono`).
+   - Tự động bắt giao dịch mới từ Hardhat EVM; mỗi bản ghi mới trượt vào bằng hiệu ứng GSAP slide-in (`opacity: 0, y: -20`).
+   - Hiển thị đầy đủ `tx_hash`, `block_number`, `gas_used`, `action_type`, nút sao chép hash nhanh.
+4. **Zone 4: Equipment Spotlight & Simulator Playground:**
+   - Lưới hiển thị thiết bị thực tế kèm mức cọc và tình trạng Mutex.
+   - Bảng giả lập tương tác cho phép chọn kịch bản mượn trả mẫu (Đúng hạn hoàn 100%, Trễ 24h phạt 10%, Trễ >24h phạt 50%, Báo mất phạt 100%) để xem Smart Contract phản hồi trực tiếp.
+
+### 17.3 5 Đề xuất Tính năng Nâng cấp để Giao việc
+1. *Simulator Playground:* Bảng điều khiển giả lập kịch bản mượn/phạt tức thì ngay tại trang giới thiệu.
+2. *Dual-State Live Diff Visualizer:* Widget so sánh đối soát song song giữa MySQL và Smart Contract, cảnh báo lệch dữ liệu.
+3. *Interactive 3D Blockchain Blocks:* Chuỗi khối 3D trực quan kết nối mắt xích, click vào block mở transaction receipt.
+4. *Reconciliation Worker Visual Monitor:* Nút giả lập server crash và trực quan hóa tiến trình tự đồng bộ dữ liệu.
+5. *Export Báo cáo Kiểm toán PDF:* Xuất chứng thư kiểm toán điện tử có mã QR trỏ tới Hash giao dịch.
+

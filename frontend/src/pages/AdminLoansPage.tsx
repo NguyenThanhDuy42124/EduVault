@@ -181,8 +181,8 @@ export const AdminLoansPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Điều phối mượn trả thiết bị
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Trung tâm kiểm duyệt yêu cầu mượn, xác nhận bàn giao và nghiệm thu hoàn trả tích hợp Smart Contract
+          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
+            Xét duyệt yêu cầu mượn, bàn giao và nghiệm thu hoàn trả.
           </p>
         </div>
 
@@ -254,7 +254,7 @@ export const AdminLoansPage: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-xs tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Đơn #</th>
                   <th className="py-3 px-4">Người mượn</th>
@@ -275,7 +275,7 @@ export const AdminLoansPage: React.FC = () => {
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
                         #{loan.id}
                         {loan.is_overdue && (
-                          <span className="block text-[9px] text-rose-600 font-semibold tracking-wider uppercase mt-0.5 animate-pulse">
+                          <span className="block text-xs text-rose-600 font-semibold tracking-wider uppercase mt-0.5">
                             Quá hạn
                           </span>
                         )}
@@ -286,7 +286,7 @@ export const AdminLoansPage: React.FC = () => {
                         <span className="font-semibold text-slate-900 block truncate max-w-[160px]">
                           {loan.user?.full_name || 'N/A'}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono block">
+                        <span className="text-xs text-slate-500 font-mono block">
                           {loan.user?.student_staff_id}
                         </span>
                       </td>
@@ -296,7 +296,7 @@ export const AdminLoansPage: React.FC = () => {
                         <span className="font-semibold text-slate-900 block truncate max-w-[180px]">
                           {loan.equipment?.name || 'N/A'}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono block">
+                        <span className="text-xs text-slate-500 font-mono block">
                           {loan.equipment?.serial_number}
                         </span>
                       </td>
@@ -322,7 +322,7 @@ export const AdminLoansPage: React.FC = () => {
                         <span className="font-mono font-bold text-slate-900 block">
                           {depositVND} đ
                         </span>
-                        <span className="text-[10px] text-slate-500 block">
+                        <span className="text-xs text-slate-500 block">
                           {loan.deposit_status}
                         </span>
                       </td>
@@ -382,7 +382,7 @@ export const AdminLoansPage: React.FC = () => {
                           )}
 
                           {['RETURNED', 'DISPUTED', 'CANCELLED', 'REJECTED'].includes(loan.status) && (
-                            <span className="text-[11px] text-slate-400 font-mono">--</span>
+                            <span className="text-xs text-slate-400 font-mono">--</span>
                           )}
                         </div>
                       </td>
@@ -431,12 +431,12 @@ export const AdminLoansPage: React.FC = () => {
                   onClick={() => setReturnCondition(c.id as ReturnCondition)}
                   className={`p-3 rounded-xl border text-left transition-all ${
                     returnCondition === c.id
-                      ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600'
+                      ? 'border-slate-900 bg-slate-100 ring-1 ring-slate-900'
                       : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
                   }`}
                 >
                   <span className="font-bold text-xs text-slate-900 block">{c.label}</span>
-                  <span className="text-[10px] text-slate-500 block mt-1 leading-tight">
+                  <span className="text-xs text-slate-500 block mt-1 leading-tight">
                     {c.desc}
                   </span>
                 </button>
@@ -456,7 +456,7 @@ export const AdminLoansPage: React.FC = () => {
               value={manualPenalty}
               onChange={(e) => setManualPenalty(e.target.value)}
               placeholder="Mặc định: Tự động (0% đúng hạn, 10% trễ <=24h, 50% trễ >24h)"
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
 
@@ -470,13 +470,13 @@ export const AdminLoansPage: React.FC = () => {
               value={inspectionNotes}
               onChange={(e) => setInspectionNotes(e.target.value)}
               placeholder="Nhập tình trạng phụ kiện, cáp nguồn, bề mặt máy..."
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
 
           {/* Smart Contract Automated Settlement Notice */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 flex items-start space-x-2">
-            <Info className="w-4 h-4 flex-shrink-0 text-indigo-600 mt-0.5" />
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
+            <Info className="w-4 h-4 flex-shrink-0 text-slate-700 mt-0.5" />
             <p>
               Giao dịch <code>confirmReturn</code> sẽ được Backend Relayer ký và phát lên Smart Contract.
               Khoản cọc mô phỏng sẽ chuyển trạng thái <strong>REFUNDED</strong> hoặc <strong>FORFEITED</strong> và thiết bị được giải phóng Mutex tự động.

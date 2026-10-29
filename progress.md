@@ -389,3 +389,40 @@
 | **Mục tiêu là gì?** | Hệ thống mượn trả thiết bị học tập EduVault hoàn chỉnh kết hợp Web2.5 (FastAPI + MySQL + Hardhat Smart Contract + React UI). |
 | **Đã học được gì?** | Áp dụng `design-taste-frontend-v1` giúp giao diện không bị AI slop, loại bỏ hoàn toàn emoji, dùng màu sắc desaturated Slate/Indigo/Emerald và bọc tương tác an toàn; các biến thư viện Node cục bộ chạy trực tiếp ổn định qua đường dẫn `node_modules`. |
 | **Đã làm được gì?** | Hoàn tất Phase 0, 1, 2, 3, 4, 5, 6. Hệ thống có trọn vẹn Smart Contract (28 tests passed), Backend API (56 tests passed), và Frontend Web App hiện đại, sẵn sàng cho khâu tích hợp End-to-End. |
+
+---
+
+## Cải tiến UI/UX & Ảnh Sản Phẩm Phòng Lab (Theo yêu cầu người dùng)
+- **Status:** complete
+- **Time:** 2026-10-29 23:22:00
+- **Nội dung thực hiện:**
+  - Áp dụng các kỹ năng `/impeccable` và `/doubt-driven-development`.
+  - **Bỏ tài khoản demo:** Xóa bỏ hoàn toàn khối "Tài khoản Demo Hội đồng" và các button quick fill trên [`LoginPage.tsx`](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/LoginPage.tsx).
+  - **Tạo & tích hợp 8 ảnh sản phẩm thiết bị lab chân thực:** Sử dụng AI Image Generator tạo ảnh studio độ phân giải cao cho 8 thiết bị đào tạo lưu tại `frontend/public/images/equipment/`:
+    1. MacBook Pro 14" M2 Pro (`macbook-pro.jpg`)
+    2. Dell XPS 15 9530 (`dell-xps.jpg`)
+    3. iPad Pro 11" M2 (`ipad-pro.jpg`)
+    4. Máy chiếu Sony VPL-EX570 (`sony-projector.jpg`)
+    5. Máy đo xung số Rigol DS1054Z (`rigol-oscilloscope.jpg`)
+    6. Kính hiển vi kỹ thuật số Andonstar AD407 (`andonstar-microscope.jpg`)
+    7. Kit vi điều khiển STM32F407 Discovery (`stm32-kit.jpg`)
+    8. Bộ cảm biến Arduino IoT Kit (`arduino-kit.jpg`)
+  - **Cập nhật Database:** Đồng bộ `image_url` nội bộ cho 8 thiết bị trong [`scripts/seed.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/scripts/seed.py) và bảng `equipment` trong MySQL.
+  - **Nâng cấp `EquipmentPage.tsx`:** Tích hợp khung ảnh tỉ lệ 16:10, hiệu ứng hover mượt mà, fallback icon tự động, khắc phục toàn bộ các cảnh báo Accessibility & Typography (thứ bậc heading h1 -> h2, contrast text >= 4.5:1, loại bỏ nested card div).
+  - **Xác minh kỹ thuật:** `node node_modules\typescript\bin\tsc -b` 0 lỗi; `node node_modules\vite\bin\vite.js build` hoàn thành trong 3.58s.
+
+---
+
+## Thiết lập Kế hoạch Phase 6B: Interactive Showcase Dashboard (GSAP Web 3D & Live Logs)
+- **Status:** complete (Planning Phase)
+- **Time:** 2026-10-30 00:06:00
+- **Nội dung thực hiện:**
+  - Lập bản thiết kế kiến trúc 4 phân vùng cho trang Showcase Dashboard:
+    1. *Zone 1:* Hero Section & Khối 3D Digital Vault tương tác xoay theo chuột (GSAP perspective tilt) và bộ counter nhảy số động.
+    2. *Zone 2:* Visual Pipeline trực quan hóa 4 trạm dừng của dòng chảy Web2.5 (MySQL Lock -> Relayer Signer -> Smart Contract Mutex -> Quyết toán cọc).
+    3. *Zone 3:* Live On-Chain Transaction Terminal stream trực tiếp log giao dịch từ Hardhat EVM.
+    4. *Zone 4:* Equipment Spotlight & Bảng giả lập tương tác Simulator Playground.
+  - Xây dựng 5 đề xuất tính năng công nghệ cao để người dùng lựa chọn giao việc.
+  - Cập nhật đồng bộ vào `task_plan.md` (bổ sung Phase 6B với 6 nhiệm vụ chi tiết), `findings.md` (Mục 17 đặc tả kiến trúc kỹ thuật) và `progress.md`.
+
+

@@ -9,6 +9,7 @@ import {
   Search,
   Edit2,
   Trash2,
+  ShieldAlert,
 } from 'lucide-react';
 
 export const AdminInventoryPage: React.FC = () => {
@@ -35,6 +36,7 @@ export const AdminInventoryPage: React.FC = () => {
   // Action status
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -135,38 +137,55 @@ export const AdminInventoryPage: React.FC = () => {
     }
   };
 
+  // Delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa thiết bị này khỏi danh mục kho?')) return;
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setDeleteError(null);
     try {
-      await equipmentService.delete(id);
+      await equipmentService.delete(confirmDeleteId);
+      setConfirmDeleteId(null);
       await fetchInventory();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      alert(axiosErr.response?.data?.detail || 'Không thể xóa thiết bị đang được tham chiếu.');
+      setDeleteError(axiosErr.response?.data?.detail || 'Không thể xóa thiết bị đang được tham chiếu trong đơn mượn.');
+      setConfirmDeleteId(null);
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Quản trị kho thiết bị
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-sm text-slate-600 mt-1 max-w-2xl">
             Đăng ký thiết bị đào tạo mới, cập nhật định mức ký quỹ và chuyển trạng thái bảo trì
           </p>
         </div>
 
         <button
           onClick={handleOpenAdd}
-          className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm active:scale-[0.98]"
+          className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs active:scale-[0.98] cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm thiết bị mới</span>
         </button>
       </div>
+
+      {deleteError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2.5 text-xs text-rose-700">
+          <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+          <span>{deleteError}</span>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -205,7 +224,7 @@ export const AdminInventoryPage: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-xs tracking-wider">
                 <tr>
                   <th className="py-3 px-4">ID</th>
                   <th className="py-3 px-4">Serial Number</th>
@@ -225,12 +244,12 @@ export const AdminInventoryPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4">
                       <span className="font-semibold text-slate-900 block">{item.name}</span>
-                      <span className="text-[10px] text-slate-500 block truncate max-w-xs mt-0.5">
+                      <span className="text-xs text-slate-500 block truncate max-w-xs mt-0.5">
                         {item.specifications || '--'}
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 font-mono">
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 font-mono">
                         {item.category}
                       </span>
                     </td>
@@ -446,6 +465,37 @@ export const AdminInventoryPage: React.FC = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        title="Xác nhận xóa thiết bị"
+        subtitle="Hành động này sẽ xóa thiết bị khỏi danh mục nếu chưa có đơn mượn liên kết"
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-600">
+            Bạn có chắc chắn muốn xóa thiết bị này khỏi danh mục kho? Hành động này không thể hoàn tác.
+          </p>
+          <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteId(null)}
+              className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDelete}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+            >
+              Xác nhận xóa
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

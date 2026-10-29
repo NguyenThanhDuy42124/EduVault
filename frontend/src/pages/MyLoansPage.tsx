@@ -81,8 +81,8 @@ export const MyLoansPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đơn mượn của tôi</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Theo dõi tiến trình xét duyệt, trạng thái bàn giao thực tế và minh chứng tiền cọc on-chain
+          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
+            Theo dõi tiến trình xét duyệt và trạng thái tiền cọc on-chain.
           </p>
         </div>
 
@@ -134,14 +134,14 @@ export const MyLoansPage: React.FC = () => {
                         ({loan.equipment?.serial_number || 'N/A'})
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Đơn mượn #{loan.id} • Gửi ngày {formatDate(loan.request_date)}
                     </p>
                   </div>
 
                   <div className="flex items-center space-x-2">
                     {loan.is_overdue && (
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 animate-pulse">
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
                         <AlertTriangle className="w-3.5 h-3.5" />
                         <span>QUÁ HẠN</span>
                       </span>
@@ -152,23 +152,23 @@ export const MyLoansPage: React.FC = () => {
 
                 {/* Progress Stepper (Visual Lifecycle) */}
                 <div className="py-2">
-                  <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-medium text-slate-600">
-                    <div className={stepIndex >= 0 ? 'text-indigo-600 font-bold' : 'text-slate-400'}>
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs font-medium text-slate-600">
+                    <div className={stepIndex >= 0 ? 'text-slate-900 font-bold' : 'text-slate-400'}>
                       1. Gửi yêu cầu
                     </div>
-                    <div className={stepIndex >= 1 ? 'text-indigo-600 font-bold' : 'text-slate-400'}>
+                    <div className={stepIndex >= 1 ? 'text-slate-900 font-bold' : 'text-slate-400'}>
                       2. Duyệt đơn
                     </div>
-                    <div className={stepIndex >= 2 ? 'text-indigo-600 font-bold' : 'text-slate-400'}>
+                    <div className={stepIndex >= 2 ? 'text-slate-900 font-bold' : 'text-slate-400'}>
                       3. Bàn giao & Dùng
                     </div>
-                    <div className={stepIndex >= 3 ? 'text-indigo-600 font-bold' : 'text-slate-400'}>
+                    <div className={stepIndex >= 3 ? 'text-slate-900 font-bold' : 'text-slate-400'}>
                       4. Hoàn tất
                     </div>
                   </div>
                   <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden flex">
                     <div
-                      className={`h-full bg-indigo-600 transition-all duration-300 ${
+                      className={`h-full bg-slate-900 transition-all duration-300 ${
                         stepIndex === 0
                           ? 'w-1/4'
                           : stepIndex === 1
@@ -184,7 +184,7 @@ export const MyLoansPage: React.FC = () => {
                 {/* Details Bento Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 text-xs">
                   <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
-                    <span className="text-slate-500 text-[10px] uppercase font-semibold block">
+                    <span className="text-slate-500 text-xs uppercase font-semibold block">
                       Dự kiến nhận
                     </span>
                     <span className="text-slate-900 font-medium mt-0.5 block">
@@ -193,7 +193,7 @@ export const MyLoansPage: React.FC = () => {
                   </div>
 
                   <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
-                    <span className="text-slate-500 text-[10px] uppercase font-semibold block">
+                    <span className="text-slate-500 text-xs uppercase font-semibold block">
                       Hạn chót trả lại
                     </span>
                     <span
@@ -206,7 +206,7 @@ export const MyLoansPage: React.FC = () => {
                   </div>
 
                   <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
-                    <span className="text-slate-500 text-[10px] uppercase font-semibold block">
+                    <span className="text-slate-500 text-xs uppercase font-semibold block">
                       Ký quỹ mô phỏng
                     </span>
                     <div className="flex items-center space-x-1.5 mt-0.5">
@@ -216,15 +216,15 @@ export const MyLoansPage: React.FC = () => {
                   </div>
 
                   <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
-                    <span className="text-slate-500 text-[10px] uppercase font-semibold block">
+                    <span className="text-slate-500 text-xs uppercase font-semibold block">
                       Mã Blockchain
                     </span>
                     {loan.on_chain_loan_id ? (
-                      <span className="font-mono text-indigo-600 text-[11px] truncate block mt-0.5" title={loan.on_chain_loan_id}>
+                      <span className="font-mono text-slate-900 font-semibold text-xs truncate block mt-0.5" title={loan.on_chain_loan_id}>
                         {loan.on_chain_loan_id.substring(0, 16)}...
                       </span>
                     ) : (
-                      <span className="text-slate-400 text-[11px] block mt-0.5">
+                      <span className="text-slate-400 text-xs block mt-0.5">
                         Chưa cấp (Chờ duyệt)
                       </span>
                     )}

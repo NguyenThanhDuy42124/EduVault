@@ -117,7 +117,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Apple M2 Pro 10-core CPU, 16-core GPU, 16GB RAM, 512GB SSD Retina XDR",
             "deposit_amount": Decimal("1000000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500"
+            "image_url": "/images/equipment/macbook-pro.jpg"
         },
         {
             "serial_number": "LAPTOP-DELL-002",
@@ -126,7 +126,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Intel Core i7-13700H, 16GB DDR5, 512GB NVMe, RTX 4050 6GB",
             "deposit_amount": Decimal("800000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=500"
+            "image_url": "/images/equipment/dell-xps.jpg"
         },
         {
             "serial_number": "TABLET-IPAD-001",
@@ -135,7 +135,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Apple M2 chip, Màn hình Liquid Retina 120Hz, kèm bút Apple Pencil 2",
             "deposit_amount": Decimal("500000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=500"
+            "image_url": "/images/equipment/ipad-pro.jpg"
         },
         {
             "serial_number": "PROJ-SONY-001",
@@ -144,7 +144,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Độ sáng 4200 Ansi Lumens, Độ phân giải XGA (1024x768), Cổng HDMI/VGA",
             "deposit_amount": Decimal("600000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=500"
+            "image_url": "/images/equipment/sony-projector.jpg"
         },
         {
             "serial_number": "OSC-RIGOL-001",
@@ -153,7 +153,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Băng thông 50MHz, 4 kênh tương tự, Tốc độ lấy mẫu 1GSa/s, Bộ nhớ 24Mpts",
             "deposit_amount": Decimal("400000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500"
+            "image_url": "/images/equipment/rigol-oscilloscope.jpg"
         },
         {
             "serial_number": "MIC-ANDON-001",
@@ -162,7 +162,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Độ phóng đại 270X, Màn hình 7 inch gắn liền, Cổng ra HDMI 1080P FHD",
             "deposit_amount": Decimal("300000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=500"
+            "image_url": "/images/equipment/andonstar-microscope.jpg"
         },
         {
             "serial_number": "KIT-STM32-001",
@@ -171,7 +171,7 @@ def seed_equipment(db) -> dict:
             "specifications": "ARM Cortex-M4 168MHz, 1MB Flash, 192KB RAM, ST-LINK/V2 tích hợp sẵn",
             "deposit_amount": Decimal("200000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1608555895009-bc362c3e1647?w=500"
+            "image_url": "/images/equipment/stm32-kit.jpg"
         },
         {
             "serial_number": "KIT-ARDUINO-001",
@@ -180,7 +180,7 @@ def seed_equipment(db) -> dict:
             "specifications": "Bo mạch Arduino Mega 2560, Module ESP8266 Wifi, 37 loại cảm biến học tập",
             "deposit_amount": Decimal("150000.00"),
             "status": EquipmentStatus.AVAILABLE,
-            "image_url": "https://images.unsplash.com/photo-1553406830-ef2513450d76?w=500"
+            "image_url": "/images/equipment/arduino-kit.jpg"
         },
     ]
 
@@ -202,6 +202,10 @@ def seed_equipment(db) -> dict:
             equipment_map[item["serial_number"]] = eq
             print(f" [EQUIPMENT ADDED]  {item['category']:<12} | {item['serial_number']:<16} | {item['name']}")
         else:
+            existing.image_url = item["image_url"]
+            existing.name = item["name"]
+            existing.specifications = item["specifications"]
+            existing.deposit_amount = item["deposit_amount"]
             equipment_map[item["serial_number"]] = existing
             print(f" [EQUIPMENT EXISTS] {item['category']:<12} | {item['serial_number']:<16} | {item['name']}")
 
