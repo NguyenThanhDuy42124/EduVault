@@ -9,6 +9,7 @@ import {
   Activity,
   LogOut,
   RefreshCw,
+  LayoutDashboard,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -35,6 +36,12 @@ export const Navbar: React.FC = () => {
   };
 
   const navLinks = [
+    {
+      name: 'Tổng quan',
+      path: '/overview',
+      icon: LayoutDashboard,
+      roles: ['ADMIN', 'BORROWER'],
+    },
     {
       name: 'Danh mục thiết bị',
       path: '/equipment',
@@ -66,6 +73,7 @@ export const Navbar: React.FC = () => {
       roles: ['ADMIN', 'BORROWER'],
     },
   ];
+
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">

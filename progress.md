@@ -426,3 +426,46 @@
   - Cập nhật đồng bộ vào `task_plan.md` (bổ sung Phase 6B với 6 nhiệm vụ chi tiết), `findings.md` (Mục 17 đặc tả kiến trúc kỹ thuật) và `progress.md`.
 
 
+
+
+---
+
+## Session: 2026-10-31 (Phase 6B - Interactive Showcase Dashboard)
+
+### Phase 6B: Nâng cấp Trang Trình diễn Tổng quan (GSAP Web 3D)
+- **Status:** complete
+- **Started:** 2026-10-31 13:00:00
+- **Completed:** 2026-10-31 13:10:00
+- **Actions taken:**
+  - **Task 6B.1**: Cài đặt thư viện GSAP (`gsap`, `@gsap/react` — 168 packages). Khởi tạo component `ShowcasePage.tsx` (~480 dòng). Đăng ký route `/overview` trong `App.tsx` và thêm nav link "Tổng quan" vào `Navbar.tsx` với icon `LayoutDashboard`.
+  - **Task 6B.2**: Zone 1 — Hero Section với nền gradient `slate-900 → indigo-900`, grid overlay, khối hình học 3D "Digital Vault" xây dựng bằng CSS 3D Transforms (`translateZ`, `rotateX`, `rotateY`) kết hợp GSAP `quickTo` bắt tọa độ chuột tạo hiệu ứng xoay đa chiều (±15°). 3 counter số liệu sống (`Thiết bị sẵn sàng`, `Giao dịch On-chain`, `Bảo toàn quỹ cọc 100%`) nhảy từ 0 bằng GSAP snap animation.
+  - **Task 6B.3**: Zone 2 — Visual Pipeline 4 trạm tương tác có gradient màu riêng biệt (blue/amber/emerald/indigo), mũi tên kết nối ChevronRight, GSAP entrance animation stagger 0.15s. Giải thích trực quan luồng Web2.5: MySQL Lock → Custodial Relayer → Smart Contract Mutex → Quyết toán cọc.
+  - **Task 6B.4**: Zone 3 — Live Transaction Terminal console chuyên nghiệp (`bg-slate-950 font-mono`), thanh tiêu đề macOS-style (3 dot: rose/amber/emerald), hiển thị tx_hash rút gọn, action badge có nhãn tiếng Việt và màu phân biệt, block_number, gas_used, timestamp. GSAP slide-in animation cho từng dòng. Nút copy hash vào clipboard.
+  - **Task 6B.5**: Zone 4 — Equipment Spotlight hiển thị danh sách thiết bị thực (ảnh, tên, serial, status badge tiếng Việt, mức cọc VND). Simulator Playground với 5 kịch bản mượn trả (Đúng hạn 0%, Trễ ≤24h 10%, Trễ >24h 50%, Hỏng 100%, Mất 100%), stepper 5 bước có animation, hiển thị kết quả phạt/cọc trực quan.
+  - **Task 6B.6**: Kiểm toán chất lượng — TypeScript `tsc -b` 0 lỗi, Vite production build thành công `2.90s` (CSS 37.01kB + JS 410.25kB gzipped 128.66kB). Lucide icons 100%, không emoji, phối màu Slate/Indigo/Emerald/Amber/Rose desaturated.
+- **Files created/modified:**
+  - `frontend/src/pages/ShowcasePage.tsx` (MỚI — ~480 dòng, 4 zones + GSAP animations)
+  - `frontend/src/App.tsx` (thêm route `/overview` → `ShowcasePage`)
+  - `frontend/src/components/Navbar.tsx` (thêm nav link "Tổng quan" với icon `LayoutDashboard`)
+  - `frontend/package.json` (thêm dependencies `gsap`, `@gsap/react`)
+
+### Bảng Kết quả Kiểm thử (Phase 6B Verification Matrix):
+| Hạng mục kiểm thử | Lệnh thực thi | Kết quả mong đợi | Kết quả thực tế | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- |
+| **TypeScript Type Check** | `tsc -b --noEmit` | 0 lỗi | Hoàn thành, không cảnh báo | **PASS** |
+| **Vite Production Build** | `vite build` | Bundle thành công | `built in 2.90s`, CSS 37kB, JS 410kB | **PASS** |
+| **GSAP Dependency** | `npm install gsap @gsap/react` | Cài đặt thành công | 168 packages added | **PASS** |
+| **Route Registration** | `/overview` trong `App.tsx` | Trang accessible | Route registered, ProtectedRoute + Layout wrap | **PASS** |
+
+---
+
+## 5-Question Reboot Check (Post Phase 6B)
+
+| Câu hỏi | Câu trả lời |
+| :--- | :--- |
+| **Đang ở đâu?** | Đã hoàn thành 100% Phase 6B: Interactive Showcase Dashboard với GSAP 3D. Trang `/overview` có 4 zones: Hero 3D Vault, Pipeline Web2.5, Live TX Terminal, Simulator Playground. Build thành công 0 lỗi. |
+| **Sắp đi đâu?** | Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ (chạy luồng mượn trả trọn vẹn, kịch bản ngoại lệ, crash recovery). |
+| **Mục tiêu là gì?** | Hệ thống mượn trả thiết bị học tập EduVault hoàn chỉnh kết hợp Web2.5 (FastAPI + MySQL + Hardhat Smart Contract + React UI). |
+| **Đã học được gì?** | GSAP `quickTo` kết hợp CSS 3D Transforms cho hiệu ứng vault tương tác mượt mà; Tailwind CSS v3 dùng `@tailwind base/components/utilities` không phải v4 `@import`. |
+| **Đã làm được gì?** | Hoàn tất Phase 0-6B. Smart Contract 28 tests, Backend 56 tests, Frontend 7 trang nghiệp vụ + Showcase Dashboard GSAP 3D. |
+

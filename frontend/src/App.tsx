@@ -11,6 +11,7 @@ import { MyLoansPage } from './pages/MyLoansPage';
 import { AdminLoansPage } from './pages/AdminLoansPage';
 import { AdminInventoryPage } from './pages/AdminInventoryPage';
 import { AuditPage } from './pages/AuditPage';
+import { ShowcasePage } from './pages/ShowcasePage';
 
 export const App: React.FC = () => {
   return (
@@ -71,6 +72,17 @@ export const App: React.FC = () => {
               <ProtectedRoute>
                 <Layout>
                   <AuditPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/overview"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ShowcasePage />
                 </Layout>
               </ProtectedRoute>
             }
