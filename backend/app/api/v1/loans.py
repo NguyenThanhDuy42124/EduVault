@@ -97,6 +97,22 @@ def list_loans_endpoint(
     return [_to_loan_response(l) for l in loans]
 
 
+
+@router.get(
+    "/my-loans",
+    response_model=List[LoanResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Xem danh sách đơn mượn của chính tôi (Alias)"
+)
+def my_loans_alias_endpoint(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> List[LoanResponse]:
+    loans = get_loans(db=db, user_id=current_user.id, skip=skip, limit=limit)
+    return [_to_loan_response(l) for l in loans]
+
 @router.get(
     "/{loan_id}",
     response_model=LoanResponse,

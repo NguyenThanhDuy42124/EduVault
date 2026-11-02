@@ -213,7 +213,8 @@ class BlockchainService:
         signed_tx = self.web3.eth.account.sign_transaction(tx_params, private_key=self.admin_account.key)
 
         # 4. Gửi Raw Transaction lên mạng
-        tx_hash_bytes = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        raw_tx = getattr(signed_tx, "raw_transaction", getattr(signed_tx, "rawTransaction", None))
+        tx_hash_bytes = self.web3.eth.send_raw_transaction(raw_tx)
         tx_hash_hex: str = tx_hash_bytes.hex()
 
         # 5. Chờ xác nhận biên lai giao dịch (Receipt)
@@ -226,8 +227,8 @@ class BlockchainService:
 
         return {
             "tx_hash": tx_hash_hex,
-            "block_number": receipt.blockNumber,
-            "gas_used": receipt.gasUsed,
+            "block_number": getattr(receipt, "block_number", getattr(receipt, "blockNumber", None)),
+            "gas_used": getattr(receipt, "gas_used", getattr(receipt, "gasUsed", None)),
             "status": "CONFIRMED" if is_success else "FAILED",
             "from_address": admin_address,
             "to_address": str(receipt.to)

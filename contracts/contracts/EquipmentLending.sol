@@ -1,20 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
  * @title EquipmentLending
- * @author EduVault Team
- * @notice Quản lý vòng đời mượn trả thiết bị học tập trên blockchain.
+ * @author EduVault Team (Web3 Native Upgrade)
+ * @notice Quản lý vòng đời mượn trả thiết bị học tập trên blockchain theo chuẩn Web3.
  *
  * Đặc điểm chính:
- *   - Simulated Deposit Accounting: ghi nhận tiền cọc dạng số, KHÔNG giữ ETH thật.
- *   - Mutex thiết bị: mỗi thiết bị chỉ cho phép 1 đơn mượn Active tại một thời điểm.
+ *   - AccessControl đa vai trò:
+ *       + DEFAULT_ADMIN_ROLE: Cấp/thu hồi quyền cho các tài khoản.
+ *       + ADMIN_ROLE: Cán bộ phòng lab (duyệt đơn, bàn giao, nhận lại máy).
+ *       + BORROWER_ROLE: Sinh viên kết nối ví MetaMask tự ký tạo đơn hoặc hủy đơn.
+ *   - Simulated Deposit Accounting: ghi nhận tiền cọc dạng số, minh bạch trên on-chain.
+ *   - Mutex thiết bị: mỗi thiết bị chỉ cho phép 1 đơn mượn Active/Approved tại một thời điểm.
  *   - Phạt tự động: trễ ≤24h → 10%, trễ >24h → 50%, hỏng/mất → tịch thu 100%.
- *   - Chỉ Owner (Admin Relayer) mới được gọi các hàm thay đổi trạng thái.
+ *   - Hỗ trợ cả sinh viên tự gọi (Web3 MetaMask) và Admin Relayer (nếu sinh viên chưa nạp gas).
  */
-contract EquipmentLending is Ownable {
+contract EquipmentLending is AccessControl {
+
+    // =========================================================================
+    //                               ROLES
+    // =========================================================================
+
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    bytes32 public constant BORROWER_ROLE = keccak256("BORROWER_ROLE");
 
     // =========================================================================
     //                               ENUMS
@@ -46,7 +57,7 @@ contract EquipmentLending is Ownable {
     struct LoanRecord {
         bytes32  loanId;            // ID duy nhất (keccak256 hash)
         uint256  equipmentId;       // Mã thiết bị (tham chiếu MySQL)
-        address  borrower;          // Địa chỉ ví đại diện sinh viên
+        address  borrower;          // Địa chỉ ví của sinh viên (MetaMask)
         string   studentId;         // Mã sinh viên (VD: "SV2026001")
         uint256  requestTime;       // Thời điểm tạo đơn (block.timestamp)
         uint256  expectedHandover;  // Ngày dự kiến bàn giao
@@ -73,7 +84,6 @@ contract EquipmentLending is Ownable {
     //                               EVENTS
     // =========================================================================
 
-    /// @notice Phát ra khi đơn mượn được tạo
     event LoanCreated(
         bytes32 indexed loanId,
         uint256 indexed equipmentId,
@@ -83,20 +93,17 @@ contract EquipmentLending is Ownable {
         uint256 depositAmount
     );
 
-    /// @notice Phát ra khi đơn mượn được duyệt
     event LoanApproved(
         bytes32 indexed loanId,
         uint256 indexed equipmentId,
         uint256 timestamp
     );
 
-    /// @notice Phát ra khi xác nhận bàn giao thiết bị
     event HandoverConfirmed(
         bytes32 indexed loanId,
         uint256 timestamp
     );
 
-    /// @notice Phát ra khi xác nhận trả thiết bị
     event LoanReturned(
         bytes32 indexed loanId,
         uint8   returnCondition,
@@ -105,7 +112,6 @@ contract EquipmentLending is Ownable {
         uint256 timestamp
     );
 
-    /// @notice Phát ra khi đơn mượn bị hủy
     event LoanCancelled(
         bytes32 indexed loanId,
         string  reason,
@@ -116,34 +122,28 @@ contract EquipmentLending is Ownable {
     //                             CONSTRUCTOR
     // =========================================================================
 
-    /// @param initialOwner Địa chỉ Admin Relayer (Hardhat Account #0)
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    /**
+     * @param initialAdmin Địa chỉ Quản trị viên khởi tạo hệ thống (Hardhat Account #0)
+     */
+    constructor(address initialAdmin) {
+        require(initialAdmin != address(0), "Invalid admin address");
+        _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
+        _grantRole(ADMIN_ROLE, initialAdmin);
+    }
 
     // =========================================================================
     //                           VIEW FUNCTIONS
     // =========================================================================
 
-    /// @notice Lấy toàn bộ thông tin một đơn mượn
-    /// @param _loanId ID của đơn mượn
-    /// @return Bản ghi LoanRecord đầy đủ
     function getLoan(bytes32 _loanId) external view returns (LoanRecord memory) {
         return loans[_loanId];
     }
 
-    /// @notice Kiểm tra đơn mượn có quá hạn hay không
-    /// @param _loanId ID của đơn mượn
-    /// @return true nếu đang Active và đã qua dueDate
     function isOverdue(bytes32 _loanId) external view returns (bool) {
         LoanRecord memory loan = loans[_loanId];
         return loan.state == LoanState.Active && block.timestamp > loan.dueDate;
     }
 
-    /// @notice Tính toán mức phạt dựa trên tình trạng thiết bị và thời gian trả
-    /// @param _loanId ID của đơn mượn
-    /// @param _returnCondition 0=TỐT, 1=HỎNG, 2=MẤT
-    /// @return penalty Phần trăm phạt (0, 10, 50 hoặc 100)
-    /// @return depState Trạng thái cọc sau khi trả
-    /// @return nextState Trạng thái đơn mượn sau khi trả
     function calculatePenalty(
         bytes32 _loanId,
         uint8   _returnCondition
@@ -175,11 +175,15 @@ contract EquipmentLending is Ownable {
     }
 
     // =========================================================================
-    //                        LIFECYCLE FUNCTIONS
+    //                        LIFECYCLE FUNCTIONS (WEB3 NATIVE)
     // =========================================================================
 
-    /// @notice Tạo đơn mượn mới và ghi nhận lên blockchain
-    /// @dev Chỉ Owner gọi. Kiểm tra: ID hợp lệ, không trùng, ngày hợp lệ.
+    /**
+     * @notice Tạo đơn mượn mới.
+     * @dev Cho phép:
+     *   1. Sinh viên kết nối ví MetaMask trực tiếp gọi (borrower = msg.sender).
+     *   2. Hoặc Admin Relayer gọi hộ (nếu truyền _borrower chỉ định).
+     */
     function createLoan(
         bytes32 _loanId,
         uint256 _equipmentId,
@@ -188,15 +192,24 @@ contract EquipmentLending is Ownable {
         uint256 _expectedHandover,
         uint256 _dueDate,
         uint256 _depositAmount
-    ) external onlyOwner {
+    ) external {
         require(_loanId != bytes32(0), "Invalid loan ID");
         require(loans[_loanId].loanId == bytes32(0), "Loan ID already exists");
         require(_dueDate > _expectedHandover, "Due date must be after handover");
 
+        // Nếu người gọi là Admin và có truyền _borrower cụ thể thì dùng _borrower
+        // Nếu người gọi là sinh viên MetaMask (hoặc _borrower rỗng), gán borrower = msg.sender
+        address actualBorrower;
+        if (hasRole(ADMIN_ROLE, msg.sender) && _borrower != address(0)) {
+            actualBorrower = _borrower;
+        } else {
+            actualBorrower = msg.sender;
+        }
+
         loans[_loanId] = LoanRecord({
             loanId:           _loanId,
             equipmentId:      _equipmentId,
-            borrower:         _borrower,
+            borrower:         actualBorrower,
             studentId:        _studentId,
             requestTime:      block.timestamp,
             expectedHandover: _expectedHandover,
@@ -211,13 +224,15 @@ contract EquipmentLending is Ownable {
 
         emit LoanCreated(
             _loanId, _equipmentId, _studentId,
-            _borrower, _dueDate, _depositAmount
+            actualBorrower, _dueDate, _depositAmount
         );
     }
 
-    /// @notice Duyệt đơn mượn và đặt Mutex giữ chỗ thiết bị
-    /// @dev Kiểm tra: đơn tồn tại, trạng thái Submitted, thiết bị chưa bị khóa.
-    function approveLoan(bytes32 _loanId) external onlyOwner {
+    /**
+     * @notice Duyệt đơn mượn và đặt Mutex giữ chỗ thiết bị.
+     * @dev Chỉ Admin (ví có ADMIN_ROLE) được gọi qua MetaMask.
+     */
+    function approveLoan(bytes32 _loanId) external onlyRole(ADMIN_ROLE) {
         LoanRecord storage loan = loans[_loanId];
         require(loan.loanId != bytes32(0), "Loan does not exist");
         require(loan.state == LoanState.Submitted, "Invalid state transition");
@@ -226,25 +241,24 @@ contract EquipmentLending is Ownable {
             "Equipment already active"
         );
 
-        // Chuyển trạng thái và khóa Mutex thiết bị
         loan.state = LoanState.Approved;
         activeEquipmentLoan[loan.equipmentId] = _loanId;
 
         emit LoanApproved(_loanId, loan.equipmentId, block.timestamp);
     }
 
-    /// @notice Xác nhận bàn giao thiết bị thực tế và khóa cọc
-    /// @dev Kiểm tra: đơn tồn tại và đang ở trạng thái Approved.
-    function confirmHandover(bytes32 _loanId) external onlyOwner {
+    /**
+     * @notice Xác nhận bàn giao thiết bị thực tế và khóa cọc.
+     * @dev Chỉ Admin (ví có ADMIN_ROLE) được gọi qua MetaMask.
+     */
+    function confirmHandover(bytes32 _loanId) external onlyRole(ADMIN_ROLE) {
         LoanRecord storage loan = loans[_loanId];
         require(loan.loanId != bytes32(0), "Loan does not exist");
         require(loan.state == LoanState.Approved, "Loan not approved");
 
-        // Chuyển sang Active, ghi nhận thời gian bàn giao
         loan.state = LoanState.Active;
         loan.actualHandover = block.timestamp;
 
-        // Khóa cọc mô phỏng (nếu có)
         if (loan.depositAmount > 0) {
             loan.depositState = DepositState.Locked;
         }
@@ -252,15 +266,15 @@ contract EquipmentLending is Ownable {
         emit HandoverConfirmed(_loanId, block.timestamp);
     }
 
-    /// @notice Xác nhận trả thiết bị, đánh giá tình trạng và áp dụng quy tắc phạt
-    /// @param _loanId ID của đơn mượn
-    /// @param _returnCondition 0=TỐT, 1=HỎNG, 2=MẤT
-    /// @param _penaltyPercent Ghi đè mức phạt thủ công (0 = tự động tính)
+    /**
+     * @notice Xác nhận trả thiết bị, đánh giá tình trạng và áp dụng quy tắc phạt.
+     * @dev Chỉ Admin (ví có ADMIN_ROLE) được gọi qua MetaMask.
+     */
     function confirmReturn(
         bytes32 _loanId,
         uint8   _returnCondition,
         uint8   _penaltyPercent
-    ) external onlyOwner {
+    ) external onlyRole(ADMIN_ROLE) {
         LoanRecord storage loan = loans[_loanId];
         require(loan.loanId != bytes32(0), "Loan does not exist");
         require(loan.state == LoanState.Active, "Loan is not active");
@@ -288,7 +302,6 @@ contract EquipmentLending is Ownable {
             nextState = LoanState.Returned;
         }
 
-        // Cập nhật bản ghi
         loan.actualReturn   = block.timestamp;
         loan.penaltyPercent = penalty;
         loan.depositState   = depState;
@@ -302,30 +315,34 @@ contract EquipmentLending is Ownable {
         );
     }
 
-    /// @notice Hủy đơn mượn (chỉ khi chưa bàn giao: Submitted hoặc Approved)
-    /// @param _loanId ID của đơn mượn
-    /// @param _reason Lý do hủy
+    /**
+     * @notice Hủy đơn mượn (chỉ khi chưa bàn giao: Submitted hoặc Approved).
+     * @dev Cho phép:
+     *   1. Chính Sinh viên mượn (msg.sender == loan.borrower) tự hủy qua MetaMask.
+     *   2. Hoặc Admin (ADMIN_ROLE) hủy hộ.
+     */
     function cancelLoan(
         bytes32 _loanId,
         string  calldata _reason
-    ) external onlyOwner {
+    ) external {
         LoanRecord storage loan = loans[_loanId];
         require(loan.loanId != bytes32(0), "Loan does not exist");
+        require(
+            hasRole(ADMIN_ROLE, msg.sender) || msg.sender == loan.borrower,
+            "Not authorized to cancel"
+        );
         require(
             loan.state == LoanState.Submitted ||
             loan.state == LoanState.Approved,
             "Cannot cancel active or closed loan"
         );
 
-        // Nếu đã Approved → giải phóng Mutex thiết bị
         if (loan.state == LoanState.Approved) {
             activeEquipmentLoan[loan.equipmentId] = bytes32(0);
         }
 
-        // Chuyển trạng thái sang Cancelled
         loan.state = LoanState.Cancelled;
 
-        // Nếu cọc đã bị khóa → hoàn trả cọc
         if (loan.depositState == DepositState.Locked) {
             loan.depositState = DepositState.Refunded;
         }

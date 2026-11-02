@@ -62,22 +62,20 @@ describe("EquipmentLending - Kiểm thử toàn diện vòng đời mượn tr�
   });
 
   // =========================================================================
-  // 1. DEPLOYMENT & OWNERSHIP
+  // 1. DEPLOYMENT & ACCESS CONTROL ROLES
   // =========================================================================
-  describe("1. Deployment & Ownership", function () {
-    it("1.1 Deploy thành công với owner đúng", async function () {
-      expect(await contract.owner()).to.equal(owner.address);
+  describe("1. Deployment & Access Control Roles", function () {
+    it("1.1 Deploy thành công với ADMIN_ROLE đúng", async function () {
+      const ADMIN_ROLE = await contract.ADMIN_ROLE();
+      expect(await contract.hasRole(ADMIN_ROLE, owner.address)).to.be.true;
     });
 
-    it("1.2 Từ chối giao dịch từ tài khoản không phải owner", async function () {
+    it("1.2 Từ chối duyệt đơn từ tài khoản không có ADMIN_ROLE", async function () {
       const id = loanId("unauth");
-      const now = await time.latest();
+      await createDefaultLoan(id);
       await expect(
-        contract.connect(unauthorized).createLoan(
-          id, EQUIPMENT_ID, STUDENT_ID, student.address,
-          now, now + ONE_DAY, DEPOSIT
-        )
-      ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
+        contract.connect(unauthorized).approveLoan(id)
+      ).to.be.revertedWithCustomError(contract, "AccessControlUnauthorizedAccount");
     });
   });
 

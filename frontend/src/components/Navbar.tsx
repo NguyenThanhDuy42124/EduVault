@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useWeb3 } from '../context/Web3Context';
 import {
   ShieldCheck,
   Laptop,
@@ -10,10 +11,13 @@ import {
   LogOut,
   RefreshCw,
   LayoutDashboard,
+  Wallet,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, role, logout, quickLogin } = useAuth();
+  const { account, balanceEth, isConnected, isCorrectNetwork, connectWallet, switchNetwork } = useWeb3();
   const location = useLocation();
   const navigate = useNavigate();
   const [switching, setSwitching] = useState(false);
@@ -117,6 +121,43 @@ export const Navbar: React.FC = () => {
 
           {/* Right Controls */}
           <div className="flex items-center space-x-3">
+            {/* Web3 MetaMask Connect Button */}
+            {isConnected ? (
+              <div className="flex items-center space-x-2">
+                {!isCorrectNetwork ? (
+                  <button
+                    onClick={switchNetwork}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
+                    title="Bấm để đổi sang mạng Hardhat 31337"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Đổi mạng (31337)</span>
+                  </button>
+                ) : (
+                  <div className="hidden md:flex items-center space-x-2 px-2.5 py-1 bg-slate-900 text-white rounded-lg border border-slate-800 text-xs font-mono shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="font-semibold text-slate-200">
+                      {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : ''}
+                    </span>
+                    {balanceEth && (
+                      <span className="text-[10px] text-slate-400 border-l border-slate-700 pl-2">
+                        {balanceEth} ETH
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={connectWallet}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                title="Kết nối ví MetaMask"
+              >
+                <Wallet className="w-3.5 h-3.5 text-orange-600" />
+                <span>Kết nối MetaMask</span>
+              </button>
+            )}
+
             {user ? (
               <>
                 {/* Role Switch Button */}

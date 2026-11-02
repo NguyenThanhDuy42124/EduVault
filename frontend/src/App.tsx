@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { Web3Provider } from './context/Web3Context';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 
@@ -17,7 +18,8 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <Web3Provider>
+          <Routes>
           {/* Public Login Route */}
           <Route path="/login" element={<LoginPage />} />
 
@@ -92,6 +94,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Navigate to="/equipment" replace />} />
           <Route path="*" element={<Navigate to="/equipment" replace />} />
         </Routes>
+        </Web3Provider>
       </AuthProvider>
     </BrowserRouter>
   );

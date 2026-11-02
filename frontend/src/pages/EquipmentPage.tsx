@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useWeb3 } from '../context/Web3Context';
 import { equipmentService } from '../services/equipmentService';
 import { loanService } from '../services/loanService';
 import { Equipment } from '../types';
@@ -24,7 +25,9 @@ import {
 } from 'lucide-react';
 
 export const EquipmentPage: React.FC = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const { isConnected, isCorrectNetwork, connectWallet, switchNetwork, getContract } = useWeb3();
+  const [web3StatusMsg, setWeb3StatusMsg] = useState<string | null>(null);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -114,7 +117,35 @@ export const EquipmentPage: React.FC = () => {
 
     setSubmitting(true);
     setActionError(null);
+    setWeb3StatusMsg(null);
     try {
+      let clientTxHash: string | undefined = undefined;
+      if (isConnected && isCorrectNetwork) {
+        setWeb3StatusMsg('Vui lòng bấm Xác nhận (Confirm) trên popup ví MetaMask...');
+        const contract = await getContract(true);
+        if (contract) {
+          const mockLoanId = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+          const startTs = Math.floor(new Date(expectedHandover).getTime() / 1000);
+          const dueTs = Math.floor(new Date(dueDate).getTime() / 1000);
+          const depositNum = Number(selectedEquipment.deposit_amount) || 0;
+
+          const tx = await contract.createLoan(
+            mockLoanId,
+            selectedEquipment.id,
+            user?.student_staff_id || 'SV2026001',
+            '0x0000000000000000000000000000000000000000',
+            startTs,
+            dueTs,
+            depositNum
+          );
+          setWeb3StatusMsg('Giao dịch đang được đào trên block...');
+          const receipt = await tx.wait();
+          clientTxHash = receipt.hash;
+        }
+      }
+
+      setWeb3StatusMsg('Đang lưu thông tin đơn mượn vào hệ thống...');
       await loanService.requestLoan({
         equipment_id: selectedEquipment.id,
         expected_handover_date: new Date(expectedHandover).toISOString(),
@@ -123,7 +154,9 @@ export const EquipmentPage: React.FC = () => {
       });
 
       setActionSuccess(
-        'Đã gửi đơn mượn thành công! Đơn đang ở trạng thái Chờ duyệt. Bạn có thể theo dõi trong mục "Đơn mượn của tôi".'
+        clientTxHash
+          ? `Gửi đơn & Ký on-chain thành công qua MetaMask! Mã Tx: ${clientTxHash.slice(0, 10)}...`
+          : 'Đã gửi đơn mượn thành công! Đơn đang ở trạng thái Chờ duyệt. Bạn có thể theo dõi trong mục "Đơn mượn của tôi".'
       );
       fetchEquipment();
       setTimeout(() => {
@@ -375,6 +408,50 @@ export const EquipmentPage: React.FC = () => {
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2 text-xs text-rose-700">
                 <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
                 <span>{actionError}</span>
+              </div>
+            )}
+
+            {/* Trạng thái kết nối ví MetaMask */}
+            <div className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+              isConnected
+                ? isCorrectNetwork
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-orange-50 border-orange-200 text-orange-800'
+            }`}>
+              <div className="flex items-center space-x-2">
+                <span className="font-semibold">Trạng thái Web3:</span>
+                <span>
+                  {isConnected
+                    ? isCorrectNetwork
+                      ? 'Đã kết nối MetaMask (Sẵn sàng ký On-chain)'
+                      : 'Sai mạng (Vui lòng chuyển sang Hardhat 31337)'
+                    : 'Chưa kết nối ví (Sẽ gửi qua Relayer mặc định)'}
+                </span>
+              </div>
+              {!isConnected && (
+                <button
+                  type="button"
+                  onClick={connectWallet}
+                  className="px-2.5 py-1 bg-orange-600 text-white rounded font-semibold text-[11px] hover:bg-orange-700 cursor-pointer"
+                >
+                  Kết nối ví
+                </button>
+              )}
+              {isConnected && !isCorrectNetwork && (
+                <button
+                  type="button"
+                  onClick={switchNetwork}
+                  className="px-2.5 py-1 bg-amber-600 text-white rounded font-semibold text-[11px] hover:bg-amber-700 cursor-pointer"
+                >
+                  Đổi mạng
+                </button>
+              )}
+            </div>
+
+            {web3StatusMsg && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 animate-pulse">
+                {web3StatusMsg}
               </div>
             )}
 

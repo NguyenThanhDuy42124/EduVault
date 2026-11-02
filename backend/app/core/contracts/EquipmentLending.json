@@ -1,12 +1,12 @@
 {
   "contractName": "EquipmentLending",
-  "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
   "abi": [
     {
       "inputs": [
         {
           "internalType": "address",
-          "name": "initialOwner",
+          "name": "initialAdmin",
           "type": "address"
         }
       ],
@@ -14,14 +14,8 @@
       "type": "constructor"
     },
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "owner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnableInvalidOwner",
+      "inputs": [],
+      "name": "AccessControlBadConfirmation",
       "type": "error"
     },
     {
@@ -30,9 +24,14 @@
           "internalType": "address",
           "name": "account",
           "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "neededRole",
+          "type": "bytes32"
         }
       ],
-      "name": "OwnableUnauthorizedAccount",
+      "name": "AccessControlUnauthorizedAccount",
       "type": "error"
     },
     {
@@ -189,19 +188,114 @@
       "inputs": [
         {
           "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "previousAdminRole",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "newAdminRole",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RoleAdminChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
           "internalType": "address",
-          "name": "previousOwner",
+          "name": "account",
           "type": "address"
         },
         {
           "indexed": true,
           "internalType": "address",
-          "name": "newOwner",
+          "name": "sender",
           "type": "address"
         }
       ],
-      "name": "OwnershipTransferred",
+      "name": "RoleGranted",
       "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RoleRevoked",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "ADMIN_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "BORROWER_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "DEFAULT_ADMIN_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [
@@ -456,6 +550,67 @@
       "inputs": [
         {
           "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getRoleAdmin",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "grantRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "hasRole",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
           "name": "_loanId",
           "type": "bytes32"
         }
@@ -551,21 +706,19 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "owner",
-      "outputs": [
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
         {
           "internalType": "address",
-          "name": "",
+          "name": "callerConfirmation",
           "type": "address"
         }
       ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "renounceOwnership",
+      "name": "renounceRole",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -573,14 +726,38 @@
     {
       "inputs": [
         {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
           "internalType": "address",
-          "name": "newOwner",
+          "name": "account",
           "type": "address"
         }
       ],
-      "name": "transferOwnership",
+      "name": "revokeRole",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "name": "supportsInterface",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     }
   ]

@@ -8,7 +8,7 @@ export const loanService = {
   },
 
   getMyLoans: async (): Promise<Loan[]> => {
-    const res = await api.get<Loan[]>('/loans/my-loans');
+    const res = await api.get<Loan[]>('/loans');
     return res.data;
   },
 
