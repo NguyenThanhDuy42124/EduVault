@@ -61,3 +61,4 @@ $Duration = [math]::Round(($TotalEndTime - $TotalStartTime).TotalSeconds, 2)
 Write-Host "`n======================================================================" -ForegroundColor Cyan
 Write-Host " [+] TONG KET: TOAN BO TEST SUITES (84+ TESTS) PASSED 100% TRONG $Duration giay!" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Cyan
+
