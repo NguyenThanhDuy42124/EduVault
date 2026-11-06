@@ -140,7 +140,7 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 ---
 
 ### Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ
-- [ ] Task 7.1: Chạy kịch bản luồng mượn trả chuẩn từ A-Z (Sinh viên tạo đơn -> Admin duyệt -> Bàn giao -> Trả đúng hạn -> Hoàn cọc 100%).
+- [x] Task 7.1: Chạy kịch bản luồng mượn trả chuẩn từ A-Z (Sinh viên tạo đơn -> Admin duyệt -> Bàn giao -> Trả đúng hạn -> Hoàn cọc 100%).
 - [ ] Task 7.2: Kiểm thử các kịch bản ngoại lệ:
   - Trả máy trễ hạn <= 24h (khấu trừ phạt 10%).
   - Trả máy trễ hạn > 24h (khấu trừ phạt 50%).
