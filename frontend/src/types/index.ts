@@ -102,6 +102,8 @@ export interface LoanCreateRequest {
   expected_handover_date: string;
   due_date: string;
   admin_notes?: string;
+  on_chain_loan_id?: string;
+  client_tx_hash?: string;
 }
 
 export interface LoanReturnRequest {

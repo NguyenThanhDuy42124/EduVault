@@ -38,3 +38,24 @@ def get_blockchain_status() -> Dict[str, Any]:
         "admin_balance_eth": str(blockchain_service.get_admin_balance()),
     }
 
+
+@router.get(
+    "/contract-info",
+    status_code=status.HTTP_200_OK,
+    summary="Lấy chi tiết thông tin Smart Contract",
+    description="Trả về địa chỉ contract, tên contract, chainId và các vai trò trên Smart Contract."
+)
+def get_contract_info() -> Dict[str, Any]:
+    """
+    Mục đích: Cung cấp thông tin chi tiết Smart Contract phục vụ trang kiểm toán AuditPage.
+    Trả về:
+        - Dict[str, Any]: contract_address, chain_id, deployer_address, is_connected.
+    """
+    return {
+        "contract_name": "EquipmentLending",
+        "contract_address": blockchain_service.contract_address,
+        "chain_id": blockchain_service.get_chain_id() or settings.CHAIN_ID,
+        "admin_wallet_address": blockchain_service.admin_account.address if blockchain_service.admin_account else None,
+        "is_connected": blockchain_service.is_connected()
+    }
+

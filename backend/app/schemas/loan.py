@@ -18,6 +18,8 @@ class LoanCreateRequest(BaseModel):
     expected_handover_date: datetime = Field(..., description="Thời gian dự kiến nhận thiết bị")
     due_date: datetime = Field(..., description="Thời gian hạn chót trả lại thiết bị")
     admin_notes: Optional[str] = Field(None, max_length=500, description="Ghi chú mục đích mượn học tập")
+    on_chain_loan_id: Optional[str] = Field(None, max_length=66, description="Mã hash định danh trên Blockchain EVM nếu đã ký trước qua MetaMask")
+    client_tx_hash: Optional[str] = Field(None, max_length=66, description="Transaction hash nếu tạo đơn qua MetaMask")
 
 
 class LoanReturnRequest(BaseModel):

@@ -89,6 +89,28 @@ async function main() {
   }, null, 2));
   console.log(`Contract address exported: ${addressFilePath}`);
 
+  // --- Export sang frontend ---
+  const frontendContractsDir = path.join(
+    __dirname, "..", "..", "frontend", "src", "contracts"
+  );
+  if (!fs.existsSync(frontendContractsDir)) {
+    fs.mkdirSync(frontendContractsDir, { recursive: true });
+  }
+  const frontendAbiPath = path.join(frontendContractsDir, "EquipmentLending.json");
+  fs.writeFileSync(frontendAbiPath, JSON.stringify({
+    contractName: "EquipmentLending",
+    address: contractAddress,
+    abi: artifact.abi,
+  }, null, 2));
+  const frontendAddrPath = path.join(frontendContractsDir, "contract_address.json");
+  fs.writeFileSync(frontendAddrPath, JSON.stringify({
+    EquipmentLending: contractAddress,
+    network: hre.network.name,
+    chainId: deployInfo.chainId,
+    deployedAt: deployInfo.deployedAt,
+  }, null, 2));
+  console.log(`Contract ABI & Address exported to frontend: ${frontendContractsDir}`);
+
   // Tóm tắt
   console.log("\n" + "=".repeat(60));
   console.log("  DEPLOY THÀNH CÔNG!");

@@ -142,10 +142,24 @@ def create_loan_request(
         status=LoanStatus.PENDING,
         deposit_amount=equipment.deposit_amount,
         deposit_status=DepositStatus.PENDING,
+        on_chain_loan_id=loan_in.on_chain_loan_id if loan_in.on_chain_loan_id else None,
         admin_notes=loan_in.admin_notes.strip() if loan_in.admin_notes else None
     )
     db.add(new_loan)
     db.flush()
+
+    # Nếu sinh viên đã gửi trực tiếp on-chain qua MetaMask, lưu vết transaction
+    if loan_in.client_tx_hash:
+        db.add(BlockchainTransaction(
+            request_id=new_loan.id,
+            tx_hash=loan_in.client_tx_hash,
+            action_type=TxActionType.CREATE_LOAN,
+            from_address=borrower_user.wallet_address or "client_wallet",
+            to_address=blockchain_service.contract_address or "contract",
+            block_number=None,
+            gas_used=None,
+            status=TxStatus.CONFIRMED
+        ))
 
     # 4. Ghi Audit Log
     audit = AuditLog(
@@ -206,13 +220,19 @@ def approve_loan_request(
     equipment = get_equipment_for_update(db, loan.equipment_id)
     equipment.status = EquipmentStatus.RESERVED
 
-    # 2. Sinh mã On-chain Loan ID chuẩn Keccak256
-    req_timestamp: int = int(loan.request_date.timestamp()) if loan.request_date else int(datetime.now().timestamp())
-    loan_id_bytes, loan_id_hex = blockchain_service.generate_loan_id(
-        user_id=loan.user_id,
-        equipment_id=loan.equipment_id,
-        timestamp=req_timestamp
-    )
+    # 2. Xác định On-chain Loan ID (Nếu đã có từ client MetaMask thì dùng tiếp, nếu chưa có thì sinh mới)
+    if loan.on_chain_loan_id:
+        loan_id_hex = loan.on_chain_loan_id
+        loan_id_bytes = bytes.fromhex(loan_id_hex.replace("0x", ""))
+        already_created_onchain = True
+    else:
+        req_timestamp: int = int(loan.request_date.timestamp()) if loan.request_date else int(datetime.now().timestamp())
+        loan_id_bytes, loan_id_hex = blockchain_service.generate_loan_id(
+            user_id=loan.user_id,
+            equipment_id=loan.equipment_id,
+            timestamp=req_timestamp
+        )
+        already_created_onchain = False
 
     # 3. Đẩy giao dịch On-chain nếu node Blockchain đang online
     if blockchain_service.is_connected() and blockchain_service.contract:
@@ -220,26 +240,27 @@ def approve_loan_request(
         borrower_address: str = borrower.wallet_address or blockchain_service.admin_account.address
         deposit_wei: int = int(loan.deposit_amount)
 
-        # Gửi createLoan
-        create_tx = blockchain_service.create_loan(
-            loan_id=loan_id_bytes,
-            equipment_id=loan.equipment_id,
-            student_id=borrower.student_staff_id,
-            borrower_address=borrower_address,
-            expected_handover=int(loan.expected_handover_date.timestamp()),
-            due_date=int(loan.due_date.timestamp()),
-            deposit_amount=deposit_wei
-        )
-        db.add(BlockchainTransaction(
-            request_id=loan.id,
-            tx_hash=create_tx["tx_hash"],
-            action_type=TxActionType.CREATE_LOAN,
-            from_address=create_tx["from_address"],
-            to_address=create_tx["to_address"],
-            block_number=create_tx["block_number"],
-            gas_used=create_tx["gas_used"],
-            status=TxStatus.CONFIRMED
-        ))
+        # Nếu chưa tạo on-chain trước đó thì Relayer tạo đơn createLoan
+        if not already_created_onchain:
+            create_tx = blockchain_service.create_loan(
+                loan_id=loan_id_bytes,
+                equipment_id=loan.equipment_id,
+                student_id=borrower.student_staff_id,
+                borrower_address=borrower_address,
+                expected_handover=int(loan.expected_handover_date.timestamp()),
+                due_date=int(loan.due_date.timestamp()),
+                deposit_amount=deposit_wei
+            )
+            db.add(BlockchainTransaction(
+                request_id=loan.id,
+                tx_hash=create_tx["tx_hash"],
+                action_type=TxActionType.CREATE_LOAN,
+                from_address=create_tx["from_address"],
+                to_address=create_tx["to_address"],
+                block_number=create_tx["block_number"],
+                gas_used=create_tx["gas_used"],
+                status=TxStatus.CONFIRMED
+            ))
 
         # Gửi approveLoan (Khóa Mutex activeEquipmentLoan on-chain)
         approve_tx = blockchain_service.approve_loan(loan_id=loan_id_bytes)

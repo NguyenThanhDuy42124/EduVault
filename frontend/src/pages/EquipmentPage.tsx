@@ -120,6 +120,7 @@ export const EquipmentPage: React.FC = () => {
     setWeb3StatusMsg(null);
     try {
       let clientTxHash: string | undefined = undefined;
+      let clientLoanId: string | undefined = undefined;
       if (isConnected && isCorrectNetwork) {
         setWeb3StatusMsg('Vui lòng bấm Xác nhận (Confirm) trên popup ví MetaMask...');
         const contract = await getContract(true);
@@ -142,6 +143,7 @@ export const EquipmentPage: React.FC = () => {
           setWeb3StatusMsg('Giao dịch đang được đào trên block...');
           const receipt = await tx.wait();
           clientTxHash = receipt.hash;
+          clientLoanId = mockLoanId;
         }
       }
 
@@ -151,6 +153,8 @@ export const EquipmentPage: React.FC = () => {
         expected_handover_date: new Date(expectedHandover).toISOString(),
         due_date: new Date(dueDate).toISOString(),
         admin_notes: notes.trim() || undefined,
+        on_chain_loan_id: clientLoanId,
+        client_tx_hash: clientTxHash,
       });
 
       setActionSuccess(
