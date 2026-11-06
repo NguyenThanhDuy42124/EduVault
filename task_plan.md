@@ -141,15 +141,15 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 
 ### Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ
 - [x] Task 7.1: Chạy kịch bản luồng mượn trả chuẩn từ A-Z (Sinh viên tạo đơn -> Admin duyệt -> Bàn giao -> Trả đúng hạn -> Hoàn cọc 100%).
-- [ ] Task 7.2: Kiểm thử các kịch bản ngoại lệ:
+- [x] Task 7.2: Kiểm thử các kịch bản ngoại lệ:
   - [x] Trả máy trễ hạn <= 24h (khấu trừ phạt 10%).
   - [x] Trả máy trễ hạn > 24h (khấu trừ phạt 50%).
   - [x] Báo hỏng thiết bị (khấu trừ 100% cọc vào quỹ trường).
   - [x] Báo mất thiết bị (khấu trừ 100% cọc).
-  - [ ] Cạnh tranh đặt trùng cùng thiết bị (kiểm tra MySQL lock & Smart Contract Mutex).
-  - [ ] Hủy đơn khi đã duyệt (kiểm tra giải phóng Mutex on-chain).
-- [ ] Task 7.3: Kiểm thử cơ chế phục hồi (Crash Simulation): giả lập server tắt đột ngột khi giao dịch on-chain đã gửi, chạy reconciliation worker kiểm tra khả năng tự đồng bộ MySQL.
-- **Status:** pending
+  - [x] Cạnh tranh đặt trùng cùng thiết bị (kiểm tra MySQL lock & Smart Contract Mutex).
+  - [x] Hủy đơn khi đã duyệt (kiểm tra giải phóng Mutex on-chain).
+- [x] Task 7.3: Kiểm thử cơ chế phục hồi (Crash Simulation): giả lập server tắt đột ngột khi giao dịch on-chain đã gửi, chạy reconciliation worker kiểm tra khả năng tự đồng bộ MySQL.
+- **Status:** complete
 
 ---
 
