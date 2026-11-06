@@ -1,5 +1,20 @@
 # Progress Log: EduVault - Educational Equipment Lending System
 
+## Session: 2026-11-06 — Rà soát sau cập nhật MetaMask
+
+- **Status:** complete (đánh giá và lập kế hoạch; các bản sửa vẫn pending).
+- Đã kiểm tra bản `6076211`, bao gồm commit Web3 `2b2803a`. Xác nhận có kết nối MetaMask, ký createLoan và AccessControl.
+- Phát hiện trọng tâm: ID của đơn tạo qua MetaMask không truyền vào backend; luồng duyệt tiếp tục tạo đơn on-chain khác.
+- Đã ghi bằng chứng, mức ưu tiên, giới hạn kiểm tra và các vấn đề đồng bộ vào findings.md mục 18.
+- Đã thêm Phase 7A với checklist và tiêu chí nghiệm thu vào task_plan.md; giữ lại lịch sử các phase trước.
+- Kết quả thực chạy: contract 28/28 pass; frontend build thất bại TS2307 vì thiếu ethers, @gsap/react, gsap.
+- Chưa chạy lại backend tests hoặc E2E MetaMask; chưa triển khai sửa mã nghiệp vụ.
+- Session catchup: python alias không khả dụng; chạy lại bằng Python trong backend/.venv thành công, không có nội dung bổ sung.
+- Phạm vi commit: task_plan.md, findings.md, progress.md. frontend/tsconfig.tsbuildinfo thay đổi do lần kiểm tra build, không thuộc commit tài liệu.
+- Người dùng đã yêu cầu commit và push tài liệu; kết quả Git được xác minh sau khi commit.
+
+---
+
 ## Session: 2026-10-23
 
 ### Phase 0: Khảo sát Môi trường & Hiện trạng

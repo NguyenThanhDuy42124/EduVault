@@ -6,7 +6,37 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ
+Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý checklist 7A trước khi nghiệm thu.
+
+### Cập nhật rà soát ngày 2026-11-06
+- Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
+- Phạm vi phiên này: ghi nhận kết quả và kế hoạch, commit/push tài liệu; chưa triển khai các bản sửa.
+- Các mục hoàn thành cũ là lịch sử triển khai, không phải bằng chứng nghiệm thu bản Web3 hiện tại.
+- Chi tiết bằng chứng và giới hạn kiểm tra: `findings.md`, mục 18.
+
+### Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu
+- **Status:** pending
+- [ ] P1 — Dùng chung một `on_chain_loan_id` giữa giao dịch MetaMask và DB. Backend xác minh receipt thành công, đúng chain/contract/event, người mượn và nội dung đơn; không tin hash do client cung cấp.
+- [ ] P1 — Khi duyệt đơn đã được sinh viên tạo on-chain, chỉ gọi `approveLoan`; không tạo thêm đơn khác. Chống dùng lại transaction cho nhiều đơn.
+- [ ] P1 — Ràng buộc tài khoản sinh viên với ví đã xác minh; nếu dùng chữ ký liên kết ví, có nonce dùng một lần và thời hạn.
+- [ ] P1 — Khi RPC offline hoặc giao dịch thất bại, không ghi nghiệp vụ đã hoàn tất. Có trạng thái chờ hoặc lỗi rõ ràng.
+- [ ] P1 — Lưu tiến trình gửi giao dịch, hỗ trợ tiếp tục an toàn khi chain thành công nhưng DB/API thất bại; kiểm thử retry không tạo đơn trùng.
+- [ ] P1 — Đối soát sự tồn tại của bản ghi, người mượn, thiết bị, tiền cọc, thời gian và mutex; phân biệt chưa ghi chain với đã đồng bộ.
+- [ ] P2 — Chốt rõ mô hình hybrid: sinh viên ký thao tác nào, admin dùng MetaMask hay relayer; mọi thao tác dùng cùng một ID.
+- [ ] P2 — Đồng bộ ABI/address sang cả frontend và backend khi deploy; kiểm tra chain và contract trước khi gửi.
+- [ ] P2 — Gỡ listener MetaMask khi effect cleanup; xử lý đổi ví/mạng, từ chối ký, thiếu gas và lỗi revert.
+- [ ] P2 — Bổ sung `/blockchain/contract-info` hoặc bỏ lời gọi và giao diện phụ thuộc endpoint chưa có.
+- [ ] P2 — Chốt ý nghĩa `BORROWER_ROLE`; hiện createLoan không kiểm tra role này. Kiểm tra condition 0–2, penalty 0–100 và phân biệt miễn phạt 0% với tự tính.
+- [ ] P2 — Cài dependency frontend theo lockfile rồi chạy lại build; chạy backend tests và E2E MetaMask trên môi trường cô lập.
+- [ ] P2 — Cập nhật báo cáo theo mô hình hiện tại, nói rõ tiền cọc mô phỏng, quyền admin và giới hạn của đối soát.
+
+**Tiêu chí nghiệm thu:** Một đơn trong DB liên kết đúng một đơn on-chain; tạo, duyệt, bàn giao, trả/hủy dùng cùng ID. Retry không tạo trùng. Offline không báo thành công sai. Ví khác không thể nhận đơn của người dùng. Có bằng chứng E2E hai tài khoản và kết quả kiểm thử thực tế.
+
+### Lỗi đã gặp trong phiên rà soát
+| Lỗi | Kết quả / Hướng xử lý |
+| --- | --- |
+| Frontend TS2307: thiếu `ethers`, `@gsap/react`, `gsap` | Build thất bại tại môi trường hiện tại; chưa cài lại dependency trong phiên đánh giá. |
+| `python` trỏ Windows Store alias | Chạy session-catchup bằng `backend/.venv/Scripts/python.exe` thành công; không có báo cáo bổ sung. |
 
 ---
 

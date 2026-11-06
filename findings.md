@@ -1,5 +1,7 @@
 # Findings & Technical Knowledge Base (EduVault)
 
+> Cập nhật 2026-11-06: xem mục 18 để biết hiện trạng sau commit MetaMask. Các mô tả Web2.5/Ownable và khẳng định nghiệm thu bên dưới là tài liệu lịch sử, cần đối chiếu lại với mã nguồn hiện tại.
+
 ## 1. Môi trường & Khảo sát ban đầu (Environment Discovery)
 
 | Thành phần | Phiên bản / Trạng thái | Quyết định kỹ thuật |
@@ -604,3 +606,41 @@ Trang Showcase đóng vai trò giao diện trực quan hóa cao cấp (High-Tech
 4. *Reconciliation Worker Visual Monitor:* Nút giả lập server crash và trực quan hóa tiến trình tự đồng bộ dữ liệu.
 5. *Export Báo cáo Kiểm toán PDF:* Xuất chứng thư kiểm toán điện tử có mã QR trỏ tới Hash giao dịch.
 
+---
+
+## 18. Rà soát đồ án Web3 + MetaMask ngày 2026-11-06
+
+### Phạm vi và kết quả xác minh
+- Bản rà soát: `6076211`; tích hợp MetaMask nằm trong commit `2b2803a`.
+- Đã đọc frontend, contract, backend, luồng đồng bộ và các bài test liên quan. Chưa demo MetaMask trực tiếp, chưa chạy lại toàn bộ backend.
+- `npm.cmd test` tại `contracts`: **28 passing**, biên dịch thành công.
+- `npm.cmd run build` tại `frontend`: **FAIL**, TS2307 thiếu module `ethers`, `@gsap/react`, `gsap` trong môi trường cục bộ. Đây chưa phải kết luận source không build được sau khi cài dependency.
+- Kết quả build/test cũ không thay thế kết quả xác minh bản hiện tại. Chưa có rubric giảng viên nên không chấm điểm số.
+
+### Những phần đã có
+- `frontend/src/context/Web3Context.tsx`: ethers BrowserProvider, kết nối ví, số dư, chuyển/thêm mạng Hardhat, accountsChanged và chainChanged.
+- `frontend/src/pages/EquipmentPage.tsx`: gọi createLoan qua signer MetaMask và chờ receipt.
+- `contracts/contracts/EquipmentLending.sol`: AccessControl, ADMIN_ROLE cho thao tác quản trị; người mượn được hủy đơn của mình.
+- Backend, MySQL, JWT, nghiệp vụ mượn trả, audit và test contract đã có nền tảng. Nhận xét trước khi cập nhật code rằng chưa có MetaMask không còn đúng.
+
+### Phát hiện và tác động
+1. **P1 — Hai đường tạo đơn chưa liên kết.** EquipmentPage tạo ID ngẫu nhiên rồi gửi createLoan. Request REST sau đó không chứa ID hoặc transaction hash. LoanCreateRequest cũng chưa nhận các trường này. approve_loan_request lại sinh ID khác rồi gửi createLoan và approveLoan. Với luồng thành công đầy đủ, đơn sinh viên ký có thể bị bỏ lại ở Submitted trong khi backend quản lý đơn thứ hai.
+2. **P1 — Chưa ràng buộc ví với tài khoản đăng nhập.** Địa chỉ MetaMask chưa được xác minh là ví của tài khoản sinh viên. Backend cần kiểm tra quyền sở hữu ví và bằng chứng giao dịch trước khi liên kết đơn; không chỉ thêm trường hash vào API.
+3. **P1 — Offline vẫn có thể cập nhật thành công trong DB.** loan_service chỉ gọi chain khi is_connected, nhưng vẫn commit các thay đổi nghiệp vụ. Điều này trái với mô tả chain là nguồn dữ liệu chuẩn.
+4. **P1 — Chưa đảm bảo phục hồi dual-write.** Giao dịch được gửi trước commit DB; frontend cũng gửi chain trước REST. API lỗi hoặc tiến trình dừng có thể để lại đơn on-chain không được DB theo dõi. Cần tiến trình bền vững và retry idempotent.
+5. **P1 — Đối soát còn hạn chế.** reconciliation_service chủ yếu kiểm tra trạng thái, equipment ID và mutex. Chưa kiểm tra đầy đủ người mượn, tiền cọc, thời gian; trường hợp chưa có on_chain_loan_id trả is_synced=True. Chưa xác minh bản ghi contract thực sự tồn tại trước khi dùng state mặc định để sửa DB.
+6. **P2 — Luồng ký mới chỉ bao phủ tạo đơn ở giao diện.** MyLoansPage và AdminLoansPage vẫn dùng API/relayer. Hybrid là lựa chọn hợp lệ, nhưng phải mô tả rõ và thống nhất ID cho toàn bộ vòng đời.
+7. **P2 — Deploy không xuất sang frontend.** contracts/scripts/deploy.cjs cập nhật deployments và backend; frontend dùng bản JSON riêng trong src/contracts. Deploy sang địa chỉ mới có thể khiến frontend gọi contract cũ.
+8. **P2 — Listener không cleanup.** Effect trong Web3Context phụ thuộc account và đăng ký listener nhưng không removeListener, dẫn đến tích lũy callback khi account thay đổi.
+9. **P2 — Thiếu endpoint thông tin contract.** AuditPage gọi blockchainService.getContractInfo(), nhưng backend router blockchain chỉ định nghĩa /status. allSettled làm lỗi không chặn phần dữ liệu khác, nhưng thông tin contract không tải được.
+10. **P2 — Quyền và kiểm tra đầu vào contract chưa hoàn chỉnh.** BORROWER_ROLE được khai báo nhưng createLoan không dùng nó. Contract chưa chặn condition ngoài 0–2 hoặc penalty trên 100. Backend cho phép miễn phạt thủ công 0%, trong khi contract hiểu 0 là tự tính khi quá hạn.
+
+### Phạm vi đồ án và tài liệu cần sửa
+- Tiền cọc hiện là số tiền mô phỏng, không phải escrow giữ và hoàn ETH. Có thể giữ phạm vi này nếu đề tài nêu rõ.
+- Không cần thêm token, NFT hoặc IPFS chỉ để tăng số công nghệ. Testnet công khai tùy yêu cầu môn học; Hardhat + MetaMask có thể đủ cho demo local.
+- Phải giải thích quyền quyết định của admin; blockchain không tự xác minh tình trạng thiết bị ngoài đời.
+- Báo cáo cũ mô tả worker nền và khôi phục crash mạnh hơn bằng chứng hiện có. Cần phân biệt API đối soát thủ công với worker định kỳ.
+- Contract lưu studentId dạng chuỗi; mô tả cũ rằng MSSV không lưu on-chain cần sửa hoặc thay đổi thiết kế dữ liệu.
+- Ưu tiên triển khai nằm ở Phase 7A trong task_plan.md. Các phát hiện trên chưa được sửa trong phiên tài liệu này.
+
+---
