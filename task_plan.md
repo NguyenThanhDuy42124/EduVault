@@ -154,7 +154,7 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 ---
 
 ### Phase 8: Kiểm thử QA & Rà soát Bảo mật
-- [ ] Task 8.1: Chạy toàn bộ test suites tự động (Smart Contract Hardhat tests + Backend Pytest).
+- [x] Task 8.1: Chạy toàn bộ test suites tự động (Smart Contract Hardhat tests + Backend Pytest).
 - [ ] Task 8.2: Rà soát bảo mật: kiểm tra chống lộ private key, kiểm tra phân quyền JWT, kiểm tra bảo vệ brute-force đăng nhập, kiểm tra reentrancy và quyền onlyOwner trên Smart Contract.
 - [ ] Task 8.3: Lập báo cáo kết quả kiểm thử QA & Bảo mật chi tiết.
 - **Status:** pending

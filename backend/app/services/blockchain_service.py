@@ -163,7 +163,7 @@ class BlockchainService:
             ["uint256", "uint256", "uint256"],
             [user_id, equipment_id, timestamp]
         )
-        return loan_id_bytes, loan_id_bytes.hex()
+        return loan_id_bytes, f"0x{loan_id_bytes.hex()}"
 
     def send_transaction(self, contract_function: Any, value_wei: int = 0) -> Dict[str, Any]:
         """

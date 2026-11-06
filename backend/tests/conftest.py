@@ -100,14 +100,20 @@ def test_borrower_user(db_session) -> User:
     return borrower
 
 
+_eq_counter = 50000
+
 @pytest.fixture(scope="function")
 def available_equipment(db_session) -> Equipment:
     """
     Mục đích: Tạo một thiết bị khả dụng mẫu sẵn sàng cho các ca kiểm thử mượn trả.
+    Ghi chú: Gán ID phân biệt (>50000) để không xung đột Mutex on-chain giữa các ca test độc lập.
     """
+    global _eq_counter
+    _eq_counter += 1
     eq = Equipment(
-        serial_number="AVAILABLE-EQ-001",
-        name="MacBook Pro M2 14 inch",
+        id=_eq_counter,
+        serial_number=f"AVAILABLE-EQ-{_eq_counter}",
+        name=f"MacBook Pro M2 {_eq_counter}",
         category="LAPTOP",
         specifications="16GB RAM, 512GB SSD",
         status=EquipmentStatus.AVAILABLE,
