@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 🛡️ EduVault
 ### Smart Contract-Audited Academic Equipment Lending Platform
@@ -232,11 +232,15 @@ EduVault/
 │   │   └── types/                        # Khai báo TypeScript Interfaces
 │   └── package.json                      # Dependencies Frontend
 ├── docs/                                 # Tài liệu kỹ thuật chi tiết
-│   └── PHASE_5_REPORT.md                 # Báo cáo nghiệm thu chi tiết Phase 5
+│   ├── PHASE_5_REPORT.md                 # Báo cáo nghiệm thu chi tiết Phase 5
+│   ├── SYSTEM_ANALYSIS_REPORT.md         # Phân tích toàn diện hệ thống (Contract/BE/FE)
+│   └── QA_SECURITY_REPORT.md             # Báo cáo kiểm thử & bảo mật
 ├── scripts/
-│   └── seed.py                           # Script nạp dữ liệu mẫu thực tế vào MySQL
-├── .env.example                          # File mẫu biến môi trường
-├── start_all.bat                         # Launcher 1-Click khởi động toàn bộ hệ thống
+│   ├── seed.py                           # Script nạp dữ liệu mẫu thực tế vào MySQL
+│   └── start_all.ps1                     # 🚀 Script PowerShell khởi động 1 chạm (3 tiến trình song song)
+├── backend/
+│   └── .env.example                      # File mẫu cấu hình môi trường có chú thích đầy đủ
+├── start_all.bat                         # Launcher 1-Click khởi động toàn bộ hệ thống (Windows)
 ├── start_backend.bat                     # Launcher khởi động riêng Backend
 ├── start_frontend.bat                    # Launcher khởi động riêng Frontend
 ├── start_hardhat.bat                     # Launcher khởi động riêng Hardhat Node
@@ -248,18 +252,30 @@ EduVault/
 
 ## 🚀 Hướng Dẫn Cài Đặt & Vận Hành Từ A-Z
 
+### 0. Clone Dự Án (Clean Checkout)
+
+```powershell
+git clone https://github.com/NguyenThanhDuy42124/EduVault.git
+cd EduVault
+```
+
+---
+
 ### 1. Yêu Cầu Tiên Quyết
-- **Hệ điều hành:** Windows 10/11 (hoặc macOS / Linux).
-- **Node.js:** Phiên bản `v18.x` trở lên (Khuyến nghị `v20.x` hoặc `v24.x`).
-- **Python:** Phiên bản `3.11.x` hoặc `3.13.x`.
-- **Cơ sở dữ liệu:** XAMPP (chứa MySQL 8.x) hoặc MySQL Server độc lập chạy trên cổng `3306`.
+
+| Phần mềm | Phiên bản | Kiểm tra |
+| :--- | :--- | :--- |
+| **Node.js** | `v18.x`+ (Khuyến nghị `v20.x`) | `node --version` |
+| **Python** | `3.11.x` hoặc `3.13.x` | `python --version` |
+| **XAMPP** (MySQL `8.x`) | Bất kỳ | Mở XAMPP Control Panel |
+| **Git** | Bất kỳ | `git --version` |
 
 ---
 
 ### 2. Chuẩn Bị Cơ Sở Dữ Liệu MySQL
-1. Mở **XAMPP Control Panel**, bấm **Start** cả hai module **Apache** và **MySQL**.
+1. Mở **XAMPP Control Panel**, bấm **Start** cho module **MySQL**.
 2. Mở trình duyệt truy cập: `http://localhost/phpmyadmin`.
-3. Bấm **New** (Tạo mới CSDL) ➡️ Điền tên: `equipment_lending_db` ➡️ Chọn bảng mã: `utf8mb4_unicode_ci` ➡️ Bấm **Create**.
+3. Bấm **New** ➡️ Điền tên: `equipment_lending_db` ➡️ Bảng mã: `utf8mb4_unicode_ci` ➡️ **Create**.
 
 ---
 
@@ -274,22 +290,28 @@ npm install
 #### B. Cài đặt Backend Python
 ```powershell
 cd EduVault\backend
-# Tạo môi trường ảo (nếu chưa có)
-python -m virtualenv .venv   # hoặc: python -m venv .venv
-# Kích hoạt môi trường ảo
+# Tạo và kích hoạt môi trường ảo
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 # Cài đặt thư viện
 pip install -r requirements.txt
 ```
 
-#### C. Cài đặt Frontend React
+#### C. Cấu hình môi trường Backend
+```powershell
+# Copy file mẫu (đã có sẵn chú thích đầy đủ)
+copy .env.example .env
+# Mặc định đã đúng cho XAMPP local, không cần sửa
+```
+
+#### D. Cài đặt Frontend React
 ```powershell
 cd EduVault\frontend
 npm install
 ```
 
-#### D. Migration & Nạp dữ liệu ban đầu
-Từ thư mục `EduVault\backend`:
+#### E. Migration & Nạp dữ liệu ban đầu
+Từ thư mục `EduVault\backend` (với `.venv` đang active):
 ```powershell
 # Tạo 5 bảng trên MySQL
 alembic upgrade head
@@ -297,48 +319,56 @@ alembic upgrade head
 # Nạp dữ liệu mẫu (1 Admin, 3 Sinh viên, 8 Thiết bị học tập)
 python ..\scripts\seed.py
 ```
-*(Hoặc bạn chỉ cần click đúp vào file `seed_data.bat` tại thư mục gốc).*
 
 ---
 
 ### 4. Khởi Động Hệ Thống
 
-#### ⚡ Cách 1: Khởi động 1-Click (Khuyến nghị)
-Tại thư mục gốc `EduVault`, click đúp vào file:
-👉 **`start_all.bat`**
+#### ⚡ Cách 1: Khởi động 1-Click bằng PowerShell (Khuyến nghị)
 
-Hệ thống sẽ tự động thực hiện tuần tự:
-1. Mở cửa sổ Hardhat EVM Node (cổng `8545`).
-2. Tự động biên dịch và Deploy Smart Contract lên local EVM.
-3. Mở cửa sổ Backend FastAPI (cổng `8000`).
-4. Mở cửa sổ Frontend Vite React (cổng `5173`).
-5. Tự động bật trình duyệt truy cập ngay `http://localhost:5173`.
+```powershell
+# Từ thư mục gốc EduVault
+.\scripts\start_all.ps1
+```
+
+Script tự động mở **3 cửa sổ PowerShell song song**:
+1. 🟢 **Hardhat Node** (cổng `8545`)
+2. 🔵 **FastAPI Backend** (cổng `8000`)
+3. 🟣 **Vite Frontend** (cổng `5173`)
+
+> ⚠️ Nếu báo lỗi policy, chạy trước: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+
+Hoặc dùng file BAT truyền thống: click đúp **`start_all.bat`** tại thư mục gốc.
 
 ---
 
 #### 🛠️ Cách 2: Khởi động thủ công từng phần
 
-**Cửa sổ 1 - Hardhat Blockchain Node & Deploy Contract:**
+**Cửa sổ 1 - Hardhat Blockchain Node:**
 ```powershell
 cd EduVault\contracts
 npx hardhat node
-# Mở một tab khác chạy deploy:
+```
+
+**Cửa sổ 1b - Deploy Contract** (tab mới, sau khi node đã sẵn sàng):
+```powershell
+cd EduVault\contracts
 npx hardhat run scripts/deploy.cjs --network localhost
 ```
 
 **Cửa sổ 2 - Backend FastAPI:**
 ```powershell
 cd EduVault
-.\backend\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-- API Docs (Swagger): `http://127.0.0.1:8000/docs`
+→ Swagger UI: `http://127.0.0.1:8000/docs`
 
 **Cửa sổ 3 - Frontend React Vite:**
 ```powershell
 cd EduVault\frontend
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev
 ```
-- Web Application: `http://localhost:5173`
+→ Web Application: `http://localhost:5173`
 
 ---
 
