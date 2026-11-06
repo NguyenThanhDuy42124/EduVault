@@ -167,10 +167,16 @@ export const EquipmentPage: React.FC = () => {
         setBorrowModalOpen(false);
       }, 2000);
     } catch (err: unknown) {
+      console.error('Error submitting loan:', err);
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(
-        axiosErr.response?.data?.detail || 'Không thể tạo đơn mượn. Vui lòng thử lại.'
-      );
+      const web3Err = err as { reason?: string; message?: string; shortMessage?: string };
+      const errMsg =
+        axiosErr.response?.data?.detail ||
+        web3Err.shortMessage ||
+        web3Err.reason ||
+        (web3Err.message && web3Err.message.length < 150 ? web3Err.message : null) ||
+        'Không thể tạo đơn mượn. Vui lòng thử lại.';
+      setActionError(errMsg);
     } finally {
       setSubmitting(false);
     }
