@@ -1,5 +1,19 @@
 # Progress Log: EduVault - Educational Equipment Lending System
 
+## Session: 2026-11-06 — Hoàn thành Phase 7 (E2E Integration) & Phase 8 (QA & Security Audit)
+
+- **Status:** complete (Phase 7 & Phase 8 đạt 100% tiêu chí nghiệm thu).
+- **Phase 7 (Tích hợp End-to-End & Xác minh Nghiệp vụ):**
+  - Đã xây dựng và thực thi thành công `scripts/test_e2e_happy_path.py`: Luồng chuẩn tạo đơn $\to$ duyệt $\to$ bàn giao $\to$ trả máy đúng hạn $\to$ hoàn cọc 100%.
+  - Đã xây dựng và thực thi thành công `scripts/test_e2e_penalties.py`: 4 kịch bản phạt trễ $\le 24$h (10%), trễ $> 24$h (50%), hỏng DAMAGED (tịch thu 100%), mất LOST (tịch thu 100%).
+  - Đã xây dựng và thực thi thành công `scripts/test_e2e_concurrency_recovery.py`: Ngăn chặn xung đột 2 người mượn cùng thiết bị qua MySQL Pessimistic Lock & Smart Contract Mutex; giải phóng Mutex khi hủy đơn; chạy `/audit/reconcile` tự phục hồi dữ liệu.
+- **Phase 8 (Kiểm thử QA & Rà soát Bảo mật):**
+  - Hợp nhất và chuẩn hóa bộ chạy test tự động `scripts/run_all_tests.ps1`: 28 Hardhat contract tests + 56 Backend Pytest + E2E scripts đều đạt 100% PASS.
+  - Xây dựng và thực thi script rà soát an ninh `scripts/audit_security.py`: Không lộ private key, RBAC chặn API admin với HTTP 403, chống brute-force tự động khóa tài khoản 15 phút với HTTP 423 Locked sau 5 lần sai, bảo vệ AccessControl on-chain.
+  - Xuất bản tài liệu báo cáo kiểm định chi tiết: `docs/QA_SECURITY_REPORT.md`.
+
+---
+
 ## Session: 2026-11-06 — Rà soát sau cập nhật MetaMask
 
 - **Status:** complete (đánh giá và lập kế hoạch; các bản sửa vẫn pending).
