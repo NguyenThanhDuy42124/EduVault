@@ -162,10 +162,10 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 ---
 
 ### Phase 9: Đóng gói Triển khai & Hướng dẫn Cài đặt
-- [ ] Task 9.1: Hoàn thiện file cấu hình mẫu `.env.example` với đầy đủ chú thích tham số.
-- [ ] Task 9.2: Viết script khởi chạy một chạm `scripts/start_all.ps1` (chạy song song Hardhat node, FastAPI backend và Vite frontend).
-- [ ] Task 9.3: Viết tài liệu hướng dẫn cài đặt từng bước từ clean checkout (`README.md`).
-- **Status:** pending
+- [x] Task 9.1: Hoàn thiện file cấu hình mẫu .env.example với đầy đủ chú thích tham số (.env.example ở root và backend/.env.example).
+- [x] Task 9.2: Viết script khởi chạy một chạm start_all.bat và scripts/start_all.ps1 (chạy song song Hardhat node, FastAPI backend và Vite frontend).
+- [x] Task 9.3: Viết tài liệu hướng dẫn cài đặt từng bước từ clean checkout (README.md).
+- **Status:** complete
 
 ---
 
@@ -178,6 +178,6 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 ---
 
 ### Phase 11: Nghiệm thu Cuối cùng
-- [ ] Task 11.1: Đối chiếu sản phẩm thực tế với Acceptance Criteria đã cam kết.
-- [ ] Task 11.2: Bàn giao toàn bộ source code, cơ sở dữ liệu mẫu và tài liệu đồ án cho người dùng.
-- **Status:** pending
+- [x] Task 11.1: Đối chiếu sản phẩm thực tế với Acceptance Criteria đã cam kết — Đạt 100% tiêu chí nghiệm thu theo docs/BIEN_BAN_NGHIEM_THU_VA_BAN_GIAO.md.
+- [x] Task 11.2: Bàn giao toàn bộ source code, cơ sở dữ liệu mẫu và tài liệu đồ án cho người dùng — Đã xuất bản docs/BIEN_BAN_NGHIEM_THU_VA_BAN_GIAO.md.
+- **Status:** complete
