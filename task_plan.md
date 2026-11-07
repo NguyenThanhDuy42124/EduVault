@@ -170,10 +170,10 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 ---
 
 ### Phase 10: Tài liệu Học thuật & Kịch bản Báo cáo
-- [ ] Task 10.1: Soạn thảo bản thuyết minh đồ án tổng hợp bằng Tiếng Việt (Tổng quan đề tài, Kiến trúc hệ thống, Thiết kế CSDL & Smart Contract, Phân tích tính an toàn).
-- [ ] Task 10.2: Soạn thảo kịch bản demo 5 bước (5-7 phút) cho buổi báo cáo trước hội đồng.
-- [ ] Task 10.3: Tổng hợp bộ 10 câu hỏi phản biện của giảng viên và câu trả lời kỹ thuật chuẩn xác.
-- **Status:** pending
+- [x] Task 10.1: Soạn thảo bản thuyết minh đồ án tổng hợp bằng Tiếng Việt (Tổng quan đề tài, Kiến trúc hệ thống, Thiết kế CSDL & Smart Contract, Phân tích tính an toàn) — Đã xuất bản docs/THUYET_MINH_DO_AN_EDUVAULT.md.
+- [x] Task 10.2: Soạn thảo kịch bản demo 5 bước (5-7 phút) cho buổi báo cáo trước hội đồng — Đã xuất bản docs/KICH_BAN_DEMO_HOI_DONG.md.
+- [x] Task 10.3: Tổng hợp bộ 10 câu hỏi phản biện của giảng viên và câu trả lời kỹ thuật chuẩn xác — Đã xuất bản docs/BO_CAU_HOI_PHAN_BIEN_HOI_DONG.md.
+- **Status:** complete
 
 ---
 

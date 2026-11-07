@@ -1,5 +1,23 @@
 # Progress Log: EduVault - Educational Equipment Lending System
 
+## Session: 2026-11-07 — Hoàn thành Phase 10: Tài liệu Học thuật & Kịch bản Báo cáo
+
+- **Status:** complete (Đã hoàn tất 100% 3 nhiệm vụ Task 10.1, 10.2, 10.3).
+- **Task 10.1 (Bản thuyết minh đồ án tổng hợp Tiếng Việt):**
+  - Đã xuất bản docs/THUYET_MINH_DO_AN_EDUVAULT.md: 5 chương đồ án chuẩn học thuật (Tổng quan & tính cấp thiết, Kiến trúc Hybrid Web2.5, Thiết kế CSDL 5 bảng MySQL & Smart Contract EquipmentLending.sol, Phân tích tính an toàn 4 lớp, Đánh giá thực nghiệm với ma trận 92 tests).
+- **Task 10.2 (Kịch bản demo 5 bước 5-7 phút trước hội đồng):**
+  - Đã xuất bản docs/KICH_BAN_DEMO_HOI_DONG.md: Timeline chi tiết từ phút 0:00 đến 7:00, checklist chuẩn bị pre-flight, kịch bản thoại (speech script) cho thuyết trình viên, thao tác click UI chi tiết, và bảng kế hoạch dự phòng (contingency plan).
+- **Task 10.3 (Bộ 10 câu hỏi phản biện của giảng viên & câu trả lời kỹ thuật):**
+  - Đã xuất bản docs/BO_CAU_HOI_PHAN_BIEN_HOI_DONG.md: Tổng hợp 10 câu hỏi hóc búa, chuyên sâu từ hội đồng/giảng viên phản biện (tính cần thiết của Blockchain, Dual-write split-brain, Simulated deposit vs native token, Race condition/Mutex, bảo mật Private key relayer, phí gas & scalability L2/Private EVM, GDPR/Zero-PII, Upgradeability UUPS, và QA Matrix 92 tests).
+- **Files created/modified:**
+  - docs/THUYET_MINH_DO_AN_EDUVAULT.md (mới)
+  - docs/KICH_BAN_DEMO_HOI_DONG.md (mới)
+  - docs/BO_CAU_HOI_PHAN_BIEN_HOI_DONG.md (mới)
+  - 	ask_plan.md (cập nhật Phase 10 complete)
+  - progress.md (cập nhật tiến độ)
+
+---
+
 ## Session: 2026-11-06 — Hoàn thành Phase 7 (E2E Integration) & Phase 8 (QA & Security Audit)
 
 - **Status:** complete (Phase 7 & Phase 8 đạt 100% tiêu chí nghiệm thu).
