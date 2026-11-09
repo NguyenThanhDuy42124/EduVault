@@ -181,3 +181,33 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
 - [x] Task 11.1: Đối chiếu sản phẩm thực tế với Acceptance Criteria đã cam kết — Đạt 100% tiêu chí nghiệm thu theo docs/BIEN_BAN_NGHIEM_THU_VA_BAN_GIAO.md.
 - [x] Task 11.2: Bàn giao toàn bộ source code, cơ sở dữ liệu mẫu và tài liệu đồ án cho người dùng — Đã xuất bản docs/BIEN_BAN_NGHIEM_THU_VA_BAN_GIAO.md.
 - **Status:** complete
+
+---
+
+### Phase 12: Chuyển dịch & Triển khai Lên Mạng Thử nghiệm Công khai (Ethereum Sepolia Testnet Migration)
+- [ ] Task 12.1: Chuẩn bị Ví Admin, Ví Sinh viên & Faucet Testnet ETH:
+  - Tạo ví "EduVault Admin" trên MetaMask và chuyển sang mạng Sepolia.
+  - Faucet ETH vào ví EduVault Admin (~0.05 - 0.2 Sepolia ETH) phục vụ deploy và làm Relayer.
+  - Chuẩn bị ví Sinh viên riêng biệt trên MetaMask và faucet gas testnet.
+  - Trích xuất Private Key của ví EduVault Admin để chuẩn bị nạp vào backend.
+- [ ] Task 12.2: Biên dịch & Deploy Smart Contract trên Remix IDE:
+  - Nạp mã nguồn `EquipmentLending.sol` lên Remix IDE và biên dịch với Solidity 0.8.20.
+  - Kết nối Injected Provider - MetaMask bằng tài khoản ví EduVault Admin.
+  - Thực hiện Deploy contract lên mạng Sepolia (ví Admin tự động nhận `DEFAULT_ADMIN_ROLE` và `ADMIN_ROLE`).
+  - Ghi nhận địa chỉ Smart Contract mới và Transaction Hash trên Sepolia Etherscan.
+- [ ] Task 12.3: Cập nhật Cấu hình & Đồng bộ Backend (FastAPI):
+  - Cập nhật `backend/.env` (BLOCKCHAIN_RPC_URL, CHAIN_ID=11155111, CONTRACT_ADDRESS, ADMIN_RELAYER_PRIVATE_KEY).
+  - Đồng bộ file `backend/app/core/contracts/contract_address.json`.
+  - Chạy script kiểm tra kết nối Web3 tới RPC Sepolia và xác nhận số dư ví Admin Relayer.
+- [ ] Task 12.4: Cập nhật Frontend & Hỗ trợ Chuyển Mạng MetaMask Tự động:
+  - Cập nhật `frontend/src/contracts/contract_address.json` với địa chỉ contract và Chain ID 11155111.
+  - Nâng cấp hàm `switchOrAddChain` trên Frontend tự động nhận diện và chuyển sang Ethereum Sepolia (Chain ID 0xaa36a7).
+  - Cập nhật đường link xem Transaction Hash trỏ trực tiếp đến `https://sepolia.etherscan.io/tx/{hash}`.
+  - Build kiểm tra Frontend TypeScript (`npm run build`) đảm bảo 0 lỗi.
+- [ ] Task 12.5: Kiểm thử Toàn diện E2E trên Sepolia & Xác minh Etherscan:
+  - Sinh viên dùng ví cá nhân kết nối web $\to$ ký tạo đơn mượn on-chain qua popup MetaMask.
+  - Admin duyệt đơn qua Backend Relayer ký trên Sepolia.
+  - Thực hiện bàn giao và nghiệm thu trả máy $\to$ kiểm tra quyết toán cọc và giải phóng Mutex on-chain.
+  - Kiểm tra đối soát trên trang `/audit` và tra cứu biên lai giao dịch công khai trên Sepolia Etherscan.
+- **Status:** in_progress
+
