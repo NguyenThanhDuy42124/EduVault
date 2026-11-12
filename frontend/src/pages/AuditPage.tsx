@@ -4,6 +4,7 @@ import { auditService } from '../services/auditService';
 import { blockchainService } from '../services/blockchainService';
 import { BlockchainTx, BlockchainStatus, ContractInfo, LoanVerification, ReconcileResult } from '../types';
 import { TableSkeleton } from '../components/LoadingSkeleton';
+import { getExplorerTxUrl, IS_SEPOLIA } from '../contracts/contractConfig';
 import {
   Activity,
   ShieldCheck,
@@ -376,7 +377,19 @@ export const AuditPage: React.FC = () => {
                       {tx.action_type}
                     </td>
                     <td className="py-3 px-4 text-slate-900 font-semibold" title={tx.tx_hash}>
-                      {formatShortAddress(tx.tx_hash)}
+                      {IS_SEPOLIA && tx.tx_hash ? (
+                        <a
+                          href={getExplorerTxUrl(tx.tx_hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                          title="Xem trên Sepolia Etherscan"
+                        >
+                          {formatShortAddress(tx.tx_hash)} ↗
+                        </a>
+                      ) : (
+                        formatShortAddress(tx.tx_hash)
+                      )}
                     </td>
                     <td className="py-3 px-4 text-slate-700">
                       {tx.block_number ? `#${tx.block_number}` : '--'}

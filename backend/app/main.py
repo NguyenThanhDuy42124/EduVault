@@ -3,6 +3,25 @@ Module: backend.app.main
 Mục đích: Điểm khởi chạy chính của FastAPI Application, cấu hình CORS và định tuyến API v1.
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
+import sys
+import types
+
+# Windows AppControl workaround: bitarray C extension DLL is blocked by policy on some machines.
+# Mock bitarray in sys.modules so eth_account can import safely (mnemonic is not needed for raw private keys).
+m = types.ModuleType("bitarray")
+class _bitarray: pass
+m.bitarray = _bitarray
+m._bitarray = types.ModuleType("bitarray._bitarray")
+u = types.ModuleType("bitarray.util")
+u.zeros = lambda n: None
+u.ba2int = lambda b: 0
+u.int2ba = lambda n, l: None
+u._util = types.ModuleType("bitarray._util")
+sys.modules["bitarray"] = m
+sys.modules["bitarray._bitarray"] = m._bitarray
+sys.modules["bitarray.util"] = u
+sys.modules["bitarray._util"] = u._util
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.v1.audit import router as audit_router

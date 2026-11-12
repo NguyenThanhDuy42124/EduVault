@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI, HARDHAT_CHAIN_ID, HARDHAT_RPC_URL } from '../contracts/contractConfig';
+import {
+  CONTRACT_ADDRESS,
+  CONTRACT_ABI,
+  TARGET_CHAIN_ID,
+  TARGET_CHAIN_NAME,
+  TARGET_RPC_URL,
+  IS_SEPOLIA,
+} from '../contracts/contractConfig';
 
 interface Web3ContextType {
   account: string | null;
@@ -29,7 +36,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   const [balanceEth, setBalanceEth] = useState<string | null>(null);
 
   const isConnected = !!account;
-  const isCorrectNetwork = chainId === HARDHAT_CHAIN_ID;
+  const isCorrectNetwork = chainId === TARGET_CHAIN_ID;
 
   // Lấy số dư ETH
   const updateBalance = useCallback(async (addr: string) => {
@@ -44,10 +51,10 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Chuyển sang mạng Hardhat 31337
+  // Chuyển sang mạng mục tiêu (Sepolia hoặc Hardhat local)
   const switchNetwork = async () => {
     if (!window.ethereum) return;
-    const hexChainId = '0x' + HARDHAT_CHAIN_ID.toString(16);
+    const hexChainId = '0x' + TARGET_CHAIN_ID.toString(16);
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
@@ -61,9 +68,12 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
           params: [
             {
               chainId: hexChainId,
-              chainName: 'Hardhat Local EVM',
+              chainName: TARGET_CHAIN_NAME,
               nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-              rpcUrls: [HARDHAT_RPC_URL],
+              rpcUrls: [TARGET_RPC_URL],
+              ...(IS_SEPOLIA && {
+                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+              }),
             },
           ],
         });
@@ -90,8 +100,8 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         setChainId(curChain);
         await updateBalance(accounts[0]);
 
-        // Nếu khác mạng 31337 thì gợi ý chuyển
-        if (curChain !== HARDHAT_CHAIN_ID) {
+        // Nếu không đúng mạng mục tiêu thì gợi ý chuyển
+        if (curChain !== TARGET_CHAIN_ID) {
           await switchNetwork();
         }
       }
@@ -126,22 +136,31 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Lắng nghe sự kiện đổi tài khoản / đổi mạng từ MetaMask
   useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          updateBalance(accounts[0]);
-        } else {
-          disconnectWallet();
-        }
-      });
+    if (!window.ethereum) return;
 
-      window.ethereum.on('chainChanged', (chainHex: string) => {
-        const id = parseInt(chainHex, 16);
-        setChainId(id);
-        if (account) updateBalance(account);
-      });
-    }
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        updateBalance(accounts[0]);
+      } else {
+        disconnectWallet();
+      }
+    };
+
+    const handleChainChanged = (chainHex: string) => {
+      const id = parseInt(chainHex, 16);
+      setChainId(id);
+      if (account) updateBalance(account);
+    };
+
+    window.ethereum.on('accountsChanged', handleAccountsChanged);
+    window.ethereum.on('chainChanged', handleChainChanged);
+
+    // Cleanup listeners khi component unmount (tránh memory leak)
+    return () => {
+      window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
+      window.ethereum?.removeListener('chainChanged', handleChainChanged);
+    };
   }, [account, updateBalance]);
 
   return (
@@ -171,4 +190,3 @@ export const useWeb3 = () => {
   }
   return context;
 };
-
