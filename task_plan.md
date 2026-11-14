@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý checklist 7A trước khi nghiệm thu.
+Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin (Solidity & Hardhat Tests) — Đang bắt đầu triển khai kiến trúc Pure Web3 100% Client-side signing và Multi-Admin cho nhóm 3 người.
 
 ### Cập nhật rà soát ngày 2026-11-06
 - Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
@@ -212,4 +212,178 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
   - Nghiệm thu trả máy `confirmReturn` (Tx: `0x10ba316a...`, Block 12132138) hoàn cọc và giải phóng Mutex on-chain.
   - Toàn bộ 4 biên lai giao dịch được xác minh và hiển thị công khai trên Sepolia Etherscan.
 - **Status:** complete
+
+---
+
+### Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin (Solidity & Hardhat Tests)
+> Mục tiêu: Tái cấu trúc contract đạt chuẩn Pure Web3 100%, bổ sung phân quyền Multi-Admin cho nhóm 3 người và tự động hóa quy tắc tính phạt.
+
+- [ ] Task 13.1: **Bổ sung các hàm Multi-Admin và Cấp quyền Sinh viên**
+  - Viết hàm `addAdmin(address _newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Cho phép ví Deployer cấp `ADMIN_ROLE` cho các ví của thành viên nhóm.
+  - Viết hàm `removeAdmin(address _admin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Thu hồi quyền Admin nếu cần.
+  - Viết hàm `registerBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Cho phép bất kỳ ví nào trong 3 Admin cấp quyền `BORROWER_ROLE` cho sinh viên.
+  - Viết hàm `revokeBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Thu hồi quyền mượn thiết bị của sinh viên vi phạm.
+  - File: `contracts/contracts/EquipmentLending.sol`
+
+- [ ] Task 13.2: **Thắt chặt Kiểm soát Quyền (Access Control) & Validate Đầu vào trong `createLoan`**
+  - Thêm điều kiện bắt buộc ví gọi hàm phải có `BORROWER_ROLE`:
+    `require(hasRole(BORROWER_ROLE, msg.sender), "Must have BORROWER_ROLE to create loan");`
+  - Thêm validation:
+    `require(_equipmentId > 0, "Invalid equipment ID");`
+    `require(bytes(_studentId).length > 0, "Student ID cannot be empty");`
+  - File: `contracts/contracts/EquipmentLending.sol`
+
+- [ ] Task 13.3: **Chuẩn hóa Tự động Tính Phạt trong `confirmReturn` & Dọn dẹp Code**
+  - Loại bỏ tham số `_penaltyPercent` khỏi hàm `confirmReturn`:
+    Signature mới: `function confirmReturn(bytes32 _loanId, uint8 _returnCondition) external onlyRole(ADMIN_ROLE)`
+  - Tính phạt tự động 100% on-chain:
+    - Nếu hỏng/mất (`_returnCondition == 1 || 2`): 100% phạt, cọc `Forfeited`, trạng thái `Disputed`.
+    - Nếu tốt (`_returnCondition == 0`):
+      - Trả đúng hạn: 0% phạt, cọc `Refunded`, trạng thái `Returned`.
+      - Quá hạn $\le$ 24h: 10% phạt, cọc `Refunded`, trạng thái `Returned`.
+      - Quá hạn $>$ 24h: 50% phạt, cọc `Refunded`, trạng thái `Returned`.
+  - Dọn dẹp dead code trong `cancelLoan` (bỏ check `depositState == Locked` vì đơn chưa Active cọc luôn là None).
+  - File: `contracts/contracts/EquipmentLending.sol`
+
+- [ ] Task 13.4: **Cập nhật Toàn diện Bộ Kiểm thử Hardhat (`contracts/test/`)**
+  - Điều chỉnh các test case gọi `createLoan` phải cấp `BORROWER_ROLE` trước.
+  - Cập nhật test case kiểm tra `addAdmin`, `removeAdmin`, `registerBorrower`.
+  - Cập nhật các test case `confirmReturn` theo signature 2 tham số mới.
+  - Chạy `npx hardhat test` đảm bảo 100% test cases passed (dự kiến 30+ tests).
+
+- [ ] Task 13.5: **Biên dịch & Deploy Smart Contract Mới Lên Ethereum Sepolia Testnet**
+  - Biên dịch contract sạch sẽ: `npx hardhat compile`.
+  - Kết nối ví Deployer (Admin 1) trên Remix hoặc Hardhat deploy script, deploy contract mới lên Sepolia.
+  - Lưu lại địa chỉ Smart Contract mới và Transaction Hash deploy trên Sepolia Etherscan.
+
+- [ ] Task 13.6: **Đồng bộ Artifacts (ABI & Contract Address) Toàn Hệ thống**
+  - Cập nhật file ABI và địa chỉ contract mới vào:
+    - `backend/app/core/contracts/EquipmentLending.json`
+    - `backend/app/core/contracts/contract_address.json`
+    - `frontend/src/contracts/EquipmentLending.json`
+    - `frontend/src/contracts/contract_address.json`
+  - Cập nhật biến `CONTRACT_ADDRESS` trong `backend/.env` và root `.env`.
+
+- **Status:** pending
+
+---
+
+### Phase 14: Chuyển đổi Backend sang Mô hình Indexer & Receipt Verifier (Loại bỏ Private Key)
+> Mục tiêu: Xóa bỏ hoàn toàn Private Key khỏi máy chủ backend, nâng tầm bảo mật hệ thống; backend chuyển thành bộ kiểm chứng biên lai giao dịch và bộ nhớ đệm (Cache/Indexer).
+
+- [ ] Task 14.1: **Gỡ bỏ `ADMIN_PRIVATE_KEY` Khỏi Cấu hình Backend**
+  - Xóa biến `ADMIN_PRIVATE_KEY` khỏi `backend/.env`, root `.env` và `backend/app/core/config.py`.
+  - Đảm bảo Backend chỉ khởi tạo kết nối Read-Only Web3 RPC (không có ví ký số nội bộ).
+  - File: `backend/app/core/config.py`, `backend/.env`
+
+- [ ] Task 14.2: **Tái cấu trúc `BlockchainService` thành Trình Xác thực Biên lai (Receipt Verifier)**
+  - Bỏ các hàm gửi transaction (`send_transaction`, `create_loan`, `approve_loan`, v.v.).
+  - Viết hàm `verify_transaction_receipt(tx_hash: str, expected_event: str)`:
+    - Lấy biên lai qua `web3.eth.get_transaction_receipt(tx_hash)`.
+    - Kiểm tra `receipt.status == 1`.
+    - Kiểm tra đúng `receipt.to == CONTRACT_ADDRESS`.
+    - Giải mã Event log (ví dụ: `LoanCreated`, `LoanApproved`, `HandoverConfirmed`, `LoanReturned`) để kiểm chứng ID đơn mượn và địa chỉ người ký.
+  - File: `backend/app/services/blockchain_service.py`
+
+- [ ] Task 14.3: **Chuyển đổi các API Vòng đời Mượn Trả sang Dạng Nhận & Xác thực Tx Hash**
+  - Cập nhật các endpoint trong `backend/app/api/v1/loans.py`:
+    - `POST /api/v1/loans/request`: Nhận `tx_hash` tạo đơn từ sinh viên, xác minh event `LoanCreated` $\to$ lưu bản ghi MySQL.
+    - `POST /api/v1/loans/{id}/approve`: Nhận `tx_hash` duyệt đơn từ ví Admin, xác minh event `LoanApproved` $\to$ đổi trạng thái `APPROVED`.
+    - `POST /api/v1/loans/{id}/handover`: Nhận `tx_hash` bàn giao từ ví Admin, xác minh event `HandoverConfirmed` $\to$ đổi trạng thái `ACTIVE`.
+    - `POST /api/v1/loans/{id}/return`: Nhận `tx_hash` trả máy từ ví Admin, xác minh event `LoanReturned` $\to$ cập nhật phạt và trạng thái `RETURNED`.
+    - `POST /api/v1/loans/{id}/cancel`: Nhận `tx_hash` hủy đơn $\to$ cập nhật trạng thái `CANCELLED`.
+  - File: `backend/app/api/v1/loans.py`, `backend/app/services/loan_service.py`
+
+- [ ] Task 14.4: **Thêm API Quản lý Ví Sinh viên & Admin trong CSDL MySQL**
+  - Cập nhật bảng `User` hoặc bảng phụ để lưu trữ danh sách `wallet_address` đã xác minh của từng tài khoản.
+  - Endpoint `POST /api/v1/users/wallet`: Liên kết ví MetaMask với tài khoản sinh viên/admin đang đăng nhập.
+  - Endpoint `GET /api/v1/admin/pending-borrowers`: Danh sách sinh viên chưa được cấp `BORROWER_ROLE` on-chain để Admin dễ duyệt.
+  - File: `backend/app/api/v1/users.py`, `backend/app/models/user.py`
+
+- [ ] Task 14.5: **Cập nhật & Chạy Lại Bộ Kiểm thử Pytest Backend**
+  - Mock Web3 receipt verifier trong các test cases backend.
+  - Chạy `pytest backend/tests` đảm bảo tất cả test cases đều pass với mô hình xác thực receipt mới.
+
+- **Status:** pending
+
+---
+
+### Phase 15: Tái cấu trúc Frontend — Tích hợp Ký số Client-Side MetaMask Toàn diện (Pure Web3)
+> Mục tiêu: Chuyển toàn bộ hành vi ký duyệt của cả Admin và Sinh viên trực tiếp lên MetaMask trình duyệt; bổ sung bảng điều khiển phân quyền Multi-Admin cho nhóm.
+
+- [ ] Task 15.1: **Nâng cấp `Web3Context.tsx` Nhận diện Quyền Động On-Chain**
+  - Bổ sung hàm đọc trực tiếp từ contract:
+    - `isDeployer`: kiểm tra `hasRole(DEFAULT_ADMIN_ROLE, account)`
+    - `isAdmin`: kiểm tra `hasRole(ADMIN_ROLE, account)`
+    - `isBorrower`: kiểm tra `hasRole(BORROWER_ROLE, account)`
+  - Tự động cập nhật trạng thái role mỗi khi người dùng đổi ví trên MetaMask.
+  - File: `frontend/src/context/Web3Context.tsx`
+
+- [ ] Task 15.2: **Xây dựng Giao diện Phân quyền Multi-Admin & Quản lý Borrower Role**
+  - Tạo component hoặc trang `AdminRolesPage.tsx` (hoặc tab trong `/admin/users`):
+    - **Mục 1: Quản trị viên Nhóm (Multi-Admin):**
+      - Hiển thị danh sách các ví Admin hiện tại.
+      - Form nhập địa chỉ ví của thành viên nhóm 2 và 3 $\to$ Nút "Cấp quyền Admin" gọi `contract.addAdmin(address)` qua MetaMask popup.
+      - Nút "Thu hồi quyền Admin" gọi `contract.removeAdmin(address)`.
+    - **Mục 2: Cấp quyền Sinh viên (Borrower Role):**
+      - Danh sách sinh viên đăng ký ví $\to$ Nút "Kích hoạt quyền mượn On-chain" gọi `contract.registerBorrower(address)` qua MetaMask popup.
+  - File: `frontend/src/pages/AdminRolesPage.tsx`, `frontend/src/components/Navigation.tsx`
+
+- [ ] Task 15.3: **Cập nhật Trang Quản lý Đơn Mượn Admin (`AdminLoansPage.tsx`) Ký Trực tiếp qua MetaMask**
+  - Nút **Duyệt đơn (Approve)**:
+    - Gọi `const tx = await contract.approveLoan(loanIdBytes); await tx.wait();` $\to$ Popup MetaMask bật lên để Admin bấm Confirm.
+    - Sau khi tx mined $\to$ gửi `tx.hash` sang API `/loans/{id}/approve` để đồng bộ DB.
+  - Nút **Bàn giao (Handover)**:
+    - Gọi `const tx = await contract.confirmHandover(loanIdBytes); await tx.wait();` $\to$ Popup MetaMask bật lên.
+    - Đồng bộ `tx.hash` sang backend.
+  - Nút **Nghiệm thu Trả máy (Return)**:
+    - Gọi `const tx = await contract.confirmReturn(loanIdBytes, returnCondition); await tx.wait();` $\to$ Popup MetaMask bật lên.
+    - Đồng bộ `tx.hash` sang backend.
+  - File: `frontend/src/pages/AdminLoansPage.tsx`
+
+- [ ] Task 15.4: **Cập nhật Trang Sinh viên (`EquipmentPage.tsx` & `MyLoansPage.tsx`)**
+  - Kiểm tra điều kiện ví: Nếu sinh viên chưa có `BORROWER_ROLE` on-chain $\to$ hiển thị nút cảnh báo và hướng dẫn gửi yêu cầu cấp role tới Admin.
+  - Khi đã có quyền $\to$ bấm "Đăng ký mượn" $\to$ MetaMask popup ký `createLoan()` $\to$ gửi `tx.hash` sang backend lưu đơn.
+  - Cho phép sinh viên tự hủy đơn qua MetaMask popup gọi `cancelLoan()`.
+  - File: `frontend/src/pages/EquipmentPage.tsx`, `frontend/src/pages/MyLoansPage.tsx`
+
+- [ ] Task 15.5: **Build Kiểm thử Frontend TypeScript (`npm run build`)**
+  - Đảm bảo 0 lỗi TypeScript, 0 lỗi bundle build.
+
+- **Status:** pending
+
+---
+
+### Phase 16: Kiểm thử Tích hợp Đa Người Dùng (Multi-User E2E Testing trên Sepolia)
+> Mục tiêu: Kiểm chứng thực tế toàn bộ kịch bản cộng tác giữa 3 ví Admin của nhóm và ví Sinh viên trên mạng Ethereum Sepolia thật.
+
+- [ ] Task 16.1: **Phân bổ Gas SepoliaETH cho 3 Ví Admin và Ví Sinh viên**
+  - Đảm bảo Ví 1 (Deployer), Ví 2 (Admin 2), Ví 3 (Admin 3) và Ví Sinh viên đều có đủ $\ge$ 0.02 SepETH để ký giao dịch.
+
+- [ ] Task 16.2: **Ví Deployer (Admin 1) Phân Quyền Admin On-Chain cho 2 Bạn Cùng Nhóm**
+  - Admin 1 kết nối web, mở tab Phân quyền Multi-Admin.
+  - Nhập địa chỉ ví của Bạn 2 và Bạn 3 $\to$ Ký MetaMask xác nhận `addAdmin`.
+  - Tra cứu sự kiện trên Sepolia Etherscan xác nhận cả 3 ví đều sở hữu `ADMIN_ROLE`.
+
+- [ ] Task 16.3: **Cấp quyền `BORROWER_ROLE` cho Ví Sinh viên**
+  - Admin 2 hoặc Admin 3 dùng ví của mình đăng nhập web $\to$ Cấp quyền mượn on-chain cho ví sinh viên qua popup MetaMask.
+
+- [ ] Task 16.4: **Thực hiện Trọn vẹn Chu trình Mượn Trả Liên Ví (Cross-Wallet E2E)**
+  - Sinh viên dùng ví riêng ký tạo đơn `createLoan`.
+  - Admin 2 dùng ví riêng duyệt đơn `approveLoan` qua popup MetaMask.
+  - Admin 3 dùng ví riêng bàn giao `confirmHandover` qua popup MetaMask.
+  - Admin 1 dùng ví riêng nghiệm thu trả máy `confirmReturn` qua popup MetaMask.
+  - Xác nhận DB MySQL tự động đồng bộ trạng thái chính xác sau mỗi giao dịch.
+
+- [ ] Task 16.5: **Thu thập Bằng chứng Giao dịch & Cập nhật Tài liệu Báo cáo Đồ án**
+  - Tổng hợp bảng tra cứu Tx Hash Etherscan chứng minh:
+    - Giao dịch phân quyền Multi-Admin (Deployer phong Admin cho thành viên).
+    - Giao dịch sinh viên tạo đơn.
+    - Giao dịch thành viên 2 duyệt đơn.
+    - Giao dịch thành viên 3 bàn giao.
+    - Giao dịch trả máy và tự động quyết toán cọc.
+  - Cập nhật thuyết minh đồ án và kịch bản demo hội đồng với kiến trúc Pure Web3 100%.
+
+- **Status:** pending
+
 
