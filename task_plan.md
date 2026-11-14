@@ -204,10 +204,12 @@ Phase 7: Tích hợp End-to-End & Xác minh Nghiệp vụ — cần xử lý che
   - Nâng cấp hàm `switchOrAddChain` trên Frontend tự động nhận diện và chuyển sang Ethereum Sepolia (Chain ID 0xaa36a7).
   - Cập nhật đường link xem Transaction Hash trỏ trực tiếp đến `https://sepolia.etherscan.io/tx/{hash}`.
   - Build kiểm tra Frontend TypeScript (`npm run build`) đảm bảo 0 lỗi.
-- [ ] Task 12.5: Kiểm thử Toàn diện E2E trên Sepolia & Xác minh Etherscan:
-  - Sinh viên dùng ví cá nhân kết nối web $\to$ ký tạo đơn mượn on-chain qua popup MetaMask.
-  - Admin duyệt đơn qua Backend Relayer ký trên Sepolia.
-  - Thực hiện bàn giao và nghiệm thu trả máy $\to$ kiểm tra quyết toán cọc và giải phóng Mutex on-chain.
-  - Kiểm tra đối soát trên trang `/audit` và tra cứu biên lai giao dịch công khai trên Sepolia Etherscan.
-- **Status:** in_progress
+- [x] Task 12.5: Kiểm thử Toàn diện E2E trên Sepolia & Xác minh Etherscan:
+  - Bắn 0.03 SepoliaETH từ ví Admin sang ví Sinh viên MetaMask (`0xc6c0...871f2`) thành công (Tx: `0x44798129...`).
+  - Sinh viên tạo đơn mượn on-chain qua `createLoan` thành công (Tx: `0xda50f48e...`, Block 12132134).
+  - Admin duyệt đơn qua Backend Relayer ký trên Sepolia qua `approveLoan` (Tx: `0x4c55ae66...`, Block 12132135).
+  - Thực hiện bàn giao `confirmHandover` (Tx: `0xd91da17c...`, Block 12132136) khóa cọc mô phỏng on-chain.
+  - Nghiệm thu trả máy `confirmReturn` (Tx: `0x10ba316a...`, Block 12132138) hoàn cọc và giải phóng Mutex on-chain.
+  - Toàn bộ 4 biên lai giao dịch được xác minh và hiển thị công khai trên Sepolia Etherscan.
+- **Status:** complete
 
