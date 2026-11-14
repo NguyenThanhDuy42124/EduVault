@@ -169,11 +169,13 @@ export const AuditPage: React.FC = () => {
               }`}
             />
             <span className="text-sm font-bold text-slate-900">
-              {chainStatus?.network || 'Hardhat Local'}
+              {chainStatus
+                ? `${chainStatus.network} (${chainStatus.is_connected ? 'Online' : 'Offline'})`
+                : '--'}
             </span>
           </div>
           <span className="text-xs text-slate-600 font-mono block">
-            Chain ID: {chainStatus?.chain_id || 31337}
+            Chain ID: {chainStatus?.chain_id ?? chainStatus?.expected_chain_id ?? '--'}
           </span>
         </div>
 
@@ -184,9 +186,11 @@ export const AuditPage: React.FC = () => {
             <Layers className="w-4 h-4 text-slate-500" />
           </div>
           <p className="text-xl font-bold font-mono text-slate-900 pt-0.5">
-            #{chainStatus?.latest_block ?? '--'}
+            {chainStatus?.latest_block != null ? `#${chainStatus.latest_block}` : '--'}
           </p>
-          <span className="text-xs text-slate-600 block">Đã đồng bộ thời gian thực</span>
+          <span className="text-xs text-slate-600 block">
+            {chainStatus?.is_connected ? 'Đã đồng bộ thời gian thực' : 'Node RPC chưa phản hồi'}
+          </span>
         </div>
 
         {/* Contract Address */}
@@ -199,10 +203,15 @@ export const AuditPage: React.FC = () => {
             className="text-xs font-mono font-bold text-slate-900 pt-0.5 truncate"
             title={contractInfo?.contract_address || ''}
           >
-            {formatShortAddress(contractInfo?.contract_address || '0x5FbDB2315678afecb367f032d93F642f64180aa3')}
+            {contractInfo?.contract_address
+              ? formatShortAddress(contractInfo.contract_address)
+              : 'Chưa cấu hình'}
           </p>
           <span className="text-xs text-slate-600 font-mono block">
-            Owner: {formatShortAddress(contractInfo?.owner_address || 'Relayer')}
+            Relayer/Owner:{' '}
+            {contractInfo?.owner_address
+              ? formatShortAddress(contractInfo.owner_address)
+              : '--'}
           </span>
         </div>
 
@@ -213,7 +222,7 @@ export const AuditPage: React.FC = () => {
             <LinkIcon className="w-4 h-4 text-slate-500" />
           </div>
           <p className="text-sm font-mono font-bold text-slate-900 pt-0.5 truncate">
-            {chainStatus?.relayer_balance_eth || '9999.98 ETH'}
+            {chainStatus?.is_connected ? `${chainStatus.relayer_balance_eth ?? '0.00'} ETH` : 'Offline'}
           </p>
           <span
             className="text-xs text-slate-600 font-mono truncate block"
@@ -221,7 +230,7 @@ export const AuditPage: React.FC = () => {
           >
             {chainStatus?.relayer_address
               ? formatShortAddress(chainStatus.relayer_address)
-              : 'Account #0'}
+              : 'Chưa cấu hình'}
           </span>
         </div>
       </div>
@@ -287,14 +296,22 @@ export const AuditPage: React.FC = () => {
                 <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
               )}
               <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="font-bold text-sm">
                     {verifyResult.is_synced
                       ? 'ĐỒNG BỘ 100% - DỮ LIỆU TOÀN VẸN TUYỆT ĐỐI'
+                      : verifyResult.sync_status === 'NOT_ON_CHAIN'
+                      ? 'ĐƠN CHƯA GHI NHẬN TRÊN BLOCKCHAIN'
+                      : verifyResult.sync_status === 'MISSING_ON_CHAIN'
+                      ? 'CHƯA TÌM THẤY BẢN GHI ON-CHAIN'
+                      : verifyResult.sync_status === 'RPC_OFFLINE'
+                      ? 'NODE BLOCKCHAIN OFFLINE / SAI MẠNG'
                       : 'PHÁT HIỆN SAI LỆCH DỮ LIỆU GIỮA MYSQL VÀ BLOCKCHAIN'}
                   </h3>
                   <span className="text-xs font-mono opacity-80">
-                    Hash: {formatShortAddress(verifyResult.on_chain_loan_id)}
+                    {verifyResult.on_chain_loan_id
+                      ? `Hash: ${formatShortAddress(verifyResult.on_chain_loan_id)}`
+                      : verifyResult.sync_status || 'NOT_ON_CHAIN'}
                   </span>
                 </div>
 

@@ -1,22 +1,57 @@
 """
 Module: backend.app.services.blockchain_service
-Mục đích: Kết nối mạng Blockchain EVM (Hardhat local), ký giao dịch Custodial Relayer và tương tác Smart Contract `EquipmentLending`.
+Mục đích: Kết nối mạng Blockchain EVM (Hardhat local / Sepolia), ký giao dịch Custodial Relayer,
+          xác thực biên lai giao dịch MetaMask từ client và tương tác Smart Contract `EquipmentLending`.
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
 import json
 import os
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from web3 import Web3
 from web3.contract import Contract
-from backend.app.core.config import settings
+from web3.exceptions import ContractLogicError, TransactionNotFound
+from web3.logs import DISCARD
+from backend.app.core.config import Settings, settings
 
 # Đường dẫn tới thư mục chứa ABI và Contract Address
 CONTRACTS_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "contracts")
 ARTIFACT_PATH: str = os.path.join(CONTRACTS_DIR, "EquipmentLending.json")
 ADDRESS_PATH: str = os.path.join(CONTRACTS_DIR, "contract_address.json")
+ZERO_BYTES32_HEX: str = "0x" + ("0" * 64)
+
+
+def normalize_hex_bytes32(value: Union[bytes, bytearray, str], expected_bytes_len: int = 32) -> str:
+    """
+    Mục đích: Chuẩn hóa dữ liệu bytes/HexBytes/str thành chuỗi hex có đúng một tiền tố `0x` chữ thường.
+    Tham số:
+        - value (Union[bytes, bytearray, str]): Giá trị bytes32 hoặc chuỗi hex cần chuẩn hóa.
+        - expected_bytes_len (int): Độ dài byte kỳ vọng (mặc định 32 bytes = 64 ký tự hex).
+    Trả về:
+        - str: Chuỗi hex chuẩn dạng `0x...` dài `2 + expected_bytes_len * 2` ký tự.
+    Lỗi:
+        - ValueError: Nếu độ dài hoặc ký tự hex không hợp lệ.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        raw_hex = value.hex()
+        hex_body = raw_hex[2:] if raw_hex.startswith(("0x", "0X")) else raw_hex
+    elif isinstance(value, str):
+        stripped = value.strip()
+        hex_body = stripped[2:] if stripped.startswith(("0x", "0X")) else stripped
+    else:
+        raise ValueError(f"Kiểu dữ liệu hex không được hỗ trợ: {type(value).__name__}")
+
+    hex_body = hex_body.lower()
+    expected_chars = expected_bytes_len * 2
+    if len(hex_body) != expected_chars:
+        raise ValueError(f"Chuỗi hex phải dài {expected_chars} ký tự (nhận {len(hex_body)}).")
+    try:
+        int(hex_body, 16)
+    except ValueError as exc:
+        raise ValueError("Chuỗi hex chứa ký tự không hợp lệ.") from exc
+    return f"0x{hex_body}"
 
 
 class BlockchainService:
@@ -55,26 +90,94 @@ class BlockchainService:
 
     def _load_contract_info(self) -> None:
         """
-        Mục đích: Nạp ABI và địa chỉ Smart Contract từ file artifacts đã xuất ở Phase 4.
+        Mục đích: Nạp ABI từ file artifacts và chọn địa chỉ Smart Contract khớp với `settings.CHAIN_ID`.
+        Thứ tự ưu tiên:
+          1. Biến môi trường `CONTRACT_ADDRESS` (nếu override hoặc khác giá trị mặc định local).
+          2. `contract_address.json` nếu `chainId` trong artifact khớp với `settings.CHAIN_ID`.
+          3. Fallback về `settings.CONTRACT_ADDRESS`.
         """
         try:
+            default_local_addr = Settings.model_fields["CONTRACT_ADDRESS"].default
+            env_override = os.environ.get("CONTRACT_ADDRESS")
+            address_from_json: Optional[str] = None
+            chain_from_json: Optional[int] = None
+
             if os.path.exists(ARTIFACT_PATH):
                 with open(ARTIFACT_PATH, "r", encoding="utf-8") as f:
                     artifact_data = json.load(f)
                     self.abi = artifact_data.get("abi", [])
-                    # Ưu tiên địa chỉ trong artifact hoặc settings
-                    self.contract_address = artifact_data.get("address", settings.CONTRACT_ADDRESS)
 
-            if os.path.exists(ADDRESS_PATH) and not self.contract_address:
+            if os.path.exists(ADDRESS_PATH):
                 with open(ADDRESS_PATH, "r", encoding="utf-8") as f:
                     address_data = json.load(f)
-                    self.contract_address = address_data.get("EquipmentLending", settings.CONTRACT_ADDRESS)
+                    address_from_json = address_data.get("EquipmentLending")
+                    raw_chain = address_data.get("chainId")
+                    if raw_chain is not None and str(raw_chain).strip():
+                        try:
+                            chain_from_json = int(str(raw_chain).strip())
+                        except ValueError:
+                            chain_from_json = None
+
+            has_explicit_env = bool(env_override and env_override.strip())
+            is_non_default_setting = (
+                bool(settings.CONTRACT_ADDRESS)
+                and default_local_addr is not None
+                and settings.CONTRACT_ADDRESS.lower() != default_local_addr.lower()
+            )
+
+            if has_explicit_env or is_non_default_setting:
+                self.contract_address = settings.CONTRACT_ADDRESS
+            elif chain_from_json is not None and int(chain_from_json) == int(settings.CHAIN_ID) and address_from_json:
+                self.contract_address = address_from_json
+            else:
+                self.contract_address = settings.CONTRACT_ADDRESS or address_from_json
 
             if self.contract_address and self.abi and self.web3:
                 checksum_address = Web3.to_checksum_address(self.contract_address)
+                self.contract_address = checksum_address
                 self.contract = self.web3.eth.contract(address=checksum_address, abi=self.abi)
         except Exception:
             self.contract = None
+
+    def reload_contract(self, contract_address: Optional[str] = None) -> None:
+        """
+        Mục đích: Khởi tạo lại instance `self.contract` khi địa chỉ contract hoặc RPC thay đổi.
+        """
+        if contract_address:
+            self.contract_address = Web3.to_checksum_address(contract_address)
+        if self.contract_address and self.abi and self.web3:
+            self.contract = self.web3.eth.contract(
+                address=Web3.to_checksum_address(self.contract_address),
+                abi=self.abi,
+            )
+
+    def ensure_ready(self, require_admin: bool = False) -> None:
+        """
+        Mục đích: Kiểm tra pre-flight node RPC online, đúng Chain ID và có bytecode Smart Contract tại `contract_address`.
+        Lỗi:
+            - ConnectionError: Khi node offline, sai Chain ID hoặc chưa deploy contract tại địa chỉ cấu hình.
+            - RuntimeError: Khi chưa khởi tạo contract ABI/address.
+            - ValueError: Khi yêu cầu ví Admin Relayer nhưng chưa cấu hình.
+        """
+        if not self.is_connected():
+            raise ConnectionError(f"Không thể kết nối tới node Blockchain tại {self.rpc_url}.")
+        if not self.contract or not self.contract_address:
+            raise RuntimeError("Smart contract chưa được khởi tạo.")
+
+        chain_id = self.get_chain_id()
+        if chain_id != int(settings.CHAIN_ID):
+            raise ConnectionError(
+                f"Sai mạng Blockchain: RPC đang ở Chain ID {chain_id}, cấu hình hệ thống yêu cầu {settings.CHAIN_ID}."
+            )
+
+        code = self.web3.eth.get_code(Web3.to_checksum_address(self.contract_address))
+        if not code or code in (b"", b"\x00"):
+            raise ConnectionError(
+                f"Không tìm thấy bytecode Smart Contract tại {self.contract_address} trên Chain ID {chain_id}."
+            )
+
+        if require_admin and not self.admin_account:
+            raise ValueError("Chưa cấu hình tài khoản Admin Relayer (ADMIN_PRIVATE_KEY).")
 
     def is_connected(self) -> bool:
         """
@@ -163,38 +266,45 @@ class BlockchainService:
             ["uint256", "uint256", "uint256"],
             [user_id, equipment_id, timestamp]
         )
-        return loan_id_bytes, f"0x{loan_id_bytes.hex()}"
+        return bytes(loan_id_bytes), normalize_hex_bytes32(loan_id_bytes, 32)
 
-    def send_transaction(self, contract_function: Any, value_wei: int = 0) -> Dict[str, Any]:
+    def send_transaction(
+        self,
+        contract_function: Any,
+        value_wei: int = 0,
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
+    ) -> Dict[str, Any]:
         """
-        Mục đích: Đóng gói, ước tính gas, ký bằng ví Admin Relayer, phát sóng giao dịch on-chain và chờ biên lai xác nhận.
+        Mục đích: Đóng gói, mô phỏng gas, ký bằng ví Admin Relayer, phát sóng giao dịch on-chain và chờ biên lai xác nhận.
         Tham số:
-            - contract_function (Any): Đối tượng ContractFunction từ web3.py (ví dụ: contract.functions.createLoan(...)).
+            - contract_function (Any): Đối tượng ContractFunction từ web3.py.
             - value_wei (int): Lượng ETH gửi kèm theo (mặc định 0).
+            - on_broadcast (Callable): Callback lưu bản ghi `PENDING` ngay sau khi phát sóng `tx_hash`.
+            - on_failed (Callable): Callback cập nhật trạng thái `FAILED` nếu receipt có `status == 0`.
         Trả về:
-            - Dict[str, Any]: Bản ghi chi tiết biên lai giao dịch (tx_hash, block_number, gas_used, status).
+            - Dict[str, Any]: Biên lai giao dịch (`tx_hash`, `block_number`, `gas_used`, `status`, `from_address`, `to_address`).
         Lỗi:
-            - ConnectionError: Khi không thể kết nối tới node Blockchain.
+            - ConnectionError: Khi node offline, sai Chain ID hoặc contract chưa deploy.
             - ValueError: Khi tài khoản Admin chưa được cấu hình.
-            - RuntimeError: Khi giao dịch bị Revert on-chain (status == 0).
-        Tác dụng phụ:
-            - Tăng nonce ví Admin, trừ gas fee, thay đổi state trên Smart Contract và tạo block mới.
+            - RuntimeError: Khi pre-flight hoặc giao dịch on-chain bị Revert.
         """
-        if not self.is_connected():
-            raise ConnectionError(f"Không thể kết nối tới node Blockchain tại {self.rpc_url}.")
-
-        if not self.admin_account:
-            raise ValueError("Chưa cấu hình tài khoản Admin Relayer (ADMIN_PRIVATE_KEY).")
+        self.ensure_ready(require_admin=True)
 
         admin_address: str = self.admin_account.address
         nonce: int = self.web3.eth.get_transaction_count(admin_address, "pending")
         chain_id: int = self.web3.eth.chain_id
 
-        # 1. Ước tính Gas an toàn
+        # 1. Mô phỏng & ước tính Gas an toàn (chặn sớm nếu hợp đồng revert)
         try:
             estimated_gas: int = contract_function.estimate_gas({"from": admin_address, "value": value_wei})
-            gas_limit: int = int(estimated_gas * 1.2)  # Buffer 20%
-        except Exception:
+            gas_limit: int = int(estimated_gas * 1.2)
+        except ContractLogicError as exc:
+            raise RuntimeError(f"Giao dịch bị Smart Contract từ chối khi mô phỏng: {exc}") from exc
+        except Exception as exc:
+            msg = str(exc)
+            if "revert" in msg.lower():
+                raise RuntimeError(f"Giao dịch bị Smart Contract từ chối khi mô phỏng: {msg}") from exc
             gas_limit = 500000
 
         gas_price: int = self.web3.eth.gas_price
@@ -212,26 +322,137 @@ class BlockchainService:
         # 3. Ký giao dịch cục bộ với Private Key
         signed_tx = self.web3.eth.account.sign_transaction(tx_params, private_key=self.admin_account.key)
 
-        # 4. Gửi Raw Transaction lên mạng
+        # 4. Gửi Raw Transaction lên mạng và chuẩn hóa tx_hash (1 tiền tố 0x)
         raw_tx = getattr(signed_tx, "raw_transaction", getattr(signed_tx, "rawTransaction", None))
         tx_hash_bytes = self.web3.eth.send_raw_transaction(raw_tx)
-        tx_hash_hex: str = tx_hash_bytes.hex()
+        tx_hash_hex: str = normalize_hex_bytes32(tx_hash_bytes, 32)
+
+        if on_broadcast is not None:
+            on_broadcast(tx_hash_hex, admin_address, self.contract_address)
 
         # 5. Chờ xác nhận biên lai giao dịch (Receipt)
         receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash_bytes, timeout=120)
+        block_number = getattr(receipt, "block_number", getattr(receipt, "blockNumber", None))
+        gas_used = getattr(receipt, "gas_used", getattr(receipt, "gasUsed", None))
 
         # 6. Kiểm tra trạng thái thực thi của Transaction
         is_success: bool = (receipt.status == 1)
         if not is_success:
-            raise RuntimeError(f"Giao dịch Blockchain {tx_hash_hex} bị Revert (Status 0).")
+            reason = f"Giao dịch Blockchain {tx_hash_hex} bị Revert (Status 0)."
+            if on_failed is not None:
+                on_failed(tx_hash_hex, block_number, gas_used, reason)
+            raise RuntimeError(reason)
+
+        return {
+            "tx_hash": tx_hash_hex,
+            "block_number": block_number,
+            "gas_used": gas_used,
+            "status": "CONFIRMED",
+            "from_address": admin_address,
+            "to_address": Web3.to_checksum_address(str(receipt.to)) if receipt.to else self.contract_address
+        }
+
+    def verify_create_loan_tx(
+        self,
+        tx_hash: str,
+        expected_loan_id: Union[bytes, str],
+        expected_equipment_id: int,
+        expected_student_id: str,
+        expected_borrower_address: str,
+        expected_handover_ts: int,
+        expected_due_ts: int,
+        expected_deposit: int,
+        expected_sender_address: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Mục đích: Xác thực biên lai giao dịch MetaMask `createLoan` trực tiếp trên RPC (chống giả mạo client_tx_hash / on_chain_loan_id).
+        """
+        self.ensure_ready(require_admin=False)
+
+        tx_hash_hex = normalize_hex_bytes32(tx_hash, 32)
+        expected_loan_id_hex = normalize_hex_bytes32(expected_loan_id, 32)
+        expected_borrower_checksum = Web3.to_checksum_address(expected_borrower_address)
+        expected_sender_checksum = Web3.to_checksum_address(expected_sender_address or expected_borrower_address)
+
+        try:
+            receipt = self.web3.eth.get_transaction_receipt(tx_hash_hex)
+        except TransactionNotFound:
+            try:
+                receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash_hex, timeout=30)
+            except Exception as exc:
+                raise ValueError(f"Không tìm thấy giao dịch {tx_hash_hex} trên blockchain hoặc chưa được khai thác.") from exc
+
+        try:
+            tx = self.web3.eth.get_transaction(tx_hash_hex)
+        except TransactionNotFound as exc:
+            raise ValueError(f"Không truy vấn được chi tiết giao dịch {tx_hash_hex}.") from exc
+
+        if getattr(receipt, "status", 0) != 1:
+            raise ValueError(f"Giao dịch {tx_hash_hex} đã bị revert on-chain (status != 1).")
+
+        receipt_to = receipt.get("to") if isinstance(receipt, dict) else getattr(receipt, "to", None)
+        if not receipt_to or str(receipt_to).lower() != str(self.contract_address).lower():
+            raise ValueError("Giao dịch không tương tác với địa chỉ Smart Contract EquipmentLending hiện hành.")
+
+        tx_chain_id = tx.get("chainId") if isinstance(tx, dict) else getattr(tx, "chainId", None)
+        if tx_chain_id is not None and int(tx_chain_id) != int(settings.CHAIN_ID):
+            raise ValueError(
+                f"Giao dịch thuộc Chain ID {tx_chain_id}, không khớp mạng cấu hình ({settings.CHAIN_ID})."
+            )
+
+        tx_from = tx.get("from") if isinstance(tx, dict) else getattr(tx, "from", None)
+        if not tx_from or str(tx_from).lower() != expected_sender_checksum.lower():
+            raise ValueError(
+                f"Địa chỉ gửi giao dịch ({tx_from}) không khớp với ví đã xác minh ({expected_sender_checksum})."
+            )
+
+        events = self.contract.events.LoanCreated().process_receipt(receipt, errors=DISCARD)
+        matched_event = None
+        for ev in events:
+            ev_loan_id = normalize_hex_bytes32(ev["args"]["loanId"], 32)
+            if ev_loan_id == expected_loan_id_hex:
+                matched_event = ev
+                break
+
+        if not matched_event:
+            raise ValueError(
+                f"Biên lai giao dịch {tx_hash_hex} không phát sự kiện LoanCreated cho loanId {expected_loan_id_hex}."
+            )
+
+        args = matched_event["args"]
+        if int(args["equipmentId"]) != int(expected_equipment_id):
+            raise ValueError("equipmentId trong sự kiện LoanCreated không khớp đơn mượn.")
+        if str(args["studentId"]) != str(expected_student_id):
+            raise ValueError("studentId trong sự kiện LoanCreated không khớp tài khoản người mượn.")
+        if str(args["borrower"]).lower() != expected_borrower_checksum.lower():
+            raise ValueError("Địa chỉ borrower trong sự kiện LoanCreated không khớp ví đã xác minh.")
+        if int(args["dueDate"]) != int(expected_due_ts):
+            raise ValueError("dueDate trong sự kiện LoanCreated không khớp thời hạn trả đã gửi.")
+        if int(args["depositAmount"]) != int(expected_deposit):
+            raise ValueError("depositAmount trong sự kiện LoanCreated không khớp tiền cọc thiết bị.")
+
+        on_chain = self.get_loan(expected_loan_id_hex)
+        if on_chain["loan_id"] == ZERO_BYTES32_HEX or int(on_chain["request_time"]) == 0:
+            raise ValueError("Bản ghi đơn mượn không tồn tại trên Smart Contract sau giao dịch.")
+        if (
+            on_chain["loan_id"] != expected_loan_id_hex
+            or int(on_chain["equipment_id"]) != int(expected_equipment_id)
+            or str(on_chain["student_id"]) != str(expected_student_id)
+            or str(on_chain["borrower"]).lower() != expected_borrower_checksum.lower()
+            or int(on_chain["expected_handover"]) != int(expected_handover_ts)
+            or int(on_chain["due_date"]) != int(expected_due_ts)
+            or int(on_chain["deposit_amount"]) != int(expected_deposit)
+        ):
+            raise ValueError("Dữ liệu on-chain của đơn mượn không khớp với thông số gửi lên API.")
 
         return {
             "tx_hash": tx_hash_hex,
             "block_number": getattr(receipt, "block_number", getattr(receipt, "blockNumber", None)),
             "gas_used": getattr(receipt, "gas_used", getattr(receipt, "gasUsed", None)),
-            "status": "CONFIRMED" if is_success else "FAILED",
-            "from_address": admin_address,
-            "to_address": str(receipt.to)
+            "status": "CONFIRMED",
+            "from_address": Web3.to_checksum_address(str(tx_from)),
+            "to_address": Web3.to_checksum_address(str(receipt_to)),
+            "on_chain_record": on_chain,
         }
 
     # =========================================================================
@@ -250,14 +471,13 @@ class BlockchainService:
         Tác dụng phụ:
             - Đọc dữ liệu on-chain (call), không tốn gas.
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
+        self.ensure_ready(require_admin=False)
 
-        loan_id_bytes: bytes = Web3.to_bytes(hexstr=loan_id) if isinstance(loan_id, str) else loan_id
+        loan_id_bytes: bytes = Web3.to_bytes(hexstr=normalize_hex_bytes32(loan_id, 32)) if isinstance(loan_id, str) else loan_id
         record = self.contract.functions.getLoan(loan_id_bytes).call()
 
         return {
-            "loan_id": record[0].hex() if isinstance(record[0], bytes) else record[0],
+            "loan_id": normalize_hex_bytes32(record[0], 32),
             "equipment_id": record[1],
             "borrower": record[2],
             "student_id": record[3],
@@ -280,13 +500,12 @@ class BlockchainService:
         Trả về:
             - bool: True nếu đơn đang Active và block timestamp > dueDate.
         Lỗi:
-            - RuntimeError: Nếu node offline.
+            - ConnectionError / RuntimeError: Nếu node offline hoặc chưa deploy contract.
         Tác dụng phụ:
             - Đọc on-chain (call).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        loan_id_bytes: bytes = Web3.to_bytes(hexstr=loan_id) if isinstance(loan_id, str) else loan_id
+        self.ensure_ready(require_admin=False)
+        loan_id_bytes: bytes = self._to_bytes32(loan_id)
         return bool(self.contract.functions.isOverdue(loan_id_bytes).call())
 
     def calculate_penalty(self, loan_id: Union[bytes, str], return_condition: int) -> Dict[str, Any]:
@@ -298,13 +517,12 @@ class BlockchainService:
         Trả về:
             - Dict[str, Any]: {'penalty_percent': int, 'deposit_state': int, 'next_state': int}.
         Lỗi:
-            - RuntimeError: Nếu node offline.
+            - ConnectionError / RuntimeError: Nếu node offline hoặc chưa deploy contract.
         Tác dụng phụ:
             - Đọc on-chain (call).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        loan_id_bytes: bytes = Web3.to_bytes(hexstr=loan_id) if isinstance(loan_id, str) else loan_id
+        self.ensure_ready(require_admin=False)
+        loan_id_bytes: bytes = self._to_bytes32(loan_id)
         penalty, dep_state, next_state = self.contract.functions.calculatePenalty(loan_id_bytes, return_condition).call()
         return {
             "penalty_percent": penalty,
@@ -320,40 +538,38 @@ class BlockchainService:
         Trả về:
             - str: Chuỗi hex của loan_id đang khóa thiết bị (hoặc chuỗi '0x00...00' nếu không bị khóa).
         Lỗi:
-            - Không.
-        Tác dụng phụ:
-            - Đọc on-chain (call).
+            - ConnectionError / RuntimeError: Khi node offline, sai mạng hoặc chưa deploy contract.
         """
-        if not self.contract:
-            return "0x" + "0" * 64
-        try:
-            active_loan_bytes: bytes = self.contract.functions.activeEquipmentLoan(equipment_id).call()
-            return active_loan_bytes.hex()
-        except Exception:
-            return "0x" + "0" * 64
+        self.ensure_ready(require_admin=False)
+        active_loan_bytes: bytes = self.contract.functions.activeEquipmentLoan(equipment_id).call()
+        return normalize_hex_bytes32(active_loan_bytes, 32)
 
     # =========================================================================
     #                   SMART CONTRACT LIFECYCLE TRANSACTIONS
     # =========================================================================
 
+    def _to_bytes32(self, loan_id: Union[bytes, str]) -> bytes:
+        return Web3.to_bytes(hexstr=normalize_hex_bytes32(loan_id, 32))
+
     def create_loan(
         self,
-        loan_id: bytes,
+        loan_id: Union[bytes, str],
         equipment_id: int,
         student_id: str,
-        borrower_address: str,
+        borrower_address: Optional[str],
         expected_handover: int,
         due_date: int,
-        deposit_amount: int
+        deposit_amount: int,
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
     ) -> Dict[str, Any]:
         """
-        Mục đích: Gửi transaction gọi hàm `createLoan` trên Smart Contract.
+        Mục đích: Gửi transaction gọi hàm `createLoan` trên Smart Contract qua ví Admin Relayer.
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
+        self.ensure_ready(require_admin=True)
         checksum_borrower = Web3.to_checksum_address(borrower_address) if borrower_address else self.admin_account.address
         func = self.contract.functions.createLoan(
-            loan_id,
+            self._to_bytes32(loan_id),
             equipment_id,
             student_id,
             checksum_borrower,
@@ -361,48 +577,62 @@ class BlockchainService:
             due_date,
             deposit_amount
         )
-        return self.send_transaction(func)
+        return self.send_transaction(func, on_broadcast=on_broadcast, on_failed=on_failed)
 
-    def approve_loan(self, loan_id: bytes) -> Dict[str, Any]:
+    def approve_loan(
+        self,
+        loan_id: Union[bytes, str],
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Mục đích: Gửi transaction gọi hàm `approveLoan` trên Smart Contract (khóa Mutex thiết bị).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        func = self.contract.functions.approveLoan(loan_id)
-        return self.send_transaction(func)
+        self.ensure_ready(require_admin=True)
+        func = self.contract.functions.approveLoan(self._to_bytes32(loan_id))
+        return self.send_transaction(func, on_broadcast=on_broadcast, on_failed=on_failed)
 
-    def confirm_handover(self, loan_id: bytes) -> Dict[str, Any]:
+    def confirm_handover(
+        self,
+        loan_id: Union[bytes, str],
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Mục đích: Gửi transaction gọi hàm `confirmHandover` trên Smart Contract (khóa tiền cọc mô phỏng).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        func = self.contract.functions.confirmHandover(loan_id)
-        return self.send_transaction(func)
+        self.ensure_ready(require_admin=True)
+        func = self.contract.functions.confirmHandover(self._to_bytes32(loan_id))
+        return self.send_transaction(func, on_broadcast=on_broadcast, on_failed=on_failed)
 
     def confirm_return(
         self,
-        loan_id: bytes,
+        loan_id: Union[bytes, str],
         return_condition: int,
-        penalty_percent: int = 0
+        penalty_percent: int = 0,
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
     ) -> Dict[str, Any]:
         """
         Mục đích: Gửi transaction gọi hàm `confirmReturn` trên Smart Contract (tính phạt và giải phóng Mutex).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        func = self.contract.functions.confirmReturn(loan_id, return_condition, penalty_percent)
-        return self.send_transaction(func)
+        self.ensure_ready(require_admin=True)
+        func = self.contract.functions.confirmReturn(self._to_bytes32(loan_id), return_condition, penalty_percent)
+        return self.send_transaction(func, on_broadcast=on_broadcast, on_failed=on_failed)
 
-    def cancel_loan(self, loan_id: bytes, reason: str = "Borrower cancelled") -> Dict[str, Any]:
+    def cancel_loan(
+        self,
+        loan_id: Union[bytes, str],
+        reason: str = "Borrower cancelled",
+        on_broadcast: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        on_failed: Optional[Callable[[str, Optional[int], Optional[int], str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Mục đích: Gửi transaction gọi hàm `cancelLoan` trên Smart Contract (hủy đơn và giải phóng Mutex nếu có).
         """
-        if not self.contract:
-            raise RuntimeError("Smart contract chưa được khởi tạo.")
-        func = self.contract.functions.cancelLoan(loan_id, reason)
-        return self.send_transaction(func)
+        self.ensure_ready(require_admin=True)
+        func = self.contract.functions.cancelLoan(self._to_bytes32(loan_id), reason)
+        return self.send_transaction(func, on_broadcast=on_broadcast, on_failed=on_failed)
 
 
 # Singleton Instance dùng chung trong toàn bộ Backend

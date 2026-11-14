@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { ethers } from 'ethers';
 import { useAuth } from '../context/AuthContext';
 import { useWeb3 } from '../context/Web3Context';
+import { TARGET_CHAIN_ID, TARGET_CHAIN_NAME } from '../contracts/contractConfig';
+import { authService } from '../services/authService';
 import { equipmentService } from '../services/equipmentService';
 import { loanService } from '../services/loanService';
 import { Equipment } from '../types';
@@ -25,9 +28,20 @@ import {
 } from 'lucide-react';
 
 export const EquipmentPage: React.FC = () => {
-  const { role, user } = useAuth();
-  const { isConnected, isCorrectNetwork, connectWallet, switchNetwork, getContract } = useWeb3();
+  const { role, user, refreshProfile } = useAuth();
+  const {
+    account,
+    isConnected,
+    isCorrectNetwork,
+    connectWallet,
+    switchNetwork,
+    getContract,
+    signMessage,
+    verifyDeployedContract,
+    parseWeb3Error,
+  } = useWeb3();
   const [web3StatusMsg, setWeb3StatusMsg] = useState<string | null>(null);
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -106,9 +120,60 @@ export const EquipmentPage: React.FC = () => {
     setBorrowModalOpen(true);
   };
 
+  const isWalletVerifiedMatching = Boolean(
+    isConnected &&
+      account &&
+      user?.wallet_verified &&
+      user?.wallet_address &&
+      user.wallet_address.toLowerCase() === account.toLowerCase()
+  );
+
+  const isWalletBoundToDifferentAccount = Boolean(
+    isConnected &&
+      account &&
+      user?.wallet_verified &&
+      user?.wallet_address &&
+      user.wallet_address.toLowerCase() !== account.toLowerCase()
+  );
+
+  const pendingDraftKey =
+    user && selectedEquipment ? `eduvault_pending_loan_${user.id}_${selectedEquipment.id}` : null;
+  const hasPendingMinedTx = useMemo(() => {
+    if (!pendingDraftKey) return false;
+    try {
+      return Boolean(localStorage.getItem(pendingDraftKey));
+    } catch {
+      return false;
+    }
+  }, [pendingDraftKey, actionError, actionSuccess, borrowModalOpen]);
+
+  const handleVerifyWallet = async () => {
+    if (!account) {
+      setActionError('Vui lòng kết nối ví MetaMask trước.');
+      return;
+    }
+    setVerifyingWallet(true);
+    setActionError(null);
+    setWeb3StatusMsg('Đang lấy thử thách xác minh ví (EIP-191)...');
+    try {
+      const challenge = await authService.requestWalletChallenge(account);
+      setWeb3StatusMsg('Vui lòng ký thông điệp xác nhận chủ sở hữu ví trên MetaMask (không tốn phí gas)...');
+      const signature = await signMessage(challenge.message);
+      await authService.verifyWalletSignature(account, signature);
+      await refreshProfile();
+      setWeb3StatusMsg(null);
+    } catch (err: unknown) {
+      setWeb3StatusMsg(null);
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
+    } finally {
+      setVerifyingWallet(false);
+    }
+  };
+
   const handleBorrowSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEquipment) return;
+    if (!selectedEquipment || !user) return;
 
     if (new Date(dueDate) <= new Date(expectedHandover)) {
       setActionError('Hạn trả thiết bị phải sau thời gian dự kiến nhận.');
@@ -118,49 +183,118 @@ export const EquipmentPage: React.FC = () => {
     setSubmitting(true);
     setActionError(null);
     setWeb3StatusMsg(null);
+
+    const draftStorageKey = `eduvault_pending_loan_${user.id}_${selectedEquipment.id}`;
+
     try {
       let clientTxHash: string | undefined = undefined;
       let clientLoanId: string | undefined = undefined;
-      if (isConnected && isCorrectNetwork) {
-        setWeb3StatusMsg('Vui lòng bấm Xác nhận (Confirm) trên popup ví MetaMask...');
-        const contract = await getContract(true);
-        if (contract) {
-          const mockLoanId = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-            .map(b => b.toString(16).padStart(2, '0')).join('');
-          const startTs = Math.floor(new Date(expectedHandover).getTime() / 1000);
-          const dueTs = Math.floor(new Date(dueDate).getTime() / 1000);
-          const depositNum = Number(selectedEquipment.deposit_amount) || 0;
+      let handoverIso = new Date(expectedHandover).toISOString();
+      let dueIso = new Date(dueDate).toISOString();
 
-          const tx = await contract.createLoan(
-            mockLoanId,
-            selectedEquipment.id,
-            user?.student_staff_id || 'SV2026001',
-            '0x0000000000000000000000000000000000000000',
-            startTs,
-            dueTs,
-            depositNum
-          );
-          setWeb3StatusMsg('Giao dịch đang được đào trên block...');
-          const receipt = await tx.wait();
-          clientTxHash = receipt.hash;
-          clientLoanId = mockLoanId;
+      // 1. Kiểm tra nếu đã có tx MetaMask được đào thành công cho thiết bị này nhưng API lần trước thất bại -> Resume idempotent
+      const rawDraft = localStorage.getItem(draftStorageKey);
+      if (rawDraft) {
+        try {
+          const parsed = JSON.parse(rawDraft) as {
+            clientLoanId?: string;
+            clientTxHash?: string;
+            expectedHandoverIso?: string;
+            dueDateIso?: string;
+          };
+          if (parsed.clientLoanId && parsed.clientTxHash && parsed.expectedHandoverIso && parsed.dueDateIso) {
+            clientLoanId = parsed.clientLoanId;
+            clientTxHash = parsed.clientTxHash;
+            handoverIso = parsed.expectedHandoverIso;
+            dueIso = parsed.dueDateIso;
+            setWeb3StatusMsg(`Phát hiện giao dịch đã xác nhận (${clientTxHash.slice(0, 10)}...), đang đồng bộ lại vào hệ thống...`);
+          }
+        } catch {
+          localStorage.removeItem(draftStorageKey);
         }
       }
 
-      setWeb3StatusMsg('Đang lưu thông tin đơn mượn vào hệ thống...');
+      // 2. Nếu chưa có giao dịch đã đào và ví MetaMask đang kết nối -> Ký trực tiếp qua MetaMask
+      if (!clientTxHash && isConnected) {
+        if (!isCorrectNetwork) {
+          setActionError(`MetaMask đang sai mạng. Vui lòng chuyển sang ${TARGET_CHAIN_NAME} (Chain ID ${TARGET_CHAIN_ID}).`);
+          setSubmitting(false);
+          return;
+        }
+        if (!account || !user.wallet_verified || !user.wallet_address || user.wallet_address.toLowerCase() !== account.toLowerCase()) {
+          setActionError('Vui lòng bấm "Liên kết & Xác minh ví MetaMask" khớp với tài khoản hiện tại trước khi ký giao dịch on-chain.');
+          setSubmitting(false);
+          return;
+        }
+
+        const deployCheck = await verifyDeployedContract();
+        if (!deployCheck.ok) {
+          setActionError(deployCheck.error || 'Smart Contract chưa sẵn sàng trên mạng hiện tại.');
+          setSubmitting(false);
+          return;
+        }
+
+        const contract = await getContract(true);
+        if (!contract) {
+          setActionError('Không thể khởi tạo Smart Contract. Vui lòng kiểm tra cấu hình mạng và địa chỉ contract.');
+          setSubmitting(false);
+          return;
+        }
+
+        setWeb3StatusMsg('Vui lòng bấm Xác nhận (Confirm) trên popup ví MetaMask...');
+        const newLoanId =
+          '0x' +
+          Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+        const startTs = Math.floor(new Date(handoverIso).getTime() / 1000);
+        const dueTs = Math.floor(new Date(dueIso).getTime() / 1000);
+        const depositNum = Math.round(Number(selectedEquipment.deposit_amount)) || 0;
+
+        const tx = await contract.createLoan(
+          newLoanId,
+          selectedEquipment.id,
+          user.student_staff_id,
+          ethers.getAddress(account),
+          startTs,
+          dueTs,
+          depositNum
+        );
+        setWeb3StatusMsg('Giao dịch đang được xác nhận trên block...');
+        const receipt = await tx.wait();
+        if (!receipt || receipt.status !== 1) {
+          throw new Error('Giao dịch trên Smart Contract đã bị revert (status = 0).');
+        }
+        clientTxHash = receipt.hash;
+        clientLoanId = newLoanId;
+
+        localStorage.setItem(
+          draftStorageKey,
+          JSON.stringify({
+            clientLoanId,
+            clientTxHash,
+            expectedHandoverIso: handoverIso,
+            dueDateIso: dueIso,
+            wallet: account,
+          })
+        );
+      }
+
+      setWeb3StatusMsg('Đang xác thực biên lai và lưu đơn mượn vào hệ thống...');
       await loanService.requestLoan({
         equipment_id: selectedEquipment.id,
-        expected_handover_date: new Date(expectedHandover).toISOString(),
-        due_date: new Date(dueDate).toISOString(),
+        expected_handover_date: handoverIso,
+        due_date: dueIso,
         admin_notes: notes.trim() || undefined,
         on_chain_loan_id: clientLoanId,
         client_tx_hash: clientTxHash,
       });
 
+      localStorage.removeItem(draftStorageKey);
       setActionSuccess(
         clientTxHash
           ? `Gửi đơn & Ký on-chain thành công qua MetaMask! Mã Tx: ${clientTxHash.slice(0, 10)}...`
-          : 'Đã gửi đơn mượn thành công! Đơn đang ở trạng thái Chờ duyệt. Bạn có thể theo dõi trong mục "Đơn mượn của tôi".'
+          : 'Đã gửi đơn mượn thành công! Đơn đang ở trạng thái Chờ duyệt (Admin Relayer sẽ đồng bộ khi duyệt).'
       );
       fetchEquipment();
       setTimeout(() => {
@@ -168,16 +302,18 @@ export const EquipmentPage: React.FC = () => {
       }, 2000);
     } catch (err: unknown) {
       console.error('Error submitting loan:', err);
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      const web3Err = err as { reason?: string; message?: string; shortMessage?: string };
-      const errMsg =
-        axiosErr.response?.data?.detail ||
-        web3Err.shortMessage ||
-        web3Err.reason ||
-        (web3Err.message && web3Err.message.length < 150 ? web3Err.message : null) ||
-        'Không thể tạo đơn mượn. Vui lòng thử lại.';
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } };
+      if (axiosErr.response?.status && [400, 409].includes(axiosErr.response.status)) {
+        // Nếu API từ chối vĩnh viễn do dữ liệu/replay, dọn draft cũ nếu có
+        const detail = axiosErr.response.data?.detail || '';
+        if (detail.includes('không hợp lệ') || detail.includes('đã được sử dụng')) {
+          localStorage.removeItem(draftStorageKey);
+        }
+      }
+      const errMsg = axiosErr.response?.data?.detail || parseWeb3Error(err);
       setActionError(errMsg);
     } finally {
+      setWeb3StatusMsg(null);
       setSubmitting(false);
     }
   };
@@ -421,29 +557,42 @@ export const EquipmentPage: React.FC = () => {
               </div>
             )}
 
-            {/* Trạng thái kết nối ví MetaMask */}
-            <div className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+            {/* Trạng thái kết nối ví MetaMask & Xác minh quyền sở hữu */}
+            <div className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
               isConnected
-                ? isCorrectNetwork
+                ? !isCorrectNetwork
+                  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                  : isWalletVerifiedMatching
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   : 'bg-amber-50 border-amber-200 text-amber-800'
                 : 'bg-orange-50 border-orange-200 text-orange-800'
             }`}>
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold">Trạng thái Web3:</span>
-                <span>
-                  {isConnected
-                    ? isCorrectNetwork
-                      ? 'Đã kết nối MetaMask (Sẵn sàng ký On-chain)'
-                      : 'Sai mạng (Vui lòng chuyển sang Hardhat 31337)'
-                    : 'Chưa kết nối ví (Sẽ gửi qua Relayer mặc định)'}
-                </span>
+              <div className="flex flex-col space-y-0.5">
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold">Trạng thái Web3:</span>
+                  <span>
+                    {isConnected
+                      ? !isCorrectNetwork
+                        ? `Sai mạng (Chuyển sang ${TARGET_CHAIN_NAME} - ID ${TARGET_CHAIN_ID})`
+                        : isWalletVerifiedMatching
+                        ? 'Đã xác minh ví MetaMask (Sẵn sàng ký On-chain)'
+                        : isWalletBoundToDifferentAccount
+                        ? `Ví MetaMask khác với ví đã liên kết (${user?.wallet_address?.slice(0, 8)}...)`
+                        : 'Ví MetaMask chưa xác minh chữ ký EIP-191'
+                      : 'Chưa kết nối ví (Sẽ gửi qua Custodial Relayer khi Admin duyệt)'}
+                  </span>
+                </div>
+                {hasPendingMinedTx && (
+                  <span className="text-[11px] font-medium text-indigo-700">
+                    Đang có giao dịch MetaMask đã xác nhận chờ đồng bộ API — bấm Gửi để tiếp tục mà không ký lại.
+                  </span>
+                )}
               </div>
               {!isConnected && (
                 <button
                   type="button"
                   onClick={connectWallet}
-                  className="px-2.5 py-1 bg-orange-600 text-white rounded font-semibold text-[11px] hover:bg-orange-700 cursor-pointer"
+                  className="px-2.5 py-1 bg-orange-600 text-white rounded font-semibold text-[11px] hover:bg-orange-700 cursor-pointer shrink-0"
                 >
                   Kết nối ví
                 </button>
@@ -452,9 +601,19 @@ export const EquipmentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={switchNetwork}
-                  className="px-2.5 py-1 bg-amber-600 text-white rounded font-semibold text-[11px] hover:bg-amber-700 cursor-pointer"
+                  className="px-2.5 py-1 bg-amber-600 text-white rounded font-semibold text-[11px] hover:bg-amber-700 cursor-pointer shrink-0"
                 >
-                  Đổi mạng
+                  Đổi mạng ({TARGET_CHAIN_ID})
+                </button>
+              )}
+              {isConnected && isCorrectNetwork && !isWalletVerifiedMatching && (
+                <button
+                  type="button"
+                  onClick={handleVerifyWallet}
+                  disabled={verifyingWallet}
+                  className="px-2.5 py-1 bg-indigo-600 text-white rounded font-semibold text-[11px] hover:bg-indigo-700 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {verifyingWallet ? 'Đang ký...' : 'Xác minh ví'}
                 </button>
               )}
             </div>
@@ -474,9 +633,9 @@ export const EquipmentPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-600 font-medium">Cơ chế quản lý tiền cọc:</span>
+                  <span className="text-slate-600 font-medium">Mô hình ký giao dịch:</span>
                   <span className="text-slate-800 font-semibold bg-slate-100 px-2.5 py-0.5 rounded text-xs font-mono">
-                    Smart Contract Custodial Relayer
+                    Hybrid Web2.5 ({isConnected ? 'MetaMask SV + Relayer' : 'Admin Relayer'})
                   </span>
                 </div>
               </div>

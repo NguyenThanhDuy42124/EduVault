@@ -146,7 +146,27 @@ export const AdminLoansPage: React.FC = () => {
     setActionLoading(true);
     setActionError(null);
     try {
-      const penaltyNum = manualPenalty ? parseInt(manualPenalty, 10) : null;
+      let penaltyNum: number | null = null;
+      if (returnCondition === 'GOOD') {
+        const trimmed = manualPenalty.trim();
+        if (trimmed !== '') {
+          const parsed = Number(trimmed);
+          if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
+            setActionError('Phần trăm phạt phải là số nguyên từ 0 đến 100.');
+            setActionLoading(false);
+            return;
+          }
+          if (selectedLoan.is_overdue && parsed === 0) {
+            setActionError(
+              'Đơn quá hạn không hỗ trợ nhập 0% thủ công (0 được hợp đồng dùng cho chế độ tự tính 10%/50%). Hãy để trống hoặc nhập 1–100%.'
+            );
+            setActionLoading(false);
+            return;
+          }
+          penaltyNum = parsed;
+        }
+      }
+
       await loanService.returnLoan(selectedLoan.id, {
         return_condition: returnCondition,
         manual_penalty_percent: penaltyNum,
@@ -444,21 +464,27 @@ export const AdminLoansPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Penalty Override (Optional) */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Phạt phần trăm cọc tùy chỉnh (Tùy chọn, để trống sẽ tự động áp dụng hợp đồng)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={manualPenalty}
-              onChange={(e) => setManualPenalty(e.target.value)}
-              placeholder="Mặc định: Tự động (0% đúng hạn, 10% trễ <=24h, 50% trễ >24h)"
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
-          </div>
+          {/* Penalty Override (Only when GOOD) */}
+          {returnCondition === 'GOOD' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Phạt phần trăm cọc tùy chỉnh (Để trống để Smart Contract tự động áp dụng)
+              </label>
+              <input
+                type="number"
+                min={selectedLoan?.is_overdue ? 1 : 0}
+                max={100}
+                value={manualPenalty}
+                onChange={(e) => setManualPenalty(e.target.value)}
+                placeholder={
+                  selectedLoan?.is_overdue
+                    ? 'Đang quá hạn: Để trống để tự tính (10% <=24h, 50% >24h) hoặc nhập 1-100'
+                    : 'Mặc định: Tự động (0% đúng hạn)'
+                }
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          )}
 
           {/* Inspection Notes */}
           <div>

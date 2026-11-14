@@ -1,5 +1,5 @@
 import api from './api';
-import { TokenResponse, User } from '../types';
+import { TokenResponse, User, WalletChallengeResponse } from '../types';
 
 export const authService = {
   login: async (identifier: string, password: string): Promise<TokenResponse> => {
@@ -12,6 +12,21 @@ export const authService = {
 
   getMe: async (): Promise<User> => {
     const res = await api.get<User>('/users/me');
+    return res.data;
+  },
+
+  requestWalletChallenge: async (walletAddress: string): Promise<WalletChallengeResponse> => {
+    const res = await api.post<WalletChallengeResponse>('/users/wallet/challenge', {
+      wallet_address: walletAddress,
+    });
+    return res.data;
+  },
+
+  verifyWalletSignature: async (walletAddress: string, signature: string): Promise<User> => {
+    const res = await api.post<User>('/users/wallet/verify', {
+      wallet_address: walletAddress,
+      signature,
+    });
     return res.data;
   },
 

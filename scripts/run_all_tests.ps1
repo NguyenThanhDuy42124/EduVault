@@ -3,7 +3,7 @@
 # Muc dich: Chay toan bo cac bo kiem thu tu dong cua he thong EduVault
 # Bao gom:
 #   1. Smart Contract Test Suite (Hardhat): 28 tests on-chain AccessControl, Mutex & Penalties
-#   2. Backend API Test Suite (Pytest): 56 tests Auth, Equipment, Loans, Audit & Blockchain
+#   2. Backend API Test Suite (Pytest): 65 tests Auth, Users/EIP-191, Equipment, Loans, Audit & Blockchain
 #   3. E2E Scenario Tests: Happy path, Penalties (10-50%), Damage/Loss forfeit & Concurrency
 # ==============================================================================
 
@@ -37,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[-] Pytest tests that bai!" -ForegroundColor Red
     exit 1
 }
-Write-Host "[+] Backend API: 56/56 TESTS PASSED!" -ForegroundColor Green
+Write-Host "[+] Backend API: 65/65 TESTS PASSED!" -ForegroundColor Green
 
 # 3. E2E INTEGRATION SUITES
 Write-Host "`n[3/3] CHAY CAC KICH BAN E2E INTEGRATION..." -ForegroundColor Yellow
@@ -59,6 +59,6 @@ $TotalEndTime = Get-Date
 $Duration = [math]::Round(($TotalEndTime - $TotalStartTime).TotalSeconds, 2)
 
 Write-Host "`n======================================================================" -ForegroundColor Cyan
-Write-Host " [+] TONG KET: TOAN BO TEST SUITES (84+ TESTS) PASSED 100% TRONG $Duration giay!" -ForegroundColor Green
+Write-Host " [+] TONG KET: TOAN BO TEST SUITES (93 TESTS + 3 E2E) PASSED 100% TRONG $Duration giay!" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Cyan
 

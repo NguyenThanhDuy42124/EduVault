@@ -10,6 +10,7 @@ import {
 import { equipmentService } from '../services/equipmentService';
 import { auditService } from '../services/auditService';
 import { blockchainService } from '../services/blockchainService';
+import { TARGET_CHAIN_NAME } from '../contracts/contractConfig';
 import type { Equipment, BlockchainTx, BlockchainStatus } from '../types';
 
 // ═════════════════════════════════════════════════════════════════════
@@ -364,7 +365,7 @@ export const ShowcasePage: React.FC = () => {
             </h1>
             <p className="text-slate-400 text-sm max-w-lg leading-relaxed">
               Hệ thống lai Web2.5 kết hợp MySQL, FastAPI và Solidity Smart Contract
-              trên Hardhat EVM. Mọi giao dịch mượn trả đều được ghi nhận bất biến
+              trên {TARGET_CHAIN_NAME}. Mọi giao dịch mượn trả đều được ghi nhận bất biến
               trên blockchain, đảm bảo minh bạch và chống gian lận.
             </p>
 
@@ -493,7 +494,7 @@ export const ShowcasePage: React.FC = () => {
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
             </div>
             <span className="text-[11px] text-slate-500 font-mono ml-2">
-              hardhat-evm@127.0.0.1:8545 — transactions.log
+              {bcStatus?.network || TARGET_CHAIN_NAME} — transactions.log
             </span>
           </div>
 
@@ -738,7 +739,7 @@ export const ShowcasePage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500 font-mono">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${bcStatus.is_connected ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-              <span>Hardhat EVM{bcStatus.chain_id != null ? ` — Chain ID ${bcStatus.chain_id}` : ''}</span>
+              <span>{bcStatus.network || TARGET_CHAIN_NAME}{bcStatus.chain_id != null ? ` — Chain ID ${bcStatus.chain_id}` : ''}</span>
             </div>
             {bcStatus.relayer_address && (
               <span>Admin: <code className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">{truncateHash(bcStatus.relayer_address)}</code></span>

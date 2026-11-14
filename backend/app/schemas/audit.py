@@ -44,6 +44,7 @@ class LoanVerificationResponse(BaseModel):
     loan_id: int = Field(..., description="ID đơn mượn trong MySQL")
     on_chain_loan_id: Optional[str] = Field(None, description="Mã hash định danh trên Blockchain")
     is_synced: bool = Field(..., description="True nếu hai bên khớp dữ liệu 100%, False nếu có lệch trạng thái")
+    sync_status: str = Field(default="SYNCED", description="Phân loại trạng thái đối soát: SYNCED, NOT_ON_CHAIN, MISSING_ON_CHAIN, RPC_OFFLINE, MISMATCH")
     mismatches: List[str] = Field(default_factory=list, description="Danh sách các trường bị sai lệch (nếu có)")
     mysql_state: Dict[str, Any] = Field(..., description="Dữ liệu trạng thái đọc từ MySQL")
     blockchain_state: Dict[str, Any] = Field(..., description="Dữ liệu trạng thái đọc từ Smart Contract")

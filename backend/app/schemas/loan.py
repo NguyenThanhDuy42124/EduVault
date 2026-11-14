@@ -25,7 +25,12 @@ class LoanCreateRequest(BaseModel):
 class LoanReturnRequest(BaseModel):
     """Schema dữ liệu khi Admin xác nhận nhận lại thiết bị và đánh giá tình trạng."""
     return_condition: ReturnCondition = Field(default=ReturnCondition.GOOD, description="Hiện trạng thiết bị: GOOD, DAMAGED, LOST")
-    manual_penalty_percent: Optional[int] = Field(None, ge=0, le=100, description="Mức phạt thủ công (nếu muốn ghi đè, mặc định để None để tự tính)")
+    manual_penalty_percent: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Mức phạt thủ công 0-100%. Khi quá hạn và tình trạng GOOD, để trống (null) để tự tính 10%/50% hoặc nhập 1-100."
+    )
     admin_notes: Optional[str] = Field(None, max_length=500, description="Ghi chú thẩm định hiện trạng bàn giao")
 
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navbar } from './Navbar';
+import { TARGET_CHAIN_NAME } from '../contracts/contractConfig';
 import { ShieldCheck } from 'lucide-react';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -20,7 +21,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <div className="flex items-center space-x-4">
             <span>FastAPI + MySQL 8.0</span>
             <span>•</span>
-            <span>Solidity Hardhat EVM</span>
+            <span>Solidity • {TARGET_CHAIN_NAME}</span>
             <span>•</span>
             <span>React 18 + Vite</span>
           </div>

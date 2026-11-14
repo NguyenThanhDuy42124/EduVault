@@ -23,7 +23,7 @@
    - 2.3 Cơ Chế Khóa Dòng Bị Động (MySQL Pessimistic Lock - SELECT FOR UPDATE)
    - 2.4 Bảo Mật Xác Thực: Bcrypt Hashing, JWT HS256 & Chống Brute-Force
    - 2.5 Dịch Vụ Web3 Custodial Relayer (Ký Thay Bằng Gas Buffer 20%)
-   - 2.6 Bộ Đối Soát Kiểm Toán & Tự Phục Hồi Dữ Liệu (Background Reconciliation Worker)
+   - 2.6 Dịch Vụ Đối Soát Chủ Động (Manual Reconciliation Service `/api/v1/audit/reconcile`)
    - 2.7 Danh Mục 7 Cụm REST API Routers
 4. [PHẦN III: PHÂN TÍCH CHUYÊN SÂU FRONTEND (REACT 18 + TS + VITE + TAILWIND)](#phần-iii-phân-tích-chuyên-sâu-frontend-react-18--ts--vite--tailwind)
    - 3.1 Triết Lý Giao Diện Clean Corporate Dashboard (Cấm Emoji, Bento Grid)
@@ -50,25 +50,24 @@ sequenceDiagram
     participant DB as MySQL 8.x (Off-Chain DB)
     participant SC as Smart Contract (Hardhat EVM)
 
-    %% Bước 1: Tạo đơn
-    SV->>FE: Chọn thiết bị, gửi yêu cầu mượn (ngày nhận, hạn trả)
-    FE->>BE: POST /api/v1/loans/request (Kèm JWT Token)
-    BE->>DB: Kiểm tra thiết bị AVAILABLE, tạo đơn PENDING (AuditLog)
+    %% Bước 1: Tạo đơn (Hỗ trợ MetaMask Verified hoặc Off-chain)
+    SV->>FE: Chọn thiết bị, xác minh ví EIP-191 (tùy chọn ký MetaMask createLoan)
+    FE->>BE: POST /api/v1/loans/request (Kèm on_chain_loan_id & client_tx_hash nếu đã ký)
+    BE->>DB: Xác minh tx receipt (nếu có), tạo đơn PENDING (AuditLog)
     DB-->>BE: Lưu thành công
     BE-->>FE: Phản hồi 201 Created (LoanResponse)
 
-    %% Bước 2: Duyệt đơn
+    %% Bước 2: Duyệt đơn (Fail-Closed On-Chain)
     CB->>FE: Bấm "Duyệt Đơn Mượn"
     FE->>BE: POST /api/v1/loans/{id}/approve (Quyền ADMIN)
-    critical MySQL Pessimistic Lock
-        BE->>DB: SELECT * FROM equipment WHERE id=? FOR UPDATE
-        BE->>DB: Cập nhật equipment.status = RESERVED
-    end
-    BE->>BE: Keccak256 hash(userId, equipmentId, timestamp) -> on_chain_loan_id
-    BE->>SC: Giao dịch createLoan(...) & approveLoan(...) [Custodial Relayer]
+    BE->>SC: Pre-flight RPC & Contract bytecode check (Offline -> HTTP 503)
+    BE->>SC: Nếu chưa Submitted -> gọi createLoan; sau đó gọi approveLoan
     SC->>SC: Kích hoạt Mutex activeEquipmentLoan[eqId] = loanId
     SC-->>BE: Trả về Transaction Receipt (status == 1)
-    BE->>DB: Lưu on_chain_loan_id, BlockchainTransaction, loan.status = APPROVED
+    critical MySQL Pessimistic Lock (Chỉ chốt DB sau khi On-Chain CONFIRMED)
+        BE->>DB: SELECT * FROM equipment WHERE id=? FOR UPDATE -> RESERVED
+        BE->>DB: Lưu on_chain_loan_id, BlockchainTransaction, loan.status = APPROVED
+    end
     BE-->>FE: Trả về kết quả duyệt thành công
 
     %% Bước 3: Bàn giao máy
@@ -98,9 +97,9 @@ Phiên bản trình biên dịch: `Solidity ^0.8.24` (EVM Target: Paris)
 Kế thừa: OpenZeppelin `AccessControl`
 
 ### 1.1 Mục Đích Và Triết Lý Thiết Kế
-Smart Contract đóng vai trò là **Sổ Cái Bất Biến (Immutable Ledger)** và **Trọng Tài Kỹ Thuật Số (Digital Escrow Arbiter)**:
-- Ngăn chặn triệt để hành vi can thiệp sửa chữa lịch sử mượn trả từ cơ sở dữ liệu nội bộ.
-- Đảm bảo tính minh bạch tuyệt đối trong việc hạch toán tiền cọc và xác định mức phạt quá hạn.
+Smart Contract đóng vai trò là **Sổ Cái Bất Biến (Immutable Ledger)** và **Kế toán Ký quỹ Mô phỏng (Simulated Deposit Accounting)**:
+- Ngăn chặn triệt để hành vi can thiệp sửa chữa lịch sử mượn trả từ cơ sở dữ liệu nội bộ (lưu `loanId`, `equipmentId`, `studentId`, địa chỉ `borrower`, mốc thời gian và trạng thái).
+- Đảm bảo tính minh bạch trong việc hạch toán số tiền cọc VND mô phỏng và xác định mức phạt quá hạn theo `block.timestamp` (lưu ý: hợp đồng không giữ ETH thật và vẫn tin cậy đánh giá vật lý `GOOD`/`DAMAGED`/`LOST` từ tài khoản `ADMIN_ROLE`).
 - Khóa Mutex độc quyền ngăn chặn tình trạng một thiết bị bị mượn trùng trên blockchain.
 
 ---
@@ -108,20 +107,19 @@ Smart Contract đóng vai trò là **Sổ Cái Bất Biến (Immutable Ledger)**
 ### 1.2 Phân Quyền AccessControl Đa Vai Trò (RBAC On-Chain)
 Hợp đồng áp dụng chuẩn bảo mật phân quyền đa tầng của OpenZeppelin:
 - `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao (Deployer), có quyền cấp phát hoặc thu hồi quyền của các vai trò khác.
-- `ADMIN_ROLE`: Dành cho tài khoản Quản trị viên phòng Lab hoặc ví Backend Custodial Relayer (`0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`). Có quyền thực thi:
+- `ADMIN_ROLE`: Dành cho tài khoản Quản trị viên phòng Lab hoặc ví Backend Custodial Relayer. Có quyền thực thi:
   - `approveLoan`: Duyệt đơn và kích hoạt Mutex.
-  - `confirmHandover`: Xác nhận giao máy và khóa cọc.
+  - `confirmHandover`: Xác nhận giao máy và khóa cọc mô phỏng.
   - `confirmReturn`: Thẩm định máy, chốt phạt và mở khóa Mutex.
-- `BORROWER_ROLE`: Cấp cho ví cá nhân sinh viên khi kết nối MetaMask. Cho phép sinh viên tự gọi hàm:
-  - `createLoan`: Tự tạo đơn trực tiếp on-chain bằng ví cá nhân.
-  - `cancelLoan`: Tự hủy đơn của chính mình khi máy chưa bàn giao.
+  - `cancelLoan`: Hủy đơn đang chờ hoặc đã duyệt và giải phóng Mutex.
+- `BORROWER_ROLE`: Đã khai báo trong `EquipmentLending.sol` để chuẩn bị cho nâng cấp bảo mật; trong phạm vi **Phase 7A** (giữ ổn định ABI hiện tại), quyền sở hữu ví sinh viên được xác minh bằng chữ ký **EIP-191** ở Backend trước khi đối chiếu tx `createLoan` MetaMask, còn việc bắt buộc đăng ký/kiểm tra `BORROWER_ROLE` on-chain bên trong `createLoan()` thuộc **Phase 13**.
 
 ---
 
 ### 1.3 Cơ Chế Ký Quỹ Mô Phỏng (Simulated Deposit Accounting)
-Một trong những quyết định kỹ thuật đột phá nhất của dự án là **không giữ ETH thật hay testnet ETH trong hợp đồng**:
+Một quyết định kỹ thuật quan trọng của dự án là **không giữ ETH thật hay testnet ETH trong hợp đồng (không phải ETH escrow)**:
 - **Lý do kỹ thuật:** Việc giữ ETH trong hợp đồng tiềm ẩn nguy cơ tấn công tái nhập (**Reentrancy Attacks**), rủi ro kẹt ETH do lỗi chuyển giao `transfer/call`, và tạo rào cản tài chính khi sinh viên phải có ETH để đặt cọc.
-- **Giải pháp:** Quản lý tiền cọc bằng số nguyên (`depositAmount` theo đơn vị VND). Hợp đồng quản lý vòng đời trạng thái cọc bất biến:
+- **Giải pháp:** Quản lý tiền cọc mô phỏng bằng số nguyên (`depositAmount` theo đơn vị VND). Hợp đồng quản lý vòng đời trạng thái cọc bất biến (trong khi giao dịch hoàn/thu tiền mặt thật được quyết toán ngoài hệ thống dưới giám sát quản trị viên):
   - `None (0)`: Chưa có cọc.
   - `Locked (1)`: Đang khóa giữ trong suốt thời gian mượn máy.
   - `Refunded (2)`: Đã hoàn trả lại cho sinh viên sau khi trừ tiền phạt.
@@ -179,7 +177,7 @@ Hợp đồng tự động so khớp `block.timestamp` với `_loan.dueDate`:
 
 | Tên Hàm | Quyền Gọi | Loại Hàm | Nhiệm vụ chính |
 | :--- | :--- | :---: | :--- |
-| `createLoan` | `ADMIN_ROLE` hoặc `BORROWER_ROLE` | External | Khởi tạo đơn mượn mới trên blockchain |
+| `createLoan` | Ví `msg.sender` / `ADMIN_ROLE` (Phase 7A); `BORROWER_ROLE` siết chặt ở Phase 13 | External | Khởi tạo đơn mượn mới trên blockchain |
 | `approveLoan` | `ADMIN_ROLE` | External | Duyệt đơn mượn và kích hoạt Mutex khóa máy |
 | `confirmHandover` | `ADMIN_ROLE` | External | Xác nhận bàn giao thực tế, khóa tiền cọc |
 | `confirmReturn` | `ADMIN_ROLE` | External | Quyết toán hoàn trả, tính phạt, giải phóng Mutex |
@@ -224,7 +222,10 @@ erDiagram
         string email UK "Email duy nhất"
         string password_hash "Mật khẩu Bcrypt"
         enum role "ADMIN | BORROWER"
-        string wallet_address "Địa chỉ ví EVM"
+        string wallet_address UK "Địa chỉ ví EVM"
+        boolean wallet_verified "Đã xác minh EIP-191"
+        string wallet_nonce "Challenge dùng 1 lần"
+        datetime wallet_nonce_expires_at "Hết hạn nonce"
         boolean is_active "Trạng thái kích hoạt"
         int failed_login_count "Bộ đếm brute-force"
         datetime locked_until "Thời điểm hết khóa"
@@ -297,35 +298,28 @@ equipment.status = EquipmentStatus.RESERVED
 - **Băm mật khẩu trực tiếp bằng Bcrypt:** Loại bỏ thư viện `passlib` (dễ bị lỗi phân rã module trên Python 3.11+). Tự động cắt an toàn tối đa 72 bytes theo chuẩn thuật toán Bcrypt.
 - **Cơ chế chống dò mật khẩu (Anti-Brute Force):**
   - Trong `auth_service.py`: Khi đăng nhập sai mật khẩu, hệ thống tăng `failed_login_count += 1`.
-  - Nếu `failed_login_count >= 5`: Tài khoản tự động bị khóa trong 15 phút (`locked_until = now + 15m`). Mọi nỗ lực đăng nhập tiếp theo đều bị chặn với mã `403 Forbidden`.
+  - Nếu `failed_login_count >= 5`: Tài khoản tự động bị khóa trong 15 phút (`locked_until = now + 15m`). Mọi nỗ lực đăng nhập tiếp theo đều bị chặn với mã `423 Locked`.
   - Đăng nhập đúng: Reset `failed_login_count = 0` và xóa `locked_until`.
-- **Cấp phát JWT Bearer Token:** Ký số với thuật toán HS256, thời hạn 1440 phút (24 giờ), payload chứa `sub` (User ID) và `role` (`ADMIN` hoặc `BORROWER`).
+- **Cấp phát JWT Bearer Token:** Ký số với thuật toán HS256, thời hạn cấu hình qua `ACCESS_TOKEN_EXPIRE_MINUTES` (30 phút mặc định, 1440 phút trong môi trường phát triển `.env`), payload chứa `sub` (User ID) và `role` (`ADMIN` hoặc `BORROWER`).
 
 ---
 
-### 2.5 Dịch Vụ Web3 Custodial Relayer (Ký Thay Bằng Gas Buffer 20%)
-Trong [`backend/app/services/blockchain_service.py`](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py):
-- **Sinh mã định danh Keccak256 On-Chain:**
-  ```python
-  loan_id_bytes = Web3.solidity_keccak(["uint256", "uint256", "uint256"], [user_id, equipment_id, timestamp])
-  ```
-- **Đóng gói và ký Raw Transaction:**
-  - Lấy nonce giao dịch đang chờ (`pending` nonce).
-  - Ước tính lượng gas tiêu thụ thực tế qua `estimate_gas`.
-  - **Cộng thêm 20% biên an toàn:** `gas_limit = int(estimated_gas * 1.20)` để chống triệt để lỗi out-of-gas khi đào block.
-  - Ký cục bộ bằng ví Admin Relayer (`ADMIN_PRIVATE_KEY`), phát sóng raw transaction qua `send_raw_transaction` và chờ biên lai xác nhận `wait_for_transaction_receipt`.
+### 2.5 Dịch Vụ Web3 Hybrid (EIP-191 Wallet Binding, Receipt Verification & Custodial Relayer)
+Trong `backend/app/services/blockchain_service.py` và `user_service.py`:
+- **Xác minh sở hữu ví EIP-191 (`personal_sign`):** `POST /users/wallet/challenge` cấp challenge 5 phút + nonce duy nhất; `POST /users/wallet/verify` khôi phục chữ ký và xóa nonce ngay sau xác minh.
+- **Xác minh tx MetaMask (`verify_create_loan_tx`):** Kiểm tra receipt `status == 1`, `to == contract_address`, `tx.chainId == CHAIN_ID`, `tx.from == verified_wallet`, sự kiện `LoanCreated` và dữ liệu `getLoan()` trước khi liên kết `(on_chain_loan_id, client_tx_hash)` và chặn replay (`HTTP 409`).
+- **Pre-flight Fail-Closed & Relayer (Gas Buffer 20%):** `ensure_ready()` kiểm tra RPC, `chainId` và bytecode hợp đồng trước khi cho phép chuyển trạng thái (trả `HTTP 503` khi offline); ước lượng gas + 20% buffer và lưu durable `PENDING`/`FAILED`/`CONFIRMED` trong `blockchain_transactions`.
 
 ---
 
-### 2.6 Bộ Đối Soát Kiểm Toán & Tự Phục Hồi Dữ Liệu (Background Reconciliation Worker)
-Trong [`backend/app/services/reconciliation_service.py`](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py):
-- **Bài toán Dual-Write Failure:** Khi mạng EVM đã xác nhận transaction thành công nhưng máy chủ Backend bị mất điện / sập nguồn trước khi câu lệnh `db.commit()` ghi vào MySQL.
-- **Thuật toán Worker Tự Phục Hồi:**
-  1. Quét toàn bộ các đơn mượn có `on_chain_loan_id` trong MySQL.
-  2. Truy vấn trực tiếp Smart Contract qua RPC: `contract.functions.getLoan(loan_id).call()`.
-  3. Lấy trạng thái trên Smart Contract làm chân lý tối cao. Nếu MySQL đang lệch (ví dụ MySQL là `PENDING` nhưng Smart Contract đã là `Approved` hay `Active`), worker sẽ tự động UPDATE trạng thái bảng `lending_requests` và `equipment` tương ứng.
-  4. Quét các giao dịch `BlockchainTransaction` đang treo `PENDING`, đọc lại biên lai từ blockchain và cập nhật sang `CONFIRMED`.
-  5. Toàn bộ thao tác sửa lệch đều ghi vết vào `AuditLog` với action `RECONCILIATION_FIX`.
+### 2.6 Dịch Vụ Đối Soát Chủ Động (Manual Reconciliation Service `/api/v1/audit/reconcile`)
+Trong `backend/app/services/reconciliation_service.py`:
+- **Kích hoạt thủ công theo yêu cầu (On-Demand API):** Hệ thống chưa chạy background worker định kỳ tự động; Admin kích hoạt quét toàn bộ hệ thống bất kỳ lúc nào qua `POST /api/v1/audit/reconcile` (hoặc kiểm tra từng đơn qua `GET /api/v1/audit/loans/{id}/verify`).
+- **Thuật toán Đối Soát & Phục Hồi An Toàn:**
+  1. Quét các đơn mượn có `on_chain_loan_id` (đánh dấu rõ `NOT_ON_CHAIN` nếu chưa đẩy lên chain, `MISSING_ON_CHAIN` nếu struct trên chain rỗng `request_time == 0`, `RPC_OFFLINE` nếu mất kết nối node).
+  2. Truy vấn trực tiếp `getLoan(loan_id)` và `activeEquipmentLoan(equipment_id)` từ Smart Contract để so khớp đủ 9 nhóm thuộc tính (trạng thái, thiết bị, mã SV, ví borrower, tiền cọc, deposit state, mốc thời gian, mutex).
+  3. **Bảo vệ không ghi đè dữ liệu rỗng:** Chỉ đồng bộ từ Smart Contract về MySQL khi bản ghi on-chain thực sự tồn tại (`request_time > 0`).
+  4. Quét các giao dịch `BlockchainTransaction` đang ở `PENDING`/`FAILED` để cập nhật biên lai xác nhận thực tế từ blockchain và ghi `AuditLog` (`RECONCILIATION_FIX`).
 
 ---
 
@@ -335,11 +329,11 @@ Trong [`backend/app/services/reconciliation_service.py`](file:///c:/Users/phucd/
 | :--- | :--- | :--- | :--- |
 | `/api/v1/health` | Health Check | `GET /health`, `GET /health/db` | Kiểm tra tình trạng liveness máy chủ & kết nối CSDL |
 | `/api/v1/auth` | Authentication | `POST /auth/login`, `POST /auth/token` | Đăng nhập JSON Web & OAuth2 Password Form cho Swagger |
-| `/api/v1/users` | Users & RBAC | `GET /users/me`, `POST /admin/users`, `GET /admin/users` | Quản lý thông tin cá nhân và quản trị tài khoản |
+| `/api/v1/users` | Users & RBAC | `GET /users/me`, `POST /users/wallet/challenge`, `POST /users/wallet/verify`, `POST /admin/users`, `GET /admin/users` | Quản lý tài khoản, xác minh ví EIP-191 và phân quyền |
 | `/api/v1/equipment`| Equipment CRUD| `GET /`, `GET /{id}`, `POST /`, `PUT /{id}`, `DELETE /{id}` | Danh mục thiết bị, tìm kiếm mờ, cập nhật/thu hồi an toàn |
-| `/api/v1/loans` | Loans Lifecycle| `POST /request`, `GET /`, `POST /{id}/approve`, `POST /{id}/reject`, `POST /{id}/handover`, `POST /{id}/return`, `POST /{id}/cancel` | Toàn bộ 6 bước vòng đời mượn trả tích hợp on-chain |
-| `/api/v1/blockchain`| Blockchain Status| `GET /status` | Chẩn đoán node Hardhat, block mới nhất, số dư ví Relayer |
-| `/api/v1/audit` | Audit & Reconcile| `GET /loans/{id}/verify`, `POST /reconcile`, `GET /transactions`, `GET /logs` | Đối soát độc lập 2 tầng dữ liệu và kích hoạt worker sửa lệch |
+| `/api/v1/loans` | Loans Lifecycle| `POST /request`, `GET /`, `POST /{id}/approve`, `POST /{id}/reject`, `POST /{id}/handover`, `POST /{id}/return`, `POST /{id}/cancel` | Vòng đời mượn trả hỗ trợ MetaMask direct & Relayer fail-closed |
+| `/api/v1/blockchain`| Blockchain Status| `GET /status`, `GET /contract-info` | Chẩn đoán node EVM, `contract_deployed`, chain ID, block & ví Relayer |
+| `/api/v1/audit` | Audit & Reconcile| `GET /loans/{id}/verify`, `POST /reconcile`, `GET /transactions`, `GET /logs` | Đối soát độc lập 2 tầng dữ liệu (`sync_status`) và phục hồi theo yêu cầu |
 
 ---
 
@@ -404,7 +398,7 @@ Nằm tại [`frontend/src/context/Web3Context.tsx`](file:///c:/Users/phucd/OneD
 
 #### 6. Kiểm Toán Blockchain (`/audit` - `AuditPage.tsx`)
 - **Dual-State Verification Console:** Cho phép nhập bất kỳ ID đơn mượn nào để hệ thống thực hiện đối soát chéo độc lập giữa MySQL và Smart Contract (so khớp State code, Equipment ID, Mutex lock và Tiền cọc). Hiển thị danh sách các điểm sai lệch nếu có.
-- **Background Reconciliation Trigger:** Nút bấm cho phép Admin kích hoạt worker quét và tự động sửa các đơn bị lệch trạng thái sau sự cố máy chủ.
+- **Manual Reconciliation Trigger:** Nút bấm cho phép Admin kích hoạt API `/audit/reconcile` quét và tự động sửa các đơn bị lệch trạng thái khi xảy ra sự cố (không chạy cron ngầm tự động).
 - **Blockchain Explorer:** Bảng hiển thị toàn bộ Transaction Hash, số hiệu khối, lượng gas tiêu thụ và liên kết đơn mượn tương ứng.
 
 ---
@@ -436,6 +430,6 @@ Nằm tại [`frontend/src/pages/ShowcasePage.tsx`](file:///c:/Users/phucd/OneDr
 Dự án **EduVault** đại diện cho một mô hình ứng dụng Blockchain thực tiễn và hoàn chỉnh:
 
 1. **Tính Thực Tiễn (Pragmatic Architecture):** Không "ép buộc" mọi thứ lên blockchain một cách hình thức. Dữ liệu nhạy cảm và thông tin cá nhân được bảo vệ tối đa trong MySQL; trong khi những gì cần minh bạch, chống gian lận và không thể chối bỏ (máy trạng thái, mốc thời gian, ký quỹ, tranh chấp) được bảo chứng bằng Smart Contract.
-2. **Trải Nghiệm Người Dùng Vượt Trội (Seamless UX):** Giải quyết rào cản Web3 bằng mô hình Custodial Relayer, giúp người dùng phổ thông sử dụng dễ dàng như các ứng dụng Web truyền thống nhưng vẫn có tùy chọn kết nối MetaMask cho người dùng nâng cao.
-3. **Độ Tin Cậy & Chịu Lỗi Cao:** Cơ chế khóa dòng MySQL Pessimistic Lock kết hợp Mutex Smart Contract triệt tiêu 100% rủi ro đặt trùng. Bộ đối soát Background Reconciliation Worker đảm bảo dữ liệu tự phục hồi toàn vẹn kể cả khi máy chủ gặp sự cố sập nguồn đột ngột.
-4. **Kiểm Thử Nghiêm Ngặt:** Toàn bộ 28 bài test Smart Contract và 56 bài test Backend Pytest đều đạt tỷ lệ pass tuyệt đối **100%**, mã nguồn Frontend biên dịch không có lỗi hay cảnh báo.
+2. **Trải Nghiệm Người Dùng Linh Hoạt (Hybrid Web2.5 UX):** Kết hợp xác minh ví MetaMask qua chữ ký EIP-191 (cho phép sinh viên tự ký `createLoan` on-chain và được Backend xác minh biên lai) cùng cơ chế Custodial Relayer dự phòng khi sinh viên chưa dùng ví Web3.
+3. **Độ Tin Cậy, Fail-Closed & Phục Hồi Chủ Động:** Cơ chế khóa dòng MySQL Pessimistic Lock kết hợp Mutex Smart Contract triệt tiêu đặt trùng; thao tác on-chain fail-closed (`HTTP 503`) khi RPC offline và ghi `PENDING`/`FAILED`/`CONFIRMED` transaction tracking; API đối soát `/api/v1/audit/reconcile` hỗ trợ Admin đồng bộ dữ liệu theo trạng thái on-chain khi có sự cố.
+4. **Kiểm Thử Nghiêm Ngặt:** Toàn bộ 28 bài test Smart Contract và 65 bài test Backend Pytest đều đạt tỷ lệ pass **100%**, cùng kiểm chứng E2E trực tiếp trên Hardhat EVM và biên dịch Frontend (`tsc --noEmit --incremental false` & `vite build`) sạch lỗi.

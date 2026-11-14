@@ -1,24 +1,25 @@
-# EDUVAULT - BÁO CÁO TOÀN DIỆN KIỂM THỬ QA & RÀ SOÁT BẢO MẬT (PHASE 8)
+# EDUVAULT - BÁO CÁO TOÀN DIỆN KIỂM THỬ QA & RÀ SOÁT BẢO MẬT (PHASE 7A / PHASE 8)
 
 > **Dự án:** EduVault - Hệ thống Quản lý Mượn trả Thiết bị Học tập Đào tạo trên EVM Blockchain  
-> **Phiên bản:** v1.0.0-rc  
+> **Phiên bản:** v1.1.0-phase7a  
 > **Thời điểm thẩm định:** 11/2026  
-> **Trạng thái tổng thể:** **100% PASS (ĐẠT TOÀN DIỆN)**
+> **Trạng thái tổng thể:** **100% PASS (ĐẠT CHUẨN PHASE 7A)**
 
 ---
 
 ## 1. TỔNG QUAN KẾT QUẢ KIỂM THỬ TỰ ĐỘNG (QA MATRIX)
 
-Toàn bộ hệ sinh thái kiểm thử của EduVault được thiết kế phân tầng từ cấp độ Smart Contract, Unit/Integration Test cho Backend đến kịch bản E2E toàn diện.
+Toàn bộ hệ sinh thái kiểm thử của EduVault được thiết kế phân tầng từ cấp độ Smart Contract, Unit/Integration Test cho Backend đến Frontend Build và kịch bản E2E trực tiếp với Hardhat EVM.
 
-| Phân tầng kiểm thử | Công cụ / Framework | Số lượng ca kiểm thử | Kết quả | Tỷ lệ thành công | Thời gian chạy |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Smart Contract Test Suite** | Hardhat (Chai / Ethers.js) | 28 tests | 28 PASS | **100%** | ~1.2s |
-| **Backend API Test Suite** | Pytest / AnyIO / SQLite in-memory | 56 tests | 56 PASS | **100%** | ~35s |
-| **E2E Happy Path Scenario** | Python Web3 Integration | 1 kịch bản hoàn chỉnh | 1 PASS | **100%** | ~3.8s |
-| **E2E Penalties & Forfeits** | Python Web3 Integration | 4 kịch bản ngoại lệ | 4 PASS | **100%** | ~4.2s |
-| **E2E Concurrency & Recovery** | Python Web3 Integration | 3 kịch bản concurrency | 3 PASS | **100%** | ~4.0s |
-| **TỔNG CỘNG** | **Hệ thống liên kết** | **92 Ca kiểm thử** | **92 PASS** | **100%** | **~48.2s** |
+| Phân tầng kiểm thử | Công cụ / Framework | Số lượng ca kiểm thử | Kết quả | Tỷ lệ thành công | Ghi chú / Thời gian |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Smart Contract Test Suite** | Hardhat (Chai / Ethers.js) | 28 tests | 28 PASS | **100%** | `npx hardhat test` (~1s) |
+| **Backend API Test Suite** | Pytest / AnyIO / SQLite + Mock Contract | 65 tests | 65 PASS | **100%** | `python -m pytest` (~51s) |
+| **Frontend Compile & Build** | TypeScript (`tsc`) + Vite | Typecheck + Build | PASS | **100%** | Exit code 0 |
+| **E2E Happy Path Scenario** | Python Web3 + Live Hardhat EVM + MySQL | 1 kịch bản | 1 PASS | **100%** | `scripts/test_e2e_happy_path.py` |
+| **E2E Penalties & Forfeits** | Python Web3 + Live Hardhat EVM + MySQL | 4 kịch bản ngoại lệ | 4 PASS | **100%** | `scripts/test_e2e_penalties.py` |
+| **E2E Concurrency & Recovery** | Python Web3 + Live Hardhat EVM + MySQL | 3 kịch bản concurrency | 3 PASS | **100%** | `scripts/test_e2e_concurrency_recovery.py` |
+| **E2E MetaMask EIP-191 & Offline Guard** | Multi-Account Hardhat #1 + FastAPI | 5 bước xác minh | 5 PASS | **100%** | Verify EIP-191, approve-only, replay `409`, offline `503` |
 
 ---
 
@@ -38,14 +39,14 @@ Toàn bộ hệ sinh thái kiểm thử của EduVault được thiết kế ph�
   5. **Mutex Khóa thiết bị (Anti-Double Borrowing):** Chặn hoàn toàn việc duyệt đơn thứ 2 khi đơn trước đó đang chiếm giữ `activeEquipmentLoan[equipmentId]`. Mutex được tự động giải phóng an toàn khi đơn trả xong hoặc bị hủy.
 
 ### 2.2. Phân tầng Backend API (`FastAPI + Pytest`)
-- **Bộ kiểm thử:** `backend/tests/` (56 ca kiểm thử).
+- **Bộ kiểm thử:** `backend/tests/` (**65 ca kiểm thử**).
 - **Module phủ sóng:**
-  - `test_auth.py` (9 tests): Đăng nhập Email / Mã SV, kiểm tra mật khẩu bcrypt, phát hiện tài khoản vô hiệu hóa, sinh JWT HS256, bảo vệ chống brute-force.
-  - `test_users.py` (8 tests): RBAC phân quyền Admin / Sinh viên, quản lý danh sách tài khoản, hồ sơ `/users/me`.
+  - `test_auth.py` (9 tests): Đăng nhập Email / Mã SV, kiểm tra mật khẩu bcrypt, phát hiện tài khoản vô hiệu hóa, sinh JWT HS256, bảo vệ chống brute-force (`HTTP 423`).
+  - `test_users.py` (9 tests): RBAC phân quyền Admin / Sinh viên, quản lý danh sách tài khoản, hồ sơ `/users/me`, và luồng xác minh ví EIP-191 challenge-response với one-time nonce (`/users/wallet/challenge`, `/users/wallet/verify`).
   - `test_equipment.py` (12 tests): CRUD thiết bị, lọc danh mục, tìm kiếm từ khóa, khóa dòng dữ liệu Pessimistic Lock (`SELECT FOR UPDATE`).
-  - `test_loans.py` (13 tests): Toàn bộ vòng đời mượn trả, kiểm tra logic ngày nhận/trả, chặn trùng đơn mượn, hủy đơn.
-  - `test_blockchain.py` (6 tests): Kiểm tra tính duy nhất & Idempotent của `generate_loan_id` (Keccak256), nạp ABI, kiểm tra tính chịu lỗi khi node RPC offline.
-  - `test_audit.py` (5 tests): Đối soát tính toàn vẹn độc lập (`/audit/loans/{id}/verify`), lịch sử giao dịch blockchain, nhật ký thao tác `audit_logs`.
+  - `test_loans.py` (18 tests): Vòng đời mượn trả hoàn chỉnh, logic ngày nhận/trả, fail-closed `HTTP 503` khi RPC offline, xử lý tx revert không làm tiến trạng thái DB (`FAILED` tx record), crash recovery `approve` khi chain đã `Approved`, xác minh biên lai MetaMask `createLoan` + `approve`-only + idempotent retry, chặn hạ phạt `0%` sai quy chế khi trả trễ.
+  - `test_blockchain.py` (7 tests): Tính duy nhất & Idempotent của `generate_loan_id`, chuẩn hóa `normalize_hex_bytes32`, phân giải địa chỉ hợp đồng theo `CHAIN_ID`, nạp ABI, trạng thái `/blockchain/status`, kiểm tra an toàn khi node RPC offline.
+  - `test_audit.py` (7 tests): Đối soát độc lập (`/audit/loans/{id}/verify`, `sync_status`), phát hiện lệch toàn phần (trạng thái, cọc, ví, thời gian, mutex), chặn ghi đè từ struct rỗng trên chain, fail-closed `503` khi reconcile offline, lịch sử `BlockchainTransaction` & `AuditLog`.
   - `test_health.py` (3 tests): Healthcheck CSDL MySQL và hệ thống lõi.
 
 ### 2.3. Phân tầng Kiểm thử Tích hợp E2E
@@ -100,11 +101,11 @@ Kịch bản rà soát an ninh tự động được thực hiện qua công c�
 
 ### 3.1. Chống rò rỉ khóa bí mật (Secret Management)
 - File cấu hình môi trường `.env` được đưa vào `.gitignore`.
-- Private key của Admin Relayer chỉ được nạp qua biến môi trường `ADMIN_RELAYER_PRIVATE_KEY`.
-- Quét biểu thức chính quy (Regex Scan) qua toàn bộ 59 file mã nguồn (`.py`, `.ts`, `.tsx`, `.sol`), không tồn tại khóa bí mật hoặc API key nhạy cảm nào bị đưa vào Git repo.
+- Private key của Admin Relayer chỉ được nạp qua biến môi trường `ADMIN_PRIVATE_KEY`.
+- Quét biểu thức chính quy (Regex Scan) qua toàn bộ mã nguồn (`.py`, `.ts`, `.tsx`, `.sol`), không tồn tại khóa bí mật sản xuất thật nào bị đưa vào Git repo.
 
 ### 3.2. Phân quyền và kiểm soát truy cập (RBAC)
-- Xác thực sử dụng JSON Web Token (JWT) thuật toán HS256 với thời gian sống 30 phút.
+- Xác thực sử dụng JSON Web Token (JWT) thuật toán HS256 với thời gian sống cấu hình qua `ACCESS_TOKEN_EXPIRE_MINUTES` (30 phút mặc định trong `config.py`, 1440 phút trong `.env` phát triển).
 - Phân quyền chặt chẽ thông qua FastAPI Dependency Injection: `Depends(require_role([UserRole.ADMIN]))`.
 - Sinh viên gọi API quản trị (/audit/logs, /audit/reconcile, /admin/users) lập tức bị chặn với mã lỗi HTTP 403 Forbidden.
 
@@ -113,19 +114,21 @@ Kịch bản rà soát an ninh tự động được thực hiện qua công c�
 - Sau 5 lần nhập sai mật khẩu liên tiếp, tài khoản tự động bị khóa trong 15 phút (`HTTP 423 Locked`).
 - Kẻ tấn công cố tình nhập đúng mật khẩu trong thời gian bị khóa vẫn bị từ chối truy cập. Khi đăng nhập thành công sau thời gian khóa, hệ thống tự động reset số lần đếm về 0.
 
-### 3.4. Bảo vệ Smart Contract & Chống Reentrancy
+### 3.4. Bảo vệ Smart Contract, Mô hình Ký quỹ & Ranh giới Tin cậy (Phase 7A vs Phase 13)
 - Smart Contract kế thừa `AccessControl` tiêu chuẩn của OpenZeppelin.
-- Phân định rõ ràng `ADMIN_ROLE` và `BORROWER_ROLE`.
-- Các hàm nhạy cảm `approveLoan`, `confirmHandover`, `confirmReturn` đều có modifier `onlyRole(ADMIN_ROLE)` (hoặc `onlyAdmin`).
-- Toàn bộ trạng thái nội bộ (`state`, `depositState`, `activeEquipmentLoan`) được cập nhật theo mẫu Checks-Effects-Interactions trước khi tương tác bên ngoài, triệt tiêu nguy cơ Reentrancy.
+- **Ký quỹ mô phỏng VND (không phải ETH escrow):** Hợp đồng lưu số nguyên `depositAmount` (VND) và vòng đời `depositState` (`Pending` $\to$ `Locked` $\to$ `Refunded`/`Forfeited`), không nhận hoặc giữ ETH, loại bỏ hoàn toàn Reentrancy.
+- **Ràng buộc ví Sinh viên (EIP-191 One-Time Nonce) & Chống Replay Tx Hash:** Backend xác minh chữ ký `personal_sign` (`wallet_verified`), kiểm tra biên lai giao dịch thật trên EVM (`status == 1`, `chainId`, địa chỉ hợp đồng, người gửi, event `LoanCreated`), và chặn sử dụng lại `client_tx_hash` hoặc `on_chain_loan_id` giữa các người dùng (`HTTP 409`).
+- **Thẩm quyền Admin & Phạm vi nâng cấp Phase 13:** Các hàm `approveLoan`, `confirmHandover`, `confirmReturn`, `cancelLoan` được bảo vệ bởi `onlyRole(ADMIN_ROLE)`; hợp đồng vẫn tin cậy nhận định của `ADMIN` về tình trạng vật lý thiết bị (`GOOD`/`DAMAGED`/`LOST`). Việc đăng ký `BORROWER_ROLE` on-chain cho từng ví sinh viên và loại bỏ hẳn tham số `manual_penalty_percent` khỏi `EquipmentLending.sol` được giữ tách biệt sang **Phase 13** (bảo toàn ABI ổn định trong Phase 7A).
+- **Đối soát kích hoạt thủ công:** API `POST /api/v1/audit/reconcile` là tiến trình kích hoạt theo yêu cầu của Admin (không phải worker nền chạy cron tự động).
+- **Dữ liệu `studentId` on-chain:** `LoanRecord` có lưu mã sinh viên nội bộ (`studentId`), trong khi PII nhạy cảm (họ tên, email, mật khẩu) được giữ 100% trong MySQL.
 
 ---
 
-## 4. KẾT LUẬN & ĐỀ XUẤT NGHIỆM THU
+## 4. KẾT LUẬN & ĐỀ XUẤT NGHIỆM THU (PHASE 7A)
 
-Hệ thống **EduVault** đã hoàn thành toàn diện giai đoạn **Phase 7 (Tích hợp E2E & Kịch bản Nghiệp vụ)** và **Phase 8 (Kiểm thử QA & Rà soát Bảo mật)**:
-1. Tất cả 92 ca kiểm thử tự động đều đạt kết quả 100% PASS.
-2. Cơ chế khóa hai lớp (MySQL Pessimistic Lock kết hợp Smart Contract Mutex) hoạt động hoàn hảo, ngăn chặn triệt để tình trạng tranh chấp thiết bị.
-3. Cơ chế tự động đối soát và khôi phục (Background Reconciliation) xử lý an toàn các trường hợp lệch dữ liệu khi có sự cố.
-4. Hệ thống sẵn sàng chuyển sang **Phase 9 (Đóng gói Triển khai & Hướng dẫn Cài đặt)**.
+Hệ thống **EduVault** đã hoàn thành toàn diện giai đoạn **Phase 7A (Hoàn thiện tích hợp MetaMask & tính nhất quán dữ liệu)** trên nền kết quả Phase 7–8 trước đó:
+1. Toàn bộ 28 tests Smart Contract + 65 tests Backend Pytest + Frontend `tsc`/`vite build` + kịch bản E2E trực tiếp trên Hardhat EVM đều đạt 100% PASS.
+2. Cơ chế khóa hai lớp (MySQL Pessimistic Lock + Smart Contract Mutex), EIP-191 wallet verification, durable `PENDING`/`FAILED`/`CONFIRMED` transaction tracking và fail-closed RPC `HTTP 503` vận hành đồng bộ.
+3. Cơ chế đối soát thủ công (`POST /api/v1/audit/reconcile` và `GET /api/v1/audit/loans/{id}/verify`) phát hiện chính xác sai lệch `NOT_ON_CHAIN` / `MISSING_ON_CHAIN` / `MISMATCH` và phục hồi an toàn từ Smart Contract mà không bao giờ ghi đè bằng bản ghi rỗng.
+4. Sẵn sàng tiến sang bước nâng cấp Smart Contract (**Phase 13**) sau khi xác nhận nghiệm thu Phase 7A.
 

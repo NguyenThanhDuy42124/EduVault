@@ -225,7 +225,7 @@ export const MyLoansPage: React.FC = () => {
                       </span>
                     ) : (
                       <span className="text-slate-400 text-xs block mt-0.5">
-                        Chưa cấp (Chờ duyệt)
+                        Chưa ghi nhận on-chain (Sẽ đồng bộ khi duyệt)
                       </span>
                     )}
                   </div>
@@ -261,6 +261,12 @@ export const MyLoansPage: React.FC = () => {
           {actionError && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
               {actionError}
+            </div>
+          )}
+
+          {selectedLoan?.on_chain_loan_id && (
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
+              Đơn đã có bản ghi Smart Contract (<code>{selectedLoan.on_chain_loan_id.slice(0, 12)}...</code>). Khi hủy, Backend Admin Relayer sẽ gửi giao dịch <code>cancelLoan</code> đồng bộ lên Blockchain.
             </div>
           )}
 

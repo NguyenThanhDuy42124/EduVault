@@ -6,31 +6,34 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin (Solidity & Hardhat Tests) — Đang bắt đầu triển khai kiến trúc Pure Web3 100% Client-side signing và Multi-Admin cho nhóm 3 người.
+Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu — **ĐÃ HOÀN TẤT (complete)**. Chờ xác nhận của người dùng trước khi chuyển sang **Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin**.
 
 ### Cập nhật rà soát ngày 2026-11-06
 - Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
-- Phạm vi phiên này: ghi nhận kết quả và kế hoạch, commit/push tài liệu; chưa triển khai các bản sửa.
-- Các mục hoàn thành cũ là lịch sử triển khai, không phải bằng chứng nghiệm thu bản Web3 hiện tại.
-- Chi tiết bằng chứng và giới hạn kiểm tra: `findings.md`, mục 18.
+- Chi tiết bằng chứng phát hiện cũ: `findings.md`, mục 18.
 
 ### Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu
-- **Status:** pending
-- [ ] P1 — Dùng chung một `on_chain_loan_id` giữa giao dịch MetaMask và DB. Backend xác minh receipt thành công, đúng chain/contract/event, người mượn và nội dung đơn; không tin hash do client cung cấp.
-- [ ] P1 — Khi duyệt đơn đã được sinh viên tạo on-chain, chỉ gọi `approveLoan`; không tạo thêm đơn khác. Chống dùng lại transaction cho nhiều đơn.
-- [ ] P1 — Ràng buộc tài khoản sinh viên với ví đã xác minh; nếu dùng chữ ký liên kết ví, có nonce dùng một lần và thời hạn.
-- [ ] P1 — Khi RPC offline hoặc giao dịch thất bại, không ghi nghiệp vụ đã hoàn tất. Có trạng thái chờ hoặc lỗi rõ ràng.
-- [ ] P1 — Lưu tiến trình gửi giao dịch, hỗ trợ tiếp tục an toàn khi chain thành công nhưng DB/API thất bại; kiểm thử retry không tạo đơn trùng.
-- [ ] P1 — Đối soát sự tồn tại của bản ghi, người mượn, thiết bị, tiền cọc, thời gian và mutex; phân biệt chưa ghi chain với đã đồng bộ.
-- [ ] P2 — Chốt rõ mô hình hybrid: sinh viên ký thao tác nào, admin dùng MetaMask hay relayer; mọi thao tác dùng cùng một ID.
-- [ ] P2 — Đồng bộ ABI/address sang cả frontend và backend khi deploy; kiểm tra chain và contract trước khi gửi.
-- [ ] P2 — Gỡ listener MetaMask khi effect cleanup; xử lý đổi ví/mạng, từ chối ký, thiếu gas và lỗi revert.
-- [ ] P2 — Bổ sung `/blockchain/contract-info` hoặc bỏ lời gọi và giao diện phụ thuộc endpoint chưa có.
-- [ ] P2 — Chốt ý nghĩa `BORROWER_ROLE`; hiện createLoan không kiểm tra role này. Kiểm tra condition 0–2, penalty 0–100 và phân biệt miễn phạt 0% với tự tính.
-- [ ] P2 — Cài dependency frontend theo lockfile rồi chạy lại build; chạy backend tests và E2E MetaMask trên môi trường cô lập.
-- [ ] P2 — Cập nhật báo cáo theo mô hình hiện tại, nói rõ tiền cọc mô phỏng, quyền admin và giới hạn của đối soát.
+- **Status:** complete
+- [x] P1 — Dùng chung một `on_chain_loan_id` giữa giao dịch MetaMask và DB. Backend xác minh receipt thành công, đúng chain/contract/event, người mượn và nội dung đơn; không tin hash do client cung cấp. (`blockchain_service.verify_create_loan_tx`, `loan_service.create_loan_request`)
+- [x] P1 — Khi duyệt đơn đã được sinh viên tạo on-chain, chỉ gọi `approveLoan`; không tạo thêm đơn khác. Chống dùng lại transaction cho nhiều đơn. (`loan_service.approve_loan_request`, HTTP 409 khi replay `tx_hash`/`on_chain_loan_id`)
+- [x] P1 — Ràng buộc tài khoản sinh viên với ví đã xác minh; có chữ ký EIP-191 liên kết ví với nonce dùng một lần và thời hạn 5 phút. (`POST /api/v1/users/wallet/challenge`, `POST /api/v1/users/wallet/verify`, Alembic `c2d9e4f7a102`)
+- [x] P1 — Khi RPC offline hoặc giao dịch thất bại, không ghi nghiệp vụ đã hoàn tất (`HTTP 503`/`502`). Có trạng thái giao dịch `PENDING`/`FAILED`/`CONFIRMED` rõ ràng. (`_ensure_chain_ready_or_http`, `_send_durable_tx`)
+- [x] P1 — Lưu tiến trình gửi giao dịch, hỗ trợ tiếp tục an toàn khi chain thành công nhưng DB/API thất bại (crash recovery + `localStorage` client cache); kiểm thử retry idempotent không tạo đơn trùng.
+- [x] P1 — Đối soát sự tồn tại của bản ghi, người mượn, thiết bị, tiền cọc, thời gian và mutex; phân biệt `NOT_ON_CHAIN`, `MISSING_ON_CHAIN`, `RPC_OFFLINE`, `MISMATCH`, `SYNCED` và không ghi đè DB từ struct rỗng. (`reconciliation_service.py`)
+- [x] P2 — Chốt rõ mô hình hybrid: sinh viên xác minh ví EIP-191 & có thể tự ký `createLoan` MetaMask, admin dùng Relayer (hoặc fallback Relayer nếu SV chưa xác minh ví); mọi thao tác dùng cùng một `on_chain_loan_id`.
+- [x] P2 — Đồng bộ ABI/address sang cả frontend và backend khi deploy (`deploy.cjs` + lọc theo `chainId` trong `contractConfig.ts` & `blockchain_service.py`); kiểm tra `chainId` và bytecode hợp đồng (`ensure_ready` / `verifyDeployedContract`) trước khi gửi.
+- [x] P2 — Gỡ listener MetaMask khi effect cleanup trong `Web3Context.tsx`; xử lý đổi ví/mạng, từ chối ký (4001), pending permission (-32002), thiếu gas và lỗi revert (`parseWeb3Error`).
+- [x] P2 — Bổ sung `/api/v1/blockchain/contract-info` đồng bộ schema với `/status`, bỏ các fallback giả lập ở `AuditPage.tsx` và `ShowcasePage.tsx`.
+- [x] P2 — Chốt ý nghĩa `BORROWER_ROLE` (xác minh EIP-191 trong Phase 7A, giữ ổn định ABI; nâng cấp on-chain `BORROWER_ROLE` & bỏ `manual_penalty_percent` để riêng sang Phase 13). Kiểm tra `condition` 0–2, `penalty` 0–100 và chặn miễn phạt `0%` khi đơn quá hạn ở tình trạng `GOOD`.
+- [x] P2 — Cài dependency `contracts` & `frontend` bằng `npm ci`; chạy `hardhat compile` & `hardhat test` (28 passing), `pytest` (65 passed), `tsc --noEmit --incremental false` & `vite build` (exit 0), và kiểm thử E2E + multi-account MetaMask trên môi trường Hardhat EVM + MySQL cô lập.
+- [x] P2 — Cập nhật `THUYET_MINH_DO_AN_EDUVAULT.md`, `SYSTEM_ANALYSIS_REPORT.md`, `QA_SECURITY_REPORT.md` theo mô hình hiện tại, nói rõ tiền cọc mô phỏng VND, quyền admin, `studentId` on-chain và giới hạn đối soát thủ công `/audit/reconcile`.
 
-**Tiêu chí nghiệm thu:** Một đơn trong DB liên kết đúng một đơn on-chain; tạo, duyệt, bàn giao, trả/hủy dùng cùng ID. Retry không tạo trùng. Offline không báo thành công sai. Ví khác không thể nhận đơn của người dùng. Có bằng chứng E2E hai tài khoản và kết quả kiểm thử thực tế.
+**Bằng chứng nghiệm thu Phase 7A:**
+- **Smart Contracts (`contracts`):** `npx hardhat test` -> 28 passing.
+- **Database Migration:** `alembic upgrade head` -> `c2d9e4f7a102 (head)` (`add wallet verification fields to users`).
+- **Backend API (`backend/tests/`):** `.\backend\.venv\Scripts\python.exe -m pytest backend/tests/ -v` -> 65 passed.
+- **Frontend (`frontend`):** `npx tsc --noEmit --incremental false` (exit 0) và `npx vite build` (exit 0).
+- **Live Hardhat EVM + MySQL E2E (môi trường cô lập `eduvault_phase7a_e2e_tmp`):** `test_e2e_happy_path.py` + `test_e2e_penalties.py` + `test_e2e_concurrency_recovery.py` PASS; kiểm chứng multi-account MetaMask EIP-191 (`personal_sign`, Account #1 `createLoan`, `approveLoan`-only, idempotent retry, replay block 409, offline fail-closed 503) PASS.
 
 ### Lỗi đã gặp trong phiên rà soát
 | Lỗi | Kết quả / Hướng xử lý |

@@ -113,3 +113,111 @@ def test_borrower_cannot_list_users_returns_403(client, borrower_token_headers):
     response = client.get("/api/v1/admin/users", headers=borrower_token_headers)
     assert response.status_code == 403
 
+
+def test_wallet_challenge_and_eip191_verify_flow_with_one_time_nonce(
+    client, db_session, test_borrower_user, borrower_token_headers
+):
+    """
+    Mục đích: Kiểm thử liên kết ví MetaMask bằng challenge nonce dùng 1 lần, hạn 5 phút và chữ ký EIP-191.
+    """
+    from datetime import datetime, timedelta
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    acct = Account.from_key("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")
+    other_acct = Account.from_key("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a")
+
+    # 1. Yêu cầu thử thách cho ví MetaMask
+    chal_res = client.post(
+        "/api/v1/users/wallet/challenge",
+        json={"wallet_address": acct.address.lower()},
+        headers=borrower_token_headers,
+    )
+    assert chal_res.status_code == 200
+    chal = chal_res.json()
+    assert chal["wallet_address"] == acct.address
+    assert "Nonce:" in chal["message"]
+
+    # 2. Ký sai khóa riêng -> 400 và tiêu thụ luôn nonce (replay cùng nonce phải fail)
+    wrong_sig = other_acct.sign_message(encode_defunct(text=chal["message"])).signature.hex()
+    bad_verify = client.post(
+        "/api/v1/users/wallet/verify",
+        json={"wallet_address": acct.address, "signature": wrong_sig},
+        headers=borrower_token_headers,
+    )
+    assert bad_verify.status_code == 400
+
+    valid_sig_for_consumed = acct.sign_message(encode_defunct(text=chal["message"])).signature.hex()
+    reused_verify = client.post(
+        "/api/v1/users/wallet/verify",
+        json={"wallet_address": acct.address, "signature": valid_sig_for_consumed},
+        headers=borrower_token_headers,
+    )
+    assert reused_verify.status_code == 400
+
+    # 3. Xin thử thách mới nhưng để hết hạn -> 400
+    chal_res_exp = client.post(
+        "/api/v1/users/wallet/challenge",
+        json={"wallet_address": acct.address},
+        headers=borrower_token_headers,
+    )
+    exp_msg = chal_res_exp.json()["message"]
+    test_borrower_user.wallet_nonce_expires_at = datetime.now() - timedelta(seconds=10)
+    db_session.commit()
+    exp_sig = acct.sign_message(encode_defunct(text=exp_msg)).signature.hex()
+    exp_verify = client.post(
+        "/api/v1/users/wallet/verify",
+        json={"wallet_address": acct.address, "signature": exp_sig},
+        headers=borrower_token_headers,
+    )
+    assert exp_verify.status_code == 400
+    assert "hết hạn" in exp_verify.json()["detail"]
+
+    # 4. Xin thử thách mới và ký đúng -> 200, wallet_verified=True; replay lại chữ ký -> 400
+    chal_res_ok = client.post(
+        "/api/v1/users/wallet/challenge",
+        json={"wallet_address": acct.address},
+        headers=borrower_token_headers,
+    )
+    ok_msg = chal_res_ok.json()["message"]
+    ok_sig = acct.sign_message(encode_defunct(text=ok_msg)).signature.hex()
+    verify_ok = client.post(
+        "/api/v1/users/wallet/verify",
+        json={"wallet_address": acct.address, "signature": ok_sig},
+        headers=borrower_token_headers,
+    )
+    assert verify_ok.status_code == 200
+    v_data = verify_ok.json()
+    assert v_data["wallet_verified"] is True
+    assert v_data["wallet_address"] == acct.address
+
+    replay_ok = client.post(
+        "/api/v1/users/wallet/verify",
+        json={"wallet_address": acct.address, "signature": ok_sig},
+        headers=borrower_token_headers,
+    )
+    assert replay_ok.status_code == 400
+
+    # 5. Tài khoản khác cố chiếm cùng địa chỉ ví -> 409 Conflict
+    from backend.app.core.security import create_access_token, hash_password
+    from backend.app.models.user import User, UserRole
+
+    u2 = User(
+        student_staff_id="SV2026009",
+        full_name="Sinh Viên Thứ 2",
+        email="sv09@eduvault.edu.vn",
+        password_hash=hash_password("student123"),
+        role=UserRole.BORROWER,
+        is_active=True,
+    )
+    db_session.add(u2)
+    db_session.commit()
+    db_session.refresh(u2)
+    u2_headers = {"Authorization": f"Bearer {create_access_token(u2.id, 'BORROWER')}"}
+    conflict_chal = client.post(
+        "/api/v1/users/wallet/challenge",
+        json={"wallet_address": acct.address},
+        headers=u2_headers,
+    )
+    assert conflict_chal.status_code == 409
+

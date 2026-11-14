@@ -6,7 +6,7 @@
 > **Tên đề tài:** Hệ thống Quản lý Mượn trả Thiết bị Học tập & Đào tạo Ứng dụng Smart Contract (EduVault)  
 > **Chuyên ngành:** Kỹ thuật Phần mềm / Công nghệ Thông tin / Mạng máy tính & An toàn thông tin  
 > **Kiến trúc cốt lõi:** Hybrid Web2.5 (Dual-State Architecture: MySQL 8.x + Solidity Smart Contract trên EVM)  
-> **Phiên bản:** v1.0.0-rc  
+> **Phiên bản:** v1.1.0-phase7a  
 > **Năm hoàn thành:** 2026  
 
 ---
@@ -21,8 +21,8 @@
 - [CHƯƠNG 2: KIẾN TRÚC HỆ THỐNG VÀ LUỒNG DỮ LIỆU](#chương-2-kiến-trúc-hệ-thống-và-luồng-dữ-liệu)
   - [2.1. Kiến trúc phân tầng Clean Architecture](#21-kiến-trúc-phân-tầng-clean-architecture)
   - [2.2. Phân định ranh giới On-Chain vs. Off-Chain (Source of Truth)](#22-phân-định-ranh-giới-on-chain-vs-off-chain-source-of-truth)
-  - [2.3. Mô hình ký giao dịch Web2.5 Custodial Relayer](#23-mô-hình-ký-giao-dịch-web25-custodial-relayer)
-  - [2.4. Cơ chế xử lý nhất quán Dual-Write & Background Reconciliation](#24-cơ-chế-xử-lý-nhất-quán-dual-write--background-reconciliation)
+  - [2.3. Mô hình Hybrid Wallet Binding (EIP-191) & Custodial Relayer](#23-mô-hình-hybrid-wallet-binding-eip-191--custodial-relayer)
+  - [2.4. Cơ chế xử lý nhất quán Dual-Write & Đối soát chủ động (Manual Reconciliation)](#24-cơ-chế-xử-lý-nhất-quán-dual-write--đối-soát-chủ-động-manual-reconciliation)
   - [2.5. Sơ đồ dòng chảy dữ liệu toàn trình (End-to-End Pipeline)](#25-sơ-đồ-dòng-chảy-dữ-liệu-toàn-trình-end-to-end-pipeline)
 - [CHƯƠNG 3: THIẾT KẾ CƠ SỞ DỮ LIỆU & SMART CONTRACT](#chương-3-thiết-kế-cơ-sở-dữ-liệu--smart-contract)
   - [3.1. Thiết kế Cơ sở Dữ liệu Quan hệ Off-Chain (MySQL DDL)](#31-thiết-kế-cơ-sở-dữ-liệu-quan-hệ-off-chain-mysql-ddl)
@@ -34,9 +34,9 @@
   - [4.1. An toàn tầng ứng dụng (Application Security)](#41-an-toàn-tầng-ứng-dụng-application-security)
   - [4.2. Chống tranh chấp đồng thời (Concurrency Control: Pessimistic Lock)](#42-chống-tranh-chấp-đồng-thời-concurrency-control-pessimistic-lock)
   - [4.3. An toàn Smart Contract (EVM Security & AccessControl)](#43-an-toàn-smart-contract-evm-security--accesscontrol)
-  - [4.4. Bảo vệ dữ liệu định danh cá nhân (GDPR & Data Privacy)](#44-bảo-vệ-dữ-liệu-định-danh-cá-nhân-gdpr--data-privacy)
+  - [4.4. Bảo vệ dữ liệu định danh cá nhân (Data Privacy)](#44-bảo-vệ-dữ-liệu-định-danh-cá-nhân-data-privacy)
 - [CHƯƠNG 5: ĐÁNH GIÁ THỰC NGHIỆM VÀ KẾT QUẢ ĐẠT ĐƯỢC](#chương-5-đánh-giá-thực-nghiệm-và-kết-quả-đạt-được)
-  - [5.1. Thống kê kết quả kiểm thử toàn diện (QA Matrix 92 Tests)](#51-thống-kê-kết-quả-kiểm-thử-toàn-diện-qa-matrix-92-tests)
+  - [5.1. Thống kê kết quả kiểm thử tự động (Phase 7A QA Summary)](#51-thống-kê-kết-quả-kiểm-thử-tự-động-phase-7a-qa-summary)
   - [5.2. Đánh giá ưu điểm và hạn chế của giải pháp](#52-đánh-giá-ưu-điểm-và-hạn-chế-của-giải-pháp)
   - [5.3. Hướng phát triển và mở rộng trong tương lai](#53-hướng-phát-triển-và-mở-rộng-trong-tương-lai)
 
@@ -59,9 +59,9 @@ Trong môi trường giáo dục đại học và viện nghiên cứu, việc q
 
 ### 1.3. Phương pháp tiếp cận: Mô hình Hybrid Web2.5
 EduVault áp dụng kiến trúc **Web2.5 Dual-State**:
-- Tách biệt ranh giới lưu trữ: Dữ liệu nghiệp vụ phong phú và thông tin định danh cá nhân (PII) được lưu trữ tại MySQL 8.x. Dữ liệu trạng thái pháp lý, cam kết ký quỹ và bằng chứng kiểm toán được ghi nhận bất biến trên Smart Contract `EquipmentLending.sol`.
-- Cầu nối **Custodial Relayer (Web3 Signer Gateway)**: Backend FastAPI đóng vai trò đại lý ký số có thẩm quyền, thay mặt người dùng thực thi các giao dịch on-chain thông qua ví quản trị được ủy quyền, giúp sinh viên sử dụng hệ thống như một ứng dụng Web thông thường mà không cần hiểu biết kỹ thuật về Blockchain hay chi trả tiền gas.
-- **Background Reconciliation Worker:** Tiến trình chạy ngầm đối soát liên tục giữa MySQL và Smart Contract, đảm bảo tính nhất quán cuối cùng (Eventual Consistency) ngay cả khi hạ tầng mạng gặp sự cố đứt đoạn hoặc server backend tắt đột ngột (Crash Recovery).
+- Tách biệt ranh giới lưu trữ: Dữ liệu nghiệp vụ phong phú và thông tin định danh cá nhân chi tiết (họ tên, email, mật khẩu) được lưu trữ tại MySQL 8.x. Dữ liệu trạng thái pháp lý, mô phỏng kế toán tiền cọc bằng đơn vị VND (`depositAmount` dạng số nguyên, không giữ ETH thật/escrow native), `studentId` nội bộ và bằng chứng kiểm toán được ghi nhận bất biến trên Smart Contract `EquipmentLending.sol`.
+- Cầu nối **Hybrid Wallet Binding (EIP-191) & Custodial Relayer**: Sinh viên có thể xác minh sở hữu ví MetaMask qua chữ ký `personal_sign` challenge-response (nonce dùng một lần có hạn 5 phút) để tự gửi `createLoan` trực tiếp on-chain; nếu chưa liên kết/xác minh ví, Backend FastAPI sử dụng ví Custodial Relayer (`ADMIN_ROLE`) làm đại lý ký thay hợp lệ cho các bước duyệt, bàn giao, hoàn trả và hủy đơn.
+- **On-Demand Reconciliation Service (`/api/v1/audit/reconcile`):** Dịch vụ đối soát kích hoạt chủ động theo yêu cầu của Quản trị viên nhằm đồng bộ trạng thái giữa MySQL và Smart Contract (kèm cập nhật biên lai giao dịch `PENDING`/`FAILED`), khắc phục sai lệch khi gặp sự cố mạng hoặc crash server mà không cần chạy tiến trình cron ngầm tự động trong API.
 
 ### 1.4. Đối tượng sử dụng và Giá trị thực tiễn
 Hệ thống được thiết kế phục vụ hai nhóm đối tượng chính:
@@ -108,33 +108,29 @@ EduVault tuân thủ nghiêm ngặt nguyên lý thiết kế phân tầng (Layer
 
 | Tiêu chí | CSDL MySQL (Off-Chain) | Smart Contract (On-Chain) | Lý do kiến trúc |
 | :--- | :--- | :--- | :--- |
-| **Thông tin cá nhân (PII)** | Họ tên, Mã sinh viên, Email, Hash mật khẩu | Hoàn toàn KHÔNG lưu trữ (Chỉ lưu `bytes32 loanId`, `uint256 userId`, `uint256 equipmentId`) | Tuân thủ bảo vệ bí mật đời tư, tránh rò rỉ dữ liệu cá nhân trên sổ cái công khai. |
+| **Thông tin cá nhân & định danh** | Họ tên, Email, Hash mật khẩu, thông số cá nhân nhạy cảm | Chỉ lưu **mã sinh viên nội bộ (`string studentId`)**, địa chỉ ví `borrower`, `bytes32 loanId`, `uint256 equipmentId` | Dữ liệu nhạy cảm (họ tên, email, mật khẩu) ở ngoài chain; chỉ mã định danh nghiệp vụ `studentId` và địa chỉ ví được neo trên `LoanRecord` để truy vết kiểm toán. |
 | **Dữ liệu danh mục thiết bị** | Tên thiết bị, số serial, hãng sản xuất, hình ảnh, thông số kỹ thuật chi tiết | Chỉ lưu trữ `uint256 equipmentId` liên kết Mutex | Chi phí lưu trữ text/image trên Blockchain cực kỳ đắt đỏ và không cần thiết. |
-| **Trạng thái pháp lý đơn mượn** | Bản sao đồng bộ phục vụ truy vấn UI nhanh | **Nguồn chân lý gốc (Ground Truth)** cho trạng thái `Approved`, `Active`, `Returned`, `Disputed` | Chống gian lận: nếu DB bị DBA can thiệp sửa trạng thái, đối soát on-chain sẽ phát hiện ngay lập tức. |
-| **Quyết toán tiền cọc & phạt** | Bảng ghi chú số tiền hiển thị cho sinh viên | **Nguồn chân lý gốc (Ground Truth)** tính toán % phạt và khóa/hoàn cọc | Hợp đồng thông minh tự động tính phạt theo thời gian block timestamp và công thức đã biên dịch cố định. |
+| **Trạng thái pháp lý đơn mượn** | Bản sao đồng bộ phục vụ truy vấn UI nhanh | **Nguồn chân lý gốc (Ground Truth)** cho trạng thái `Submitted`, `Approved`, `Active`, `Returned`, `Disputed` | Chống gian lận: nếu DB bị DBA can thiệp sửa trạng thái, đối soát on-chain sẽ phát hiện ngay lập tức. |
+| **Quyết toán tiền cọc & phạt (Mô phỏng VND)** | Bảng ghi chú số tiền hiển thị và xử lý thanh toán thực tế ngoài hệ thống | **Kế toán mô phỏng (Simulated Deposit Accounting)** lưu `depositAmount` (VND), `penaltyPercent` và `depositState` | Hợp đồng tính tỷ lệ phạt trễ hạn theo `block.timestamp`; việc thẩm định tình trạng vật lý (`GOOD`/`DAMAGED`/`LOST`) và hoàn/thu tiền thật ngoài đời phụ thuộc vào thẩm quyền cán bộ `ADMIN`. |
 | **Lịch sử thao tác** | Bảng `audit_logs` phục vụ tra cứu nghiệp vụ | Các sự kiện EVM (`LoanApproved`, `HandoverConfirmed`, `LoanReturned`...) | Bằng chứng mã hóa bất biến không thể bị xóa bởi bất kỳ ai. |
 
-### 2.3. Mô hình ký giao dịch Web2.5 Custodial Relayer
-Trong mô hình này, Backend FastAPI nắm giữ ví cục bộ (Custodial Account) được cấp quyền `ADMIN_ROLE` trong Smart Contract:
-1. Khi cán bộ quản lý phê duyệt hoặc bàn giao máy, frontend gửi yêu cầu ký thực thi kèm JWT Token hợp lệ lên Backend.
-2. Backend kiểm tra quyền quản trị (`require_role("ADMIN")`).
-3. Dịch vụ `Web3Service` chuẩn bị dữ liệu giao dịch (Transaction data), tính toán `nonce`, ước lượng gas tiêu thụ và tự động cộng thêm **20% Gas Buffer** (`gas_limit = int(estimated_gas * 1.2)`) nhằm tránh lỗi giao dịch bị nghẽn mạng hoặc out-of-gas.
-4. Giao dịch được ký offline bằng Private Key của Relayer (`w3.eth.account.sign_transaction`), sau đó gửi thô (`eth_sendRawTransaction`) lên mạng lưới EVM.
-5. Backend lắng nghe biên lai giao dịch (Receipt), xác minh `status == 1`, trích xuất sự kiện và đồng bộ bản ghi về MySQL trong cùng chu trình xử lý.
+### 2.3. Mô hình Hybrid Wallet Binding (EIP-191) & Custodial Relayer
+Hệ thống kết hợp xác thực ví Web3 cá nhân với dịch vụ Relayer quản trị:
+1. **Liên kết và xác minh ví sinh viên (EIP-191):** Trước khi sử dụng MetaMask tạo đơn trực tiếp, sinh viên lấy thử thách ký (`POST /api/v1/users/wallet/challenge`) và ký thông điệp `personal_sign` chứa nonce dùng một lần (hiệu lực 5 phút), gửi về `POST /api/v1/users/wallet/verify` để gắn cờ `wallet_verified = true` và chống giả mạo ví.
+2. **Xác minh giao dịch MetaMask (`createLoan`):** Khi sinh viên gửi `(on_chain_loan_id, client_tx_hash)` từ MetaMask, Backend kiểm tra giao dịch đã đào thành công (`status == 1`), khớp `chainId`, địa chỉ hợp đồng, người gửi khớp ví đã xác minh và giải mã sự kiện `LoanCreated`. Khi Admin duyệt sau đó, hệ thống chỉ gọi `approveLoan` (không ghi đè lại ví `borrower`).
+3. **Custodial Relayer (Gas Buffer 20%) & Fail-Closed:** Với các đơn không có ví MetaMask xác minh hoặc các bước quản trị (`approveLoan`, `confirmHandover`, `confirmReturn`, `cancelLoan`), `BlockchainService` kiểm tra RPC/Contract pre-flight (`ensure_ready`, lỗi mạng trả về `HTTP 503`), tự động ước lượng gas cộng **20% biên an toàn**, ghi `BlockchainTransaction` trạng thái `PENDING` ngay khi broadcast và chỉ chốt CSDL sau khi có receipt `status == 1`.
 
-### 2.4. Cơ chế xử lý nhất quán Dual-Write & Background Reconciliation
+### 2.4. Cơ chế xử lý nhất quán Dual-Write & Đối soát chủ động (Manual Reconciliation)
 Thách thức lớn nhất trong kiến trúc Web2.5 là bài toán **Dual-Write**: dữ liệu cần được ghi đồng thời vào hai kho lưu trữ độc lập (MySQL và EVM Blockchain). Nếu một trong hai bên gặp lỗi hoặc mạng bị đứt giữa chừng, trạng thái hệ thống có nguy cơ bị lệch (Split-brain).
 
 EduVault xử lý bài toán này qua cơ chế phối hợp hai bước:
-1. **Idempotent Hash Key (`on_chain_loan_id`):** 
-   Mỗi đơn mượn được cấp một mã băm duy nhất tính bằng thuật toán mật mã Keccak256:
-   $$\text{on\_chain\_loan\_id} = \text{keccak256}(\text{abi.encodePacked}(\text{userId}, \text{equipmentId}, \text{createdAtTimestamp}))$$
-   Mã này được lưu trong bảng `lending_requests.on_chain_loan_id` và làm khóa chính trên Smart Contract. Nhờ tính chất đơn nhất này, việc gọi lại giao dịch (retry) sẽ không bao giờ sinh ra đơn mượn trùng lặp trên Blockchain.
-2. **Background Reconciliation Worker (Tiến trình đối soát tự động):**
-   Tiến trình ngầm độc lập định kỳ (hoặc kích hoạt tức thì qua API `/api/v1/audit/reconcile`) quét toàn bộ các đơn mượn đang hoạt động. Với mỗi đơn, Worker thực hiện:
-   - Đọc trạng thái on-chain từ Smart Contract qua hàm `getLoanDetails(on_chain_loan_id)`.
-   - Đối chiếu với trạng thái off-chain trong MySQL.
-   - Nếu phát hiện độ lệch (ví dụ: giao dịch on-chain đã bàn giao thành công nhưng MySQL chưa kịp cập nhật do crash server), Worker sẽ tự động kích hoạt tiến trình phục hồi dữ liệu (Self-Healing), ghi nhận `AuditLog` cảnh báo và đồng bộ lại MySQL theo sự thật on-chain.
+1. **Idempotent Hash Key (`on_chain_loan_id`) & Fail-Closed Check:**
+   Mỗi đơn mượn được cấp một mã băm Keccak256 duy nhất (`keccak256(abi.encodePacked(userId, equipmentId, timestamp))`) lưu trong `lending_requests.on_chain_loan_id` (checkpoint trước khi phát sóng) kèm cơ chế fail-closed (nếu node RPC offline, từ chối bằng `HTTP 503` trước khi làm bẩn trạng thái CSDL) và Crash Recovery kiểm tra `getLoan()` trước khi phát sóng lại.
+2. **Dịch vụ Đối soát chủ động (`POST /api/v1/audit/reconcile`):**
+   Cơ chế đối soát được kích hoạt thủ công qua API quản trị (chưa chạy worker cron ngầm tự động). Khi Admin gọi `/api/v1/audit/reconcile`, dịch vụ thực hiện:
+   - Đọc trạng thái on-chain từ Smart Contract qua hàm `getLoan(on_chain_loan_id)` và đối soát đồng thời khóa Mutex `activeEquipmentLoan`.
+   - Không ghi đè dữ liệu MySQL nếu `getLoan()` trả về bản ghi rỗng trên chain (`request_time == 0`).
+   - Nếu phát hiện độ lệch (ví dụ: giao dịch on-chain đã chuyển trạng thái nhưng MySQL chưa kịp cập nhật do sập server), hệ thống tự động đồng bộ `lending_requests`, `equipment`, `deposit_status`, `blockchain_transactions` và ghi `AuditLog` (`RECONCILIATION_FIX`).
 
 ### 2.5. Sơ đồ dòng chảy dữ liệu toàn trình (End-to-End Pipeline)
 
@@ -315,9 +311,10 @@ struct Loan {
 ```
 
 #### Phân quyền RBAC trên Smart Contract
-Hợp đồng định nghĩa 2 vai trò mật mã:
+Hợp đồng hiện tại (`EquipmentLending.sol` Phase 7A) định nghĩa các vai trò trên OpenZeppelin `AccessControl`:
 - `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao (Deployer), có thể cấp phát hoặc thu hồi quyền.
 - `ADMIN_ROLE`: Vai trò gán cho ví Custodial Relayer của Backend FastAPI, cho phép thực thi các tác vụ: `approveLoan`, `confirmHandover`, `confirmReturn`, `cancelLoan`.
+- `BORROWER_ROLE`: Đã khai báo vai trò trong hợp đồng để chuẩn bị cho nâng cấp bảo mật; trong phạm vi Phase 7A giữ nguyên ABI ổn định, việc xác minh quyền sở hữu ví sinh viên thực hiện qua EIP-191 ở Backend, còn siết chặt đăng ký và kiểm tra `BORROWER_ROLE` trực tiếp trong `createLoan()` thuộc kế hoạch nâng cấp hợp đồng ở Phase 13.
 
 ---
 
@@ -367,8 +364,8 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
-**Quy tắc phạt và quyết toán tiền cọc tự động:**
-Khi cán bộ kho tiếp nhận trả máy thông qua hàm `confirmReturn(loanId, condition, penaltyPercent)`:
+**Quy tắc phạt và quyết toán tiền cọc mô phỏng:**
+Khi cán bộ kho tiếp nhận trả máy thông qua hàm `confirmReturn(loanId, condition, penaltyPercent)` (Lưu ý: Smart Contract không thể tự quan sát tình trạng vật lý của thiết bị nên phụ thuộc vào thẩm định trung thực từ tài khoản có `ADMIN_ROLE`; trong Phase 7A, giao diện và Backend chặn ghi đè `manual_penalty_percent = 0` khi đơn đã quá hạn ở tình trạng `GOOD`, còn việc loại bỏ hẳn tham số ghi đè khỏi ABI thuộc Phase 13):
 1. **Trả đúng hạn & Máy tốt (`condition == GOOD`, `block.timestamp <= dueDate`):**
    - Phạt: $0\%$.
    - Hoàn trả: $100\%$ tiền cọc (`depositStatus = Refunded`).
@@ -393,8 +390,8 @@ Khi cán bộ kho tiếp nhận trả máy thông qua hàm `confirmReturn(loanId
 ### 4.1. An toàn tầng ứng dụng (Application Security)
 1. **Mã hóa mật khẩu bằng thuật toán Bcrypt:** Mật khẩu người dùng được băm bằng thuật toán `bcrypt` với cost factor tiêu chuẩn công nghiệp (salt ngẫu nhiên 12 vòng lặp). Hệ thống không bao giờ lưu trữ mật khẩu ở dạng plain-text.
 2. **Cơ chế xác thực phân tán JWT (JSON Web Tokens):**
-   - Sử dụng thuật toán ký `HS256` với `SECRET_KEY` bảo mật cao (tối thiểu 32 ký tự ngẫu nhiên).
-   - Thời hạn hiệu lực của access token được giới hạn trong 30 phút (`ACCESS_TOKEN_EXPIRE_MINUTES = 30`).
+   - Sử dụng thuật toán ký `HS256` với `JWT_SECRET_KEY` cấu hình từ biến môi trường.
+   - Thời hạn hiệu lực của access token cấu hình theo `ACCESS_TOKEN_EXPIRE_MINUTES` (hiện đặt `1440` phút trong `.env` phát triển và `30` phút theo mặc định an toàn trong `config.py`).
    - Tích hợp middleware xác thực và phân quyền RBAC dựa trên Dependency Injection (`Depends(require_role("ADMIN"))`), ngăn chặn triệt để lỗ hổng leo thang đặc quyền (Privilege Escalation).
 3. **Cơ chế chống tấn công dò mật khẩu (Brute-Force Protection):**
    - Theo dõi số lần đăng nhập thất bại liên tiếp qua cột `users.failed_login_count`.
@@ -419,42 +416,44 @@ if equipment.status != EquipmentStatus.AVAILABLE:
 - Bất kỳ transaction đồng thời nào khác cố gắng đọc để cập nhật thiết bị này đều phải xếp hàng chờ cho đến khi transaction đầu tiên commit hoặc rollback, ngăn chặn tuyệt đối tình trạng Overbooking.
 
 ### 4.3. An toàn Smart Contract (EVM Security & AccessControl)
-1. **Kiểm soát truy cập nghiêm ngặt (AccessControl):** Tất cả các hàm nhạy cảm có khả năng thay đổi trạng thái pháp lý (`approveLoan`, `confirmHandover`, `confirmReturn`, `cancelLoan`) đều được bảo vệ bởi modifier `onlyRole(ADMIN_ROLE)`. Mọi nỗ lực gọi hàm trực tiếp từ các tài khoản không có thẩm quyền đều bị EVM revert ngay lập tức.
-2. **Phòng chống tấn công tái nhập (Reentrancy Protection):** Do sử dụng mô hình kế toán ký quỹ mô phỏng, Smart Contract hoàn toàn không thực hiện lời gọi ngoài (`external call` hoặc `transfer/call.value`) để gửi native token cho người dùng, qua đó triệt tiêu hoàn toàn vector tấn công Reentrancy.
+1. **Kiểm soát truy cập nghiêm ngặt (AccessControl & Thẩm quyền Admin):** Tất cả các hàm quản trị chuyển trạng thái pháp lý (`approveLoan`, `confirmHandover`, `confirmReturn`, `cancelLoan`) đều được bảo vệ bởi modifier `onlyRole(ADMIN_ROLE)`. Tuy nhiên, hợp đồng tin tưởng cán bộ giữ `ADMIN_ROLE` khi nhập kết quả nghiệm thu vật lý (`GOOD`/`DAMAGED`/`LOST`).
+2. **Phòng chống tấn công tái nhập (Reentrancy Protection):** Do sử dụng mô hình kế toán ký quỹ mô phỏng theo đơn vị VND (không phải ETH escrow), Smart Contract không giữ native token hay thực hiện lời gọi ngoài (`transfer/call.value`), qua đó triệt tiêu hoàn toàn vector tấn công Reentrancy.
 3. **Bảo vệ chống tràn số (Overflow/Underflow):** Hợp đồng được biên dịch bằng Solidity 0.8.24, tích hợp sẵn cơ chế kiểm tra tràn số học ở cấp độ trình biên dịch.
 
-### 4.4. Bảo vệ dữ liệu định danh cá nhân (GDPR & Data Privacy)
-Một trong những lỗi phổ biến nhất khi ứng dụng Blockchain vào quản lý hồ sơ sinh viên là đưa thông tin định danh cá nhân (PII) lên on-chain:
-- **Nguyên lý bảo mật của EduVault:** Tuyệt đối không lưu trữ Email, Số CMND/CCCD, Số điện thoại hay Tên sinh viên lên Blockchain.
-- **Định danh ẩn danh (Pseudonymous Identifier):** On-chain chỉ lưu trữ mã số định danh nguyên thủy dạng số `userId` và mã băm giao dịch `bytes32 loanId`. Chỉ có người nắm quyền truy cập cơ sở dữ liệu nội bộ của nhà trường mới có thể giải mã xem `userId = 2` tương ứng với sinh viên nào, đảm bảo tính bảo mật và tuân thủ các chuẩn mực an toàn dữ liệu cá nhân quốc tế.
+### 4.4. Bảo vệ dữ liệu định danh cá nhân (Data Privacy)
+Một nguyên tắc quan trọng khi ứng dụng Blockchain vào quản lý hồ sơ sinh viên là phân tách thông tin định danh cá nhân (PII):
+- **Dữ liệu nhạy cảm ngoài chuỗi:** Tuyệt đối không lưu trữ Họ tên đầy đủ, Email, Số CMND/CCCD hay Mật khẩu lên Blockchain.
+- **Định danh nghiệp vụ tối thiểu on-chain:** `LoanRecord` chỉ lưu **mã sinh viên nội bộ (`string studentId`)**, địa chỉ ví `borrower`, mã đơn `bytes32 loanId` và `uint256 equipmentId` nhằm bảo đảm khả năng kiểm toán và giải mã minh bạch giữa MySQL và Smart Contract mà vẫn giữ các thông tin cá nhân nhạy cảm hoàn toàn off-chain.
 
 ---
 
 ## CHƯƠNG 5: ĐÁNH GIÁ THỰC NGHIỆM VÀ KẾT QUẢ ĐẠT ĐƯỢC
 
-### 5.1. Thống kê kết quả kiểm thử toàn diện (QA Matrix 92 Tests)
-Hệ thống EduVault đã trải qua quy trình kiểm thử tự động đa tầng với tỷ lệ thành công tuyệt đối:
+### 5.1. Thống kê kết quả kiểm thử tự động (Phase 7A QA Summary)
+Hệ thống EduVault đã trải qua quy trình kiểm thử tự động đa tầng và xác minh E2E trên Hardhat EVM cục bộ:
 
 | Phân hệ kiểm thử | Bộ công cụ thực thi | Số ca kiểm thử | Kết quả | Ghi chú kỹ thuật |
 | :--- | :--- | :---: | :---: | :--- |
 | **Smart Contract** | Hardhat, Chai, Ethers.js | 28 tests | **28/28 PASS** | Kiểm tra 100% các nhánh: Vòng đời chuẩn, phạt trễ 10%/50%, hỏng/mất, Mutex on-chain, AccessControl. |
-| **Backend REST API** | Pytest, AnyIO, SQLAlchemy | 56 tests | **56/56 PASS** | Kiểm tra xác thực Bcrypt, JWT, RBAC, CRUD thiết bị, Pessimistic Lock, Idempotent Keccak256, Audit logs. |
-| **E2E Happy Path** | Python Web3 Integration | 1 kịch bản | **1/1 PASS** | Sinh viên tạo đơn $\to$ Duyệt $\to$ Bàn giao $\to$ Trả đúng hạn hoàn 100% cọc. |
-| **E2E Penalties** | Python Web3 Integration | 4 kịch bản | **4/4 PASS** | Kiểm tra khấu trừ 10%, 50% cọc và tịch thu 100% cọc khi hỏng/mất. |
-| **E2E Concurrency & Recovery** | Python Web3 Integration | 3 kịch bản | **3/3 PASS** | Chống 2 người mượn trùng thiết bị, giải phóng Mutex khi hủy đơn, tự phục hồi qua `/audit/reconcile`. |
-| **TỔNG CỘNG** | **Hệ thống liên kết** | **92 Ca kiểm thử** | **92/92 PASS (100%)** | Thời gian chạy toàn bộ: ~48.2 giây. |
+| **Backend REST API** | Pytest, AnyIO, SQLAlchemy | 65 tests | **65/65 PASS** | Kiểm tra Auth/RBAC, CRUD & Pessimistic Lock, EIP-191 wallet verify, MetaMask receipt/idempotency, fail-closed 503, Reconcile. |
+| **Frontend Build** | TypeScript (`tsc`) + Vite | Typecheck + Build | **PASS (Exit 0)** | Biên dịch production sạch lỗi TypeScript và bundler Vite (`npx tsc --noEmit --incremental false` & `npx vite build`). |
+| **E2E Happy Path** | Python Web3 Integration | 1 kịch bản | **PASS** | Sinh viên tạo đơn $\to$ Duyệt $\to$ Bàn giao $\to$ Trả đúng hạn hoàn 100% cọc trên Hardhat EVM. |
+| **E2E Penalties** | Python Web3 Integration | 4 kịch bản | **PASS** | Kiểm tra khấu trừ 10%, 50% cọc và tịch thu 100% cọc khi hỏng/mất. |
+| **E2E Concurrency & Recovery** | Python Web3 Integration | 3 kịch bản | **PASS** | Chống mượn trùng thiết bị, giải phóng Mutex khi hủy đơn, tự phục hồi qua `POST /audit/reconcile`. |
+| **E2E MetaMask EIP-191 & Offline Guard** | Python Web3 Multi-Account | 5 bước xác minh | **PASS** | Xác minh `personal_sign` nonce 1 lần, Account #1 `createLoan` + `approve`-only, chặn replay `409`, offline RPC trả `503`. |
 
 ### 5.2. Đánh giá ưu điểm và hạn chế của giải pháp
 
 #### Ưu điểm vượt trội:
-1. **Tính bất biến và chống chối bỏ (Non-repudiation):** Nhật ký mượn trả, phán quyết cọc và lịch sử bàn giao một khi đã ghi nhận on-chain thì không một cá nhân nào có thể xóa hoặc sửa.
-2. **Trải nghiệm người dùng tuyệt hảo (Frictionless Web2.5 UX):** Sinh viên không cần cài đặt tiện ích ví, không cần nắm giữ tiền mã hóa và không phải trả phí gas mạng lưới.
-3. **Khả năng chịu lỗi và tự phục hồi cao (Self-Healing):** Cơ chế đối soát nền tảng (Reconciler) giúp hệ thống tự phát hiện và đồng bộ trạng thái khi có sự cố mạng hoặc sập nguồn server đột ngột.
+1. **Tính bất biến và chống chối bỏ (Non-repudiation):** Nhật ký mượn trả, phán quyết cọc mô phỏng VND và lịch sử bàn giao một khi đã ghi nhận on-chain thì không một cá nhân nào có thể xóa hoặc sửa.
+2. **Trải nghiệm người dùng linh hoạt (Hybrid Web2.5 UX):** Hỗ trợ đồng thời luồng MetaMask xác minh EIP-191 (sinh viên tự ký `createLoan`) và luồng Custodial Relayer khi sinh viên chưa dùng ví Web3.
+3. **Tính toàn vẹn và phục hồi theo yêu cầu (Fail-Closed + On-Demand Reconcile):** Mọi thao tác on-chain thất bại khi node offline (`HTTP 503`) hoặc revert (`HTTP 502`) không làm bẩn trạng thái CSDL; công cụ `/api/v1/audit/reconcile` hỗ trợ Admin quét và đồng bộ lại trạng thái khi xảy ra sự cố.
 4. **Kiểm soát xung đột hai tầng:** Kết hợp chặt chẽ giữa Khóa dòng bi quan (MySQL Pessimistic Lock) ở tầng dữ liệu nhanh và Mutex mapping ở tầng hợp đồng thông minh.
 
 #### Hạn chế hiện tại:
-1. **Phụ thuộc vào Custodial Wallet của Backend:** Nếu máy chủ Backend bị tấn công chiếm đoạt máy chủ vật lý, Private Key của Relayer có thể gặp rủi ro bị lộ nếu không sử dụng Hardware Security Module (HSM) hoặc dịch vụ KMS đám mây.
-2. **Chi phí gas trên mạng Mainnet công khai:** Khi triển khai trên Ethereum Mainnet, chi phí gas cho mỗi giao dịch có thể cao. Giải pháp khắc phục là triển khai trên các mạng Layer 2 (Arbitrum, Optimism, Polygon) hoặc mạng riêng tư (Enterprise Private EVM / Hyperledger Besu).
+1. **Phụ thuộc vào Custodial Wallet & Thẩm quyền Admin:** Private Key của Relayer quản trị thao tác cần bảo vệ bằng HSM/KMS trong môi trường thật; ngoài ra Smart Contract chưa thể tự kiểm tra tình trạng vật lý thiết bị (`GOOD`/`DAMAGED`/`LOST`) nên vẫn tin cậy xác nhận từ `ADMIN_ROLE`.
+2. **Chưa có tiến trình đối soát định kỳ tự động & `BORROWER_ROLE` trên chain:** Việc đối soát hiện kích hoạt thủ công qua API `/audit/reconcile`; việc bắt buộc `BORROWER_ROLE` trực tiếp trong `EquipmentLending.createLoan` và loại bỏ tham số `manual_penalty_percent` on-chain thuộc phạm vi nâng cấp Smart Contract ở Phase 13.
+3. **Chi phí gas trên mạng công khai:** Khi triển khai lên Mainnet/Testnet công khai cần tối ưu chi phí gas (Layer 2 hoặc Private EVM).
 
 ### 5.3. Hướng phát triển và mở rộng trong tương lai
 1. **Nâng cấp tích hợp Account Abstraction (ERC-4337):** Cho phép sinh viên đăng nhập bằng giao thức WebAuthn/Passkey (vân tay, FaceID) và sử dụng Paymaster tài trợ gas mà không cần phụ thuộc hoàn toàn vào Custodial Relayer tập trung.

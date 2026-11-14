@@ -9,8 +9,19 @@ from sqlalchemy.orm import Session
 from backend.app.api.deps import get_current_user, require_role
 from backend.app.db.session import get_db
 from backend.app.models.user import User, UserRole
-from backend.app.schemas.user import UserCreate, UserResponse
-from backend.app.services.user_service import create_user, get_users
+from backend.app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    WalletChallengeRequest,
+    WalletChallengeResponse,
+    WalletVerifyRequest,
+)
+from backend.app.services.user_service import (
+    create_user,
+    create_wallet_challenge,
+    get_users,
+    verify_wallet_signature,
+)
 
 router = APIRouter(tags=["Users"])
 
@@ -37,6 +48,46 @@ def read_current_user(
         - Không.
     """
     return current_user
+
+
+@router.post(
+    "/users/wallet/challenge",
+    response_model=WalletChallengeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Tạo thử thách ký xác minh ví MetaMask (one-time nonce)",
+    description="Cấp mã nonce dùng một lần (hiệu lực 5 phút) để người dùng ký bằng personal_sign chứng minh quyền sở hữu ví."
+)
+def request_wallet_challenge(
+    payload: WalletChallengeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> WalletChallengeResponse:
+    result = create_wallet_challenge(
+        db=db,
+        current_user=current_user,
+        wallet_address=payload.wallet_address
+    )
+    return WalletChallengeResponse(**result)
+
+
+@router.post(
+    "/users/wallet/verify",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Xác minh chữ ký EIP-191 và gắn ví vào tài khoản",
+    description="Kiểm tra chữ ký MetaMask khớp thử thách còn hạn, tiêu thụ nonce một lần và lưu trạng thái wallet_verified."
+)
+def verify_user_wallet(
+    payload: WalletVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> UserResponse:
+    return verify_wallet_signature(
+        db=db,
+        current_user=current_user,
+        wallet_address=payload.wallet_address,
+        signature=payload.signature
+    )
 
 
 @router.post(

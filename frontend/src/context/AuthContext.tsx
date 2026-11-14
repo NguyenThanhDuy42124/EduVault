@@ -82,9 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const quickLogin = async (targetRole: 'ADMIN' | 'BORROWER') => {
     if (targetRole === 'ADMIN') {
-      await login('admin@eduvault.local', 'admin123');
+      await login('admin@eduvault.edu.vn', 'admin123456');
     } else {
-      await login('sv001@eduvault.local', 'student123');
+      await login('sv01@eduvault.edu.vn', 'student123');
     }
   };
 

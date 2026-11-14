@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useWeb3 } from '../context/Web3Context';
+import { TARGET_CHAIN_ID, TARGET_CHAIN_NAME } from '../contracts/contractConfig';
 import {
   ShieldCheck,
   Laptop,
@@ -128,14 +129,27 @@ export const Navbar: React.FC = () => {
                   <button
                     onClick={switchNetwork}
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
-                    title="Bấm để đổi sang mạng Hardhat 31337"
+                    title={`Bấm để đổi sang mạng ${TARGET_CHAIN_NAME} (${TARGET_CHAIN_ID})`}
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Đổi mạng (31337)</span>
+                    <span>Đổi mạng ({TARGET_CHAIN_ID})</span>
                   </button>
                 ) : (
-                  <div className="hidden md:flex items-center space-x-2 px-2.5 py-1 bg-slate-900 text-white rounded-lg border border-slate-800 text-xs font-mono shadow-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <div
+                    className="hidden md:flex items-center space-x-2 px-2.5 py-1 bg-slate-900 text-white rounded-lg border border-slate-800 text-xs font-mono shadow-xs"
+                    title={
+                      user?.wallet_verified && user?.wallet_address?.toLowerCase() === account?.toLowerCase()
+                        ? `Ví đã xác minh EIP-191 khớp tài khoản ${user.student_staff_id}`
+                        : 'Ví MetaMask đã kết nối (chưa xác minh hoặc khác ví tài khoản)'
+                    }
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        user?.wallet_verified && user?.wallet_address?.toLowerCase() === account?.toLowerCase()
+                          ? 'bg-emerald-400 animate-pulse'
+                          : 'bg-amber-400'
+                      }`}
+                    ></span>
                     <span className="font-semibold text-slate-200">
                       {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : ''}
                     </span>

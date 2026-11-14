@@ -13,11 +13,20 @@ export interface User {
   email: string;
   role: UserRole;
   wallet_address?: string | null;
+  wallet_verified?: boolean;
+  wallet_linked_at?: string | null;
   is_active: boolean;
   failed_login_count: number;
   locked_until?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface WalletChallengeResponse {
+  nonce: string;
+  message: string;
+  wallet_address: string;
+  expires_at: string;
 }
 
 export interface TokenResponse {
@@ -155,6 +164,7 @@ export interface LoanVerification {
   loan_id: number;
   on_chain_loan_id?: string | null;
   is_synced: boolean;
+  sync_status?: string;
   mismatches: string[];
   mysql_state: Record<string, unknown>;
   blockchain_state: Record<string, unknown>;
@@ -167,20 +177,35 @@ export interface ReconcileResult {
 }
 
 export interface BlockchainStatus {
+  status?: string;
   is_connected: boolean;
   network: string;
-  chain_id?: number;
-  latest_block?: number;
+  rpc_url?: string;
+  chain_id?: number | null;
+  expected_chain_id?: number;
+  contract_address?: string | null;
+  contract_deployed?: boolean;
+  latest_block?: number | null;
   gas_price_gwei?: number;
-  relayer_address?: string;
+  relayer_address?: string | null;
   relayer_balance_eth?: string;
+  admin_wallet_address?: string | null;
+  admin_balance_eth?: string;
 }
 
 export interface ContractInfo {
-  contract_address: string;
-  owner_address: string;
-  name: string;
-  version: string;
+  contract_name?: string;
+  contract_address?: string | null;
+  chain_id?: number | null;
+  network?: string;
+  owner_address?: string | null;
+  admin_wallet_address?: string | null;
+  relayer_address?: string | null;
+  relayer_balance_eth?: string;
+  is_connected?: boolean;
+  contract_deployed?: boolean;
+  name?: string;
+  version?: string;
 }
 
 // --- System & Database Health ---

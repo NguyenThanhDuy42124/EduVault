@@ -533,3 +533,57 @@
 | **Đã học được gì?** | GSAP `quickTo` kết hợp CSS 3D Transforms cho hiệu ứng vault tương tác mượt mà; Tailwind CSS v3 dùng `@tailwind base/components/utilities` không phải v4 `@import`. |
 | **Đã làm được gì?** | Hoàn tất Phase 0-6B. Smart Contract 28 tests, Backend 56 tests, Frontend 7 trang nghiệp vụ + Showcase Dashboard GSAP 3D. |
 
+---
+
+## Session: 2026-11-14 (Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu)
+
+### Phase 7A Execution Log
+- **Status:** complete (Dừng chờ xác nhận trước khi sang Phase 13)
+- **Các thay đổi đã thực hiện:**
+  1. **Web3 Service & Contract Resolution (`backend/app/services/blockchain_service.py`):**
+     - Sửa lỗi `0x0x...` HexBytes qua `normalize_hex_bytes32` và `ZERO_BYTES32_HEX`.
+     - Sửa `_load_contract_info()` ưu tiên biến môi trường / `settings.CONTRACT_ADDRESS` trước, chỉ nạp `contract_address.json` khi `chainId` khớp `settings.CHAIN_ID`; thêm `reload_contract()`.
+     - Bổ sung `ensure_ready(require_admin)` kiểm tra node RPC, `chainId`, bytecode hợp đồng (`get_code`) và ví admin trước mọi giao dịch.
+     - Bổ sung `verify_create_loan_tx(...)` xác minh receipt `status == 1`, `to == contract_address`, `tx.chainId`, `tx.from == expected_sender`, event `LoanCreated` và dữ liệu `getLoan()`; hỗ trợ callback `on_broadcast`/`on_failed`.
+  2. **EIP-191 Wallet Binding (`user.py`, `c2d9e4f7a102`, `schemas/user.py`, `user_service.py`, `api/v1/users.py`):**
+     - Thêm cột `wallet_verified`, `wallet_nonce`, `wallet_nonce_expires_at`, `wallet_challenge_address`, `wallet_linked_at` và ràng buộc unique index `wallet_address`; đã chạy `alembic upgrade head` tới `c2d9e4f7a102`.
+     - Bổ sung endpoint `POST /api/v1/users/wallet/challenge` (nonce 1 lần, hết hạn 5 phút) và `POST /api/v1/users/wallet/verify` (`encode_defunct` EIP-191 + AuditLog).
+  3. **Loan Lifecycle Consistency & Fail-Closed (`backend/app/services/loan_service.py`, `schemas/loan.py`):**
+     - Hợp nhất 1 `on_chain_loan_id`: `create_loan_request` yêu cầu `wallet_verified == True` khi gửi tx MetaMask, kiểm tra cặp `(on_chain_loan_id, client_tx_hash)`, hỗ trợ retry idempotent cùng người dùng/payload và chặn replay (`HTTP 409`).
+     - `approve_loan_request`: fail-closed `HTTP 503` khi RPC offline; lưu checkpoint `on_chain_loan_id` trước phát sóng; chỉ gọi `approveLoan` khi SV đã `createLoan` (`state == 0`); crash-recovery nếu chain đã `Approved` (`state == 1`); chỉ chốt DB `APPROVED`/`RESERVED` sau khi receipt `CONFIRMED`.
+     - Áp dụng fail-closed (`503`/`502`), durable `PENDING`/`FAILED`/`CONFIRMED` `BlockchainTransaction` tracking và crash recovery cho `reject`, `handover`, `return`, `cancel`.
+     - Chặn `manual_penalty_percent == 0` khi đơn quá hạn ở tình trạng `GOOD` (HTTP 400); đọc lại `penalty_percent` từ Smart Contract sau `confirmReturn`.
+  4. **Reconciliation & Blockchain Status Parity (`reconciliation_service.py`, `schemas/audit.py`, `api/v1/blockchain.py`):**
+     - Phân biệt `NOT_ON_CHAIN`, `MISSING_ON_CHAIN`, `RPC_OFFLINE`, `MISMATCH`, `SYNCED` (`is_synced = False` khi chưa lên chain/lỗi kết nối); đối soát đầy đủ `request_time > 0`, `state`, `equipment_id`, `student_id`, `borrower`, `deposit_amount`, `deposit_state`, timestamps và mutex `activeEquipmentLoan`; không ghi đè DB từ struct rỗng.
+     - Đồng bộ schema `/api/v1/blockchain/status` và `/api/v1/blockchain/contract-info` (`is_connected`, `network`, `contract_address`, `contract_deployed`, `chain_id`, `expected_chain_id`, `latest_block`, `relayer_address`, `relayer_balance_eth`, `owner_address`).
+  5. **Frontend Web3 UX & Diagnostics (`frontend/src/`):**
+     - `contractConfig.ts`, `Navbar.tsx`, `Layout.tsx`: đồng bộ `CONTRACT_ADDRESS`/`TARGET_CHAIN_ID` theo cấu hình mạng, gỡ `Hardhat 31337` hardcode.
+     - `Web3Context.tsx`: single mount `useEffect` kèm `removeListener` cleanup, hydration `eth_accounts`/`eth_chainId`, `signMessage`, `verifyDeployedContract`, `parseWeb3Error`.
+     - `EquipmentPage.tsx`: nút **"Xác minh ví"** (`personal_sign`), dùng ví `account` đã xác minh khi gọi `createLoan`, lưu pending proof trong `localStorage` để retry API an toàn khi lỗi mạng, chặn trước nếu chưa deploy đúng contract.
+     - `AuthContext.tsx`, `AdminLoansPage.tsx`, `MyLoansPage.tsx`, `AuditPage.tsx`, `ShowcasePage.tsx`: sửa credentials `quickLogin`, validate `manual_penalty_percent` (chặn `0%` khi trễ hạn GOOD), bỏ các dữ liệu fallback giả lập ở Audit/Showcase.
+  6. **Tests & Docs (`backend/tests/*`, `docs/*`, `scripts/run_all_tests.ps1`):**
+     - Bổ sung unit/integration tests Phase 7A nâng tổng số backend tests lên **65 tests**; cập nhật `THUYET_MINH_DO_AN_EDUVAULT.md`, `SYSTEM_ANALYSIS_REPORT.md`, `QA_SECURITY_REPORT.md` phản ánh đúng mô hình ký quỹ mô phỏng VND, quyền admin, `studentId` on-chain, EIP-191 + Relayer hybrid, ranh giới `BORROWER_ROLE` (Phase 7A vs 13) và cơ chế `/audit/reconcile` thủ công.
+
+### Bảng Kết quả Kiểm thử Thực tế (Phase 7A Verification Matrix)
+| Hạng mục kiểm thử | Lệnh thực thi | Kết quả thực tế | Trạng thái |
+| :--- | :--- | :--- | :--- |
+| **Install JS Dependencies** | `npm ci` (`contracts` & `frontend`) | Exit 0 (642 & 177 packages) | **PASS** |
+| **Smart Contract Suite** | `npx hardhat compile` & `npx hardhat test` | `28 passing` | **PASS** |
+| **Database Migration** | `.\.venv\Scripts\alembic.exe upgrade head` | Head `c2d9e4f7a102` | **PASS** |
+| **Backend API Suite** | `.\backend\.venv\Scripts\python.exe -m pytest backend/tests/ -v` | `65 passed, 1 warning` | **PASS** |
+| **Frontend Typecheck & Build** | `npx tsc --noEmit --incremental false` & `npx vite build` | Exit 0 | **PASS** |
+| **E2E Existing Suites (Live Hardhat + Temp MySQL)** | `test_e2e_happy_path.py`, `test_e2e_penalties.py`, `test_e2e_concurrency_recovery.py` | 100% PASS (Exit 0) | **PASS** |
+| **E2E Multi-Account EIP-191 & Fail-Closed** | Hardhat Account #1 + FastAPI (`eduvault_phase7a_e2e_tmp`) | Verify EIP-191, approve-only, replay `409`, offline `503` PASS | **PASS** |
+
+---
+
+## 5-Question Reboot Check (Post Phase 7A)
+
+| Câu hỏi | Câu trả lời |
+| :--- | :--- |
+| **Đang ở đâu?** | Đã hoàn thành 100% **Phase 7A** (MetaMask EIP-191, đồng nhất `on_chain_loan_id`, fail-closed RPC, đối soát toàn phần, cập nhật tài liệu & kiểm thử E2E cô lập). |
+| **Sắp đi đâu?** | Chờ xác nhận của người dùng để bắt đầu **Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin**. |
+| **Mục tiêu là gì?** | Hệ thống EduVault hoàn thiện theo lộ trình `Phase 7A -> Phase 13 -> Phase 14 -> Phase 15 -> Phase 16`. |
+| **Đã học được gì?** | `web3.py` 6.20 `HexBytes.hex()` đã gồm tiền tố `'0x'`; tách rạch ròi Phase 7A (giữ ABI ổn định) và Phase 13 (nâng cấp `EquipmentLending.sol`); luôn dùng `--incremental false` khi typecheck để không làm bẩn `frontend/tsconfig.tsbuildinfo`. |
+| **Đã làm được gì?** | Hoàn tất Phase 0–12 + Phase 7A. Hợp đồng 28/28 tests, Backend 65/65 tests, Frontend compile & build 0 lỗi, E2E live Hardhat EVM PASS 100%. |
+

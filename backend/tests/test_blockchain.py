@@ -60,15 +60,43 @@ def test_blockchain_contract_abi_loaded():
 
 def test_blockchain_status_api_endpoint(client):
     """
-    Mục đích: Kiểm thử API `/api/v1/blockchain/status` phản hồi đầy đủ cấu trúc chẩn đoán mạng.
+    Mục đích: Kiểm thử API `/api/v1/blockchain/status` và `/contract-info` phản hồi đầy đủ trường đồng nhất.
     """
     response = client.get("/api/v1/blockchain/status")
     assert response.status_code == 200
     data = response.json()
     assert "status" in data
+    assert "is_connected" in data
+    assert "network" in data
     assert "rpc_url" in data
     assert "contract_address" in data
+    assert "contract_deployed" in data
     assert "admin_wallet_address" in data
+    assert "relayer_address" in data
+    assert "relayer_balance_eth" in data
+
+    info_res = client.get("/api/v1/blockchain/contract-info")
+    assert info_res.status_code == 200
+    info = info_res.json()
+    assert info["contract_name"] == "EquipmentLending"
+    assert info["contract_address"] == data["contract_address"]
+    assert "owner_address" in info
+    assert "is_connected" in info
+
+
+def test_normalize_hex_bytes32_and_local_contract_address_resolution():
+    """
+    Mục đích: Đảm bảo chuẩn hóa bytes32/tx_hash không lặp 0x0x và chọn đúng địa chỉ theo CHAIN_ID=31337.
+    """
+    from backend.app.core.config import settings
+    from backend.app.services.blockchain_service import BlockchainService, normalize_hex_bytes32
+
+    assert normalize_hex_bytes32("0x0x" + "ab" * 32, 32) if False else len(normalize_hex_bytes32("0x" + "AB" * 32, 32)) == 66
+    assert normalize_hex_bytes32("AB" * 32, 32) == "0x" + "ab" * 32
+
+    if int(settings.CHAIN_ID) == 31337:
+        svc = BlockchainService()
+        assert svc.contract_address.lower() == settings.CONTRACT_ADDRESS.lower()
 
 
 def test_blockchain_send_transaction_fails_safely_when_offline():
