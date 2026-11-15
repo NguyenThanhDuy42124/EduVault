@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useAuth } from '../context/AuthContext';
 import { useWeb3 } from '../context/Web3Context';
@@ -28,7 +29,10 @@ import {
 } from 'lucide-react';
 
 export const EquipmentPage: React.FC = () => {
-  const { role, user, refreshProfile } = useAuth();
+  const { role, user, isAuthenticated, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledBorrowParamRef = useRef<string | null>(null);
   const {
     account,
     isConnected,
@@ -96,7 +100,7 @@ export const EquipmentPage: React.FC = () => {
     });
   }, [equipmentList, search, selectedCategory, selectedStatus]);
 
-  const handleOpenBorrowModal = (item: Equipment) => {
+  const handleOpenBorrowModal = useCallback((item: Equipment) => {
     setSelectedEquipment(item);
     setActionError(null);
     setActionSuccess(null);
@@ -119,7 +123,25 @@ export const EquipmentPage: React.FC = () => {
     setDueDate(formatForInput(due));
     setNotes('');
     setBorrowModalOpen(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    const borrowIdParam = searchParams.get('borrow');
+    if (!borrowIdParam || loading || equipmentList.length === 0) return;
+    if (handledBorrowParamRef.current === borrowIdParam) return;
+    if (role !== 'BORROWER') return;
+
+    handledBorrowParamRef.current = borrowIdParam;
+    const targetId = Number(borrowIdParam);
+    const matched = equipmentList.find((eq) => eq.id === targetId && eq.status === 'AVAILABLE');
+    if (matched) {
+      handleOpenBorrowModal(matched);
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('borrow');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, loading, equipmentList, role, handleOpenBorrowModal]);
 
   const isWalletVerifiedMatching = Boolean(
     isConnected &&
@@ -517,8 +539,29 @@ export const EquipmentPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {role === 'BORROWER' ? (
+                  {!isAuthenticated ? (
                     <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/login?reason=borrow&borrow=${item.id}`, {
+                          state: {
+                            from: { pathname: '/equipment', search: `?borrow=${item.id}` },
+                            authNotice: 'Vui lòng đăng nhập hoặc đăng ký tài khoản để mượn thiết bị.',
+                          },
+                        })
+                      }
+                      disabled={!isAvailable}
+                      className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] ${
+                        isAvailable
+                          ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                      }`}
+                    >
+                      {isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
+                    </button>
+                  ) : role === 'BORROWER' ? (
+                    <button
+                      type="button"
                       onClick={() => handleOpenBorrowModal(item)}
                       disabled={!isAvailable}
                       className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] cursor-pointer ${

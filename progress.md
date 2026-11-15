@@ -633,3 +633,22 @@
   - `npx tsc --noEmit --incremental false` (frontend): Exit 0.
   - Quét `ADMIN_PRIVATE_KEY` / `admin_account` / `send_transaction` trong `backend/app` & `.env*`: **0 kết quả**.
 
+---
+
+## Session: 2026-11-15 (Task A: Simplified EduVault Public Homepage & Auth Entry Flow)
+
+### Task A Execution Log
+- **Status:** `complete`
+- **Thay đổi giao diện & điều hướng công khai:**
+  1. Thiết kế lại trang chủ công khai `/` ([HomePage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/HomePage.tsx)) và danh sách thiết bị hiện có ([HomeEquipmentSection.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/components/home/HomeEquipmentSection.tsx)):
+     - Header ([Navbar.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/components/Navbar.tsx)): hiển thị logo EduVault, menu `Trang chủ` / `Thiết bị`, nút `Đăng nhập` / `Đăng ký` khi chưa đăng nhập; hiển thị tên người dùng, nút `Xem đơn mượn` và thanh công cụ vai trò/ví khi đã đăng nhập; drawer responsive trên mobile.
+     - Hero section: tiêu đề `"Mượn thiết bị học tập dễ dàng và minh bạch"`, mô tả, CTA `"Xem thiết bị"` và `"Đăng ký tài khoản"`, animation GSAP nhẹ (`autoAlpha` + `y`) tôn trọng `prefers-reduced-motion`, không dùng Three.js hay vòng lặp vô hạn.
+     - Section `"Thiết bị hiện có"`: gọi API danh mục hiện có, grid responsive 1–4 cột, có loading skeleton, empty state, error state kèm nút `"Thử lại"`.
+     - Quy tắc xác thực: khách vãng lai xem được danh sách thiết bị; bấm `"Đăng ký mượn"` chuyển sang `/login?reason=borrow&borrow=<id>` kèm thông báo yêu cầu đăng nhập/đăng ký và link sang `/register`; sau khi đăng nhập tài khoản sinh viên chuyển sang `/equipment` và tự mở modal đăng ký mượn.
+     - Section giới thiệu 3 điểm (icon Lucide) và Footer đơn giản ([Layout.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/components/Layout.tsx)).
+  2. Tinh chỉnh typography/styling và truy cập bàn phím: [index.html](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/index.html), [tailwind.config.js](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/tailwind.config.js), [index.css](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/index.css), [Modal.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/components/Modal.tsx), [App.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/App.tsx), [EquipmentPage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/EquipmentPage.tsx), [LoginPage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/LoginPage.tsx), [RegisterPage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/RegisterPage.tsx), [vite.config.ts](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/vite.config.ts).
+- **Kiểm chứng thực tế:**
+  - `npx tsc --noEmit --incremental false` & `npm run build` (frontend): Pass (Exit 0).
+  - Kiểm thử trình duyệt thực tế (`1280x800` & `390x844`): Pass luồng khách xem `/` & `/equipment` -> `"Đăng ký mượn"` -> `/login?reason=borrow&borrow=1` -> đăng nhập `sv01@eduvault.edu.vn` -> mở modal mượn thiết bị -> `Escape` đóng modal -> `/` header hiển thị `"Nguyễn Văn An"` & `"Xem đơn mượn"` -> `/my-loans` -> mobile `390x844` không tràn ngang (`0` console errors, `0` failed requests).
+
+

@@ -1,111 +1,137 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { Web3Provider } from './context/Web3Context';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
+import { HomePage } from './pages/HomePage';
 
-// Pages
-import { LoginPage } from './pages/LoginPage';
-import { EquipmentPage } from './pages/EquipmentPage';
-import { MyLoansPage } from './pages/MyLoansPage';
-import { AdminLoansPage } from './pages/AdminLoansPage';
-import { AdminInventoryPage } from './pages/AdminInventoryPage';
-import { AdminRolesPage } from './pages/AdminRolesPage';
-import { AuditPage } from './pages/AuditPage';
-import { ShowcasePage } from './pages/ShowcasePage';
+// Lazy-loaded Secondary Pages for fast public landing & small initial bundle
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('./pages/RegisterPage'));
+const EquipmentPage = React.lazy(() => import('./pages/EquipmentPage'));
+const MyLoansPage = React.lazy(() =>
+  import('./pages/MyLoansPage').then((m) => ({ default: m.MyLoansPage }))
+);
+const AdminLoansPage = React.lazy(() =>
+  import('./pages/AdminLoansPage').then((m) => ({ default: m.AdminLoansPage }))
+);
+const AdminInventoryPage = React.lazy(() =>
+  import('./pages/AdminInventoryPage').then((m) => ({ default: m.AdminInventoryPage }))
+);
+const AdminRolesPage = React.lazy(() =>
+  import('./pages/AdminRolesPage').then((m) => ({ default: m.AdminRolesPage }))
+);
+const AuditPage = React.lazy(() => import('./pages/AuditPage'));
+const ShowcasePage = React.lazy(() => import('./pages/ShowcasePage'));
+
+const PageLoader: React.FC = () => (
+  <div className="min-h-[60vh] flex items-center justify-center px-4">
+    <div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Web3Provider>
-          <Routes>
-          {/* Public Login Route */}
-          <Route path="/login" element={<LoginPage />} />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Public Homepage & Equipment Catalog */}
+              <Route
+                path="/"
+                element={
+                  <Layout>
+                    <HomePage />
+                  </Layout>
+                }
+              />
 
-          {/* Protected Routes */}
-          <Route
-            path="/equipment"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <EquipmentPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              <Route
+                path="/equipment"
+                element={
+                  <Layout>
+                    <EquipmentPage />
+                  </Layout>
+                }
+              />
 
-          <Route
-            path="/my-loans"
-            element={
-              <ProtectedRoute allowedRoles={['BORROWER']}>
-                <Layout>
-                  <MyLoansPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              {/* Auth Routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
 
-          <Route
-            path="/admin/loans"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <Layout>
-                  <AdminLoansPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              {/* Protected Routes */}
+              <Route
+                path="/my-loans"
+                element={
+                  <ProtectedRoute allowedRoles={['BORROWER']}>
+                    <Layout>
+                      <MyLoansPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-          <Route
-            path="/admin/inventory"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <Layout>
-                  <AdminInventoryPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              <Route
+                path="/admin/loans"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <Layout>
+                      <AdminLoansPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-          <Route
-            path="/admin/roles"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <Layout>
-                  <AdminRolesPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              <Route
+                path="/admin/inventory"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <Layout>
+                      <AdminInventoryPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-          <Route
-            path="/audit"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <AuditPage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              <Route
+                path="/admin/roles"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <Layout>
+                      <AdminRolesPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-          <Route
-            path="/overview"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ShowcasePage />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+              <Route
+                path="/audit"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <AuditPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Root and Catch-All Redirects */}
-          <Route path="/" element={<Navigate to="/equipment" replace />} />
-          <Route path="*" element={<Navigate to="/equipment" replace />} />
-        </Routes>
+              <Route
+                path="/overview"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ShowcasePage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Catch-All Redirect */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </Web3Provider>
       </AuthProvider>
     </BrowserRouter>
