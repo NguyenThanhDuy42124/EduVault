@@ -1,11 +1,22 @@
 import api from './api';
-import { TokenResponse, User, WalletChallengeResponse } from '../types';
+import { PublicRegisterRequest, TokenResponse, User, WalletChallengeResponse } from '../types';
 
 export const authService = {
   login: async (identifier: string, password: string): Promise<TokenResponse> => {
     const res = await api.post<TokenResponse>('/auth/login', {
       identifier: identifier.trim(),
       password,
+    });
+    return res.data;
+  },
+
+  register: async (payload: PublicRegisterRequest): Promise<User> => {
+    const res = await api.post<User>('/auth/register', {
+      student_staff_id: payload.student_staff_id.trim(),
+      full_name: payload.full_name.trim(),
+      email: payload.email.trim().toLowerCase(),
+      password: payload.password,
+      password_confirmation: payload.password_confirmation,
     });
     return res.data;
   },

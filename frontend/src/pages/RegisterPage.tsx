@@ -1,13 +1,120 @@
-import React from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowRight, IdCard, Lock, Mail, ShieldAlert, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
+
+interface ValidationErrorItem {
+  msg?: string;
+}
+
+function extractRegisterError(err: unknown): string {
+  const axiosError = err as {
+    response?: {
+      status?: number;
+      data?: {
+        detail?: string | ValidationErrorItem[];
+      };
+    };
+  };
+
+  if (!axiosError.response) {
+    return 'Không thể kết nối tới máy chủ EduVault. Vui lòng kiểm tra Backend API và thử lại.';
+  }
+
+  const detail = axiosError.response.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    const messages = detail
+      .map((item) => item?.msg?.replace(/^Value error,\s*/i, '').trim())
+      .filter((msg): msg is string => Boolean(msg));
+    if (messages.length > 0) {
+      return messages.join(' ');
+    }
+  }
+
+  return 'Không thể đăng ký tài khoản lúc này. Vui lòng kiểm tra lại thông tin.';
+}
 
 export const RegisterPage: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
+  const [fullName, setFullName] = useState('');
+  const [studentStaffId, setStudentStaffId] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const borrowQueryId = searchParams.get('borrow');
-  const loginHref = borrowQueryId ? `/login?reason=borrow&borrow=${borrowQueryId}` : '/login';
+  const loginHref = borrowQueryId ? `/login?borrow=${borrowQueryId}` : '/login';
+
+  if (!authLoading && isAuthenticated) {
+    return <Navigate to={borrowQueryId ? `/equipment?borrow=${borrowQueryId}` : '/'} replace />;
+  }
+
+  const validateForm = (): string | null => {
+    if (fullName.trim().length < 2) {
+      return 'Họ và tên phải có tối thiểu 2 ký tự.';
+    }
+    if (studentStaffId.trim().length < 3) {
+      return 'Mã số sinh viên / cán bộ phải có tối thiểu 3 ký tự.';
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return 'Vui lòng nhập địa chỉ email hợp lệ.';
+    }
+    if (password.length < 8) {
+      return 'Mật khẩu phải có tối thiểu 8 ký tự.';
+    }
+    if (password !== passwordConfirmation) {
+      return 'Mật khẩu xác nhận không khớp.';
+    }
+    return null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const createdUser = await authService.register({
+        full_name: fullName,
+        student_staff_id: studentStaffId,
+        email,
+        password,
+        password_confirmation: passwordConfirmation,
+      });
+
+      const prevState = (location.state as Record<string, unknown> | null) ?? {};
+      navigate(loginHref, {
+        replace: true,
+        state: {
+          ...prevState,
+          authNotice: undefined,
+          registerSuccess: 'Đăng ký tài khoản thành công! Vui lòng đăng nhập để tiếp tục.',
+          prefillIdentifier: createdUser.email,
+        },
+      });
+    } catch (err: unknown) {
+      setError(extractRegisterError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50">
@@ -18,99 +125,179 @@ export const RegisterPage: React.FC = () => {
           </div>
           <span className="text-xl font-bold tracking-tight text-slate-900">EduVault</span>
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đăng ký tài khoản</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đăng ký tài khoản sinh viên</h1>
         <p className="mt-2 text-sm text-slate-600 max-w-sm mx-auto">
-          Tài khoản sinh viên và cán bộ được gắn với mã định danh trường để mượn thiết bị.
+          Tạo tài khoản người mượn (BORROWER) để đăng ký và theo dõi đơn mượn thiết bị học tập.
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 sm:px-8 shadow-xs border border-slate-200 rounded-xl space-y-5">
-          {/* Honest status notice: backend does not yet provide a public self-registration endpoint */}
-          <div
-            role="status"
-            className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start space-x-2.5 text-xs text-amber-900 leading-relaxed"
-          >
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-700" aria-hidden="true" />
-            <div>
-              <p className="font-semibold">Cổng tự đăng ký chưa kích hoạt trên Backend API</p>
-              <p className="mt-1">
-                Hệ thống hiện chỉ hỗ trợ cấp tài khoản bởi Quản trị viên phòng lab để đối chiếu đúng MSSV/Email trước khi cấp quyền mượn. Vui lòng liên hệ Quản trị viên hoặc đăng nhập bằng tài khoản đã được cấp.
-              </p>
+          {error && (
+            <div
+              role="alert"
+              className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2.5 text-xs font-medium text-rose-800"
+            >
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" aria-hidden="true" />
+              <span>{error}</span>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-3 opacity-60" aria-disabled="true">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
-              <label htmlFor="reg-fullname" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="reg-fullname" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Họ và tên
               </label>
-              <input
-                id="reg-fullname"
-                type="text"
-                disabled
-                placeholder="Nguyễn Văn An"
-                className="block w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-500 cursor-not-allowed"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <UserIcon className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                </div>
+                <input
+                  id="reg-fullname"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={fullName}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Nguyễn Văn An"
+                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-colors"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="reg-student-id" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="reg-student-id" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Mã số sinh viên / Cán bộ
               </label>
-              <input
-                id="reg-student-id"
-                type="text"
-                disabled
-                placeholder="SV2026001"
-                className="block w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-500 cursor-not-allowed"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <IdCard className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                </div>
+                <input
+                  id="reg-student-id"
+                  type="text"
+                  required
+                  value={studentStaffId}
+                  onChange={(e) => {
+                    setStudentStaffId(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="SV2026009"
+                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-colors"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="reg-email" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="reg-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email trường
               </label>
-              <input
-                id="reg-email"
-                type="email"
-                disabled
-                placeholder="sv@eduvault.edu.vn"
-                className="block w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-500 cursor-not-allowed"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                </div>
+                <input
+                  id="reg-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="sinhvien@eduvault.edu.vn"
+                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="reg-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Mật khẩu
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                </div>
+                <input
+                  id="reg-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Tối thiểu 8 ký tự..."
+                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="reg-password-confirm" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Xác nhận mật khẩu
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                </div>
+                <input
+                  id="reg-password-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={passwordConfirmation}
+                  onChange={(e) => {
+                    setPasswordConfirmation(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Nhập lại mật khẩu..."
+                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-colors"
+                />
+              </div>
             </div>
 
             <button
-              type="button"
-              disabled
-              className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-slate-500 bg-slate-200 cursor-not-allowed"
+              type="submit"
+              disabled={submitting}
+              className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              Chưa mở tự đăng ký trên máy chủ
+              {submitting ? (
+                <span>Đang tạo tài khoản...</span>
+              ) : (
+                <>
+                  <span>Đăng ký tài khoản</span>
+                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
+                </>
+              )}
             </button>
-          </div>
+          </form>
 
-          <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+            <span>Đã có tài khoản?</span>
             <Link
-              to={loginHref}
+              to={borrowQueryId ? `/login?reason=borrow&borrow=${borrowQueryId}` : '/login'}
               state={location.state ?? undefined}
-              className="w-full sm:w-auto inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-colors"
+              className="font-semibold text-indigo-700 hover:text-indigo-800"
             >
-              <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Chuyển sang Đăng nhập</span>
-            </Link>
-
-            <Link
-              to="/equipment"
-              className="text-xs font-semibold text-indigo-700 hover:text-indigo-800"
-            >
-              Xem thiết bị hiện có
+              Đăng nhập ngay
             </Link>
           </div>
         </div>
 
-        <div className="mt-5 text-center">
-          <Link to="/" className="text-xs font-semibold text-slate-600 hover:text-slate-900">
+        <div className="mt-5 text-center space-x-4 text-xs">
+          <Link to="/" className="font-semibold text-slate-600 hover:text-slate-900">
             Quay lại trang chủ
+          </Link>
+          <span className="text-slate-300">·</span>
+          <Link to="/equipment" className="font-semibold text-slate-600 hover:text-slate-900">
+            Xem thiết bị hiện có
           </Link>
         </div>
       </div>

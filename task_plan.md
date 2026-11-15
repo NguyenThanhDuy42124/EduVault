@@ -375,4 +375,21 @@ Toàn bộ 16 Phase trong lộ trình dự án đã hoàn thành 100%! Hệ th�
 
 - **Status:** complete
 
+---
+
+### Bổ sung sau Phase 16: Giao diện Trang chủ Công khai & Luồng Tự Đăng Ký Sinh Viên (2026-11-15)
+> Mục tiêu: Đơn giản hóa trang chủ công khai phục vụ sinh viên tìm kiếm/đăng ký mượn thiết bị và mở cổng tự đăng ký tài khoản `BORROWER`.
+
+- [x] **Task A: Đơn giản hóa Trang chủ Công khai & Điều hướng Đăng nhập/Đăng ký**
+  - Homepage `/`, `/equipment` công khai, header/footer tối giản, GSAP entrance nhẹ tôn trọng `prefers-reduced-motion`, chuyển hướng khách bấm mượn sang `/login?reason=borrow&borrow=<id>` và tự mở modal sau đăng nhập.
+  - Files: `frontend/index.html`, `frontend/tailwind.config.js`, `frontend/vite.config.ts`, `frontend/src/index.css`, `frontend/src/App.tsx`, `frontend/src/components/{Layout,Modal,Navbar}.tsx`, `frontend/src/components/home/HomeEquipmentSection.tsx`, `frontend/src/pages/{HomePage,EquipmentPage,LoginPage,RegisterPage}.tsx`.
+
+- [x] **Task B: Luồng Tự Đăng Ký Tài Khoản Sinh Viên Công Khai (`POST /api/v1/auth/register`)**
+  - Backend: thêm `PublicRegisterRequest` (`extra="forbid"`, gán cứng `role=BORROWER`, `wallet_address=None`, `wallet_verified=False`, `is_active=True`), `register_borrower(...)` kèm xử lý `IntegrityError` (HTTP `409 Conflict`), route công khai `POST /api/v1/auth/register` (HTTP `201`), và 14 test tự động trong `backend/tests/test_auth.py`.
+  - Frontend: thêm `authService.register` & `PublicRegisterRequest`, thay thế `/register` thành form đăng ký thực tế, chuyển hướng sang `/login` (bảo toàn `?borrow=`) để đăng nhập chính thức.
+  - Ghi nhận giới hạn: public registration chỉ tạo `BORROWER`; chưa có email verification (chưa có mail provider); chưa có refresh token (dùng JWT access-only); logout xử lý bằng xóa token phía client.
+
+- **Status:** complete
+
+
 

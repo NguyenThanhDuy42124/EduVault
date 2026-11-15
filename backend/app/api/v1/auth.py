@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from backend.app.db.session import get_db
 from backend.app.models.user import User
 from backend.app.schemas.token import Token
-from backend.app.schemas.user import UserLoginRequest
+from backend.app.schemas.user import PublicRegisterRequest, UserLoginRequest, UserResponse
 from backend.app.services.auth_service import authenticate_user, generate_user_token
+from backend.app.services.user_service import register_borrower
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -76,4 +77,32 @@ def login_oauth2_form(
         password=form_data.password
     )
     return generate_user_token(user)
+
+
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Tự đăng ký tài khoản sinh viên (Public)",
+    description="Cho phép sinh viên tự tạo tài khoản BORROWER mà không cần xác thực trước."
+)
+def register_public_borrower(
+    register_data: PublicRegisterRequest,
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Mục đích: Xử lý tự đăng ký tài khoản BORROWER công khai cho sinh viên.
+    Tham số:
+        - register_data (PublicRegisterRequest): Thông tin đăng ký (mã số SV, họ tên, email, mật khẩu).
+        - db (Session): Phiên làm việc CSDL.
+    Trả về:
+        - UserResponse: Thông tin người dùng mới (không bao gồm password_hash, role=BORROWER).
+    Lỗi:
+        - HTTPException 409: Email hoặc mã số sinh viên đã tồn tại.
+        - HTTPException 422: Dữ liệu đầu vào không hợp lệ hoặc cố truyền field ngoài cho phép (role, wallet_address).
+    Tác dụng phụ:
+        - Tạo bản ghi User mới với role=BORROWER và is_active=True trong CSDL.
+    """
+    return register_borrower(db=db, register_in=register_data)
+
 

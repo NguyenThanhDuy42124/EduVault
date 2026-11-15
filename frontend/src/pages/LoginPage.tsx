@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Info, Lock, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Info, Lock, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface LocationAuthState {
@@ -9,6 +9,8 @@ interface LocationAuthState {
     search?: string;
   };
   authNotice?: string;
+  registerSuccess?: string;
+  prefillIdentifier?: string;
 }
 
 export const LoginPage: React.FC = () => {
@@ -17,20 +19,23 @@ export const LoginPage: React.FC = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const [identifier, setIdentifier] = useState('');
+  const locState = (location.state as LocationAuthState | null) ?? null;
+
+  const [identifier, setIdentifier] = useState(locState?.prefillIdentifier || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const locState = (location.state as LocationAuthState | null) ?? null;
   const borrowQueryId = searchParams.get('borrow');
   const reasonQuery = searchParams.get('reason');
 
-  const authNotice =
-    locState?.authNotice ||
-    (reasonQuery === 'borrow'
-      ? 'Vui lòng đăng nhập hoặc đăng ký tài khoản để mượn thiết bị.'
-      : null);
+  const registerSuccess = locState?.registerSuccess || null;
+  const authNotice = registerSuccess
+    ? null
+    : locState?.authNotice ||
+      (reasonQuery === 'borrow'
+        ? 'Vui lòng đăng nhập hoặc đăng ký tài khoản để mượn thiết bị.'
+        : null);
 
   const fromTarget = locState?.from?.pathname
     ? `${locState.from.pathname}${locState.from.search || ''}`
@@ -80,6 +85,16 @@ export const LoginPage: React.FC = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 sm:px-8 shadow-xs border border-slate-200 rounded-xl space-y-5">
+          {registerSuccess && (
+            <div
+              role="status"
+              className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start space-x-2.5 text-xs font-medium text-emerald-900"
+            >
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600" aria-hidden="true" />
+              <span>{registerSuccess}</span>
+            </div>
+          )}
+
           {authNotice && (
             <div
               role="status"

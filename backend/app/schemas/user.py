@@ -5,7 +5,7 @@ Mục đích: Định nghĩa các Schema Pydantic cho người dùng (tạo mớ
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from web3 import Web3
 from backend.app.models.user import UserRole
 
@@ -38,6 +38,71 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema dữ liệu khi tạo người dùng mới."""
     password: str = Field(..., min_length=6, max_length=100, description="Mật khẩu khởi tạo tối thiểu 6 ký tự")
+
+
+class PublicRegisterRequest(BaseModel):
+    """Schema dữ liệu tự đăng ký tài khoản công khai dành cho sinh viên/người mượn."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    student_staff_id: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="Mã số sinh viên duy nhất (3–50 ký tự)",
+    )
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=150,
+        description="Họ và tên đầy đủ (2–150 ký tự)",
+    )
+    email: EmailStr = Field(..., description="Địa chỉ email hợp lệ")
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="Mật khẩu tối thiểu 8 ký tự",
+    )
+    password_confirmation: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Nhập lại mật khẩu để xác nhận",
+    )
+
+    @field_validator("student_staff_id", mode="before")
+    @classmethod
+    def validate_student_staff_id(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Mã số sinh viên/cán bộ phải là chuỗi hợp lệ.")
+        cleaned = value.strip()
+        if not 3 <= len(cleaned) <= 50:
+            raise ValueError("Mã số sinh viên/cán bộ phải có từ 3 đến 50 ký tự.")
+        return cleaned
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Họ và tên phải là chuỗi hợp lệ.")
+        cleaned = value.strip()
+        if not 2 <= len(cleaned) <= 150:
+            raise ValueError("Họ và tên phải có từ 2 đến 150 ký tự.")
+        return cleaned
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @model_validator(mode="after")
+    def verify_password_match(self) -> "PublicRegisterRequest":
+        if self.password != self.password_confirmation:
+            raise ValueError("Mật khẩu xác nhận không khớp.")
+        return self
 
 
 class UserLoginRequest(BaseModel):

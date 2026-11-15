@@ -29,6 +29,14 @@ export interface WalletChallengeResponse {
   expires_at: string;
 }
 
+export interface PublicRegisterRequest {
+  student_staff_id: string;
+  full_name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;

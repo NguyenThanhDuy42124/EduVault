@@ -651,4 +651,33 @@
   - `npx tsc --noEmit --incremental false` & `npm run build` (frontend): Pass (Exit 0).
   - Kiểm thử trình duyệt thực tế (`1280x800` & `390x844`): Pass luồng khách xem `/` & `/equipment` -> `"Đăng ký mượn"` -> `/login?reason=borrow&borrow=1` -> đăng nhập `sv01@eduvault.edu.vn` -> mở modal mượn thiết bị -> `Escape` đóng modal -> `/` header hiển thị `"Nguyễn Văn An"` & `"Xem đơn mượn"` -> `/my-loans` -> mobile `390x844` không tràn ngang (`0` console errors, `0` failed requests).
 
+---
+
+## Session: 2026-11-15 (Task B: Public Borrower Registration Flow)
+
+### Task B Execution Log
+- **Status:** `complete`
+- **Endpoint mới:** `POST /api/v1/auth/register` (không yêu cầu JWT, HTTP `201 Created`, trả về `UserResponse` không kèm `password_hash` hay thông tin nonce).
+- **Thay đổi Backend & Kiểm thử:**
+  1. [backend/app/schemas/user.py](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/schemas/user.py): thêm `PublicRegisterRequest` với `ConfigDict(extra="forbid")` (từ chối client tự truyền `role` hay `wallet_address` với HTTP `422`), chuẩn hóa/trim `student_staff_id`, `full_name`, lowercase `email`, kiểm tra mật khẩu tối thiểu 8 ký tự và `password_confirmation` khớp `password`.
+  2. [backend/app/services/user_service.py](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/services/user_service.py): tách helper `_create_user_record(...)` và thêm `register_borrower(...)` gán cứng `role=UserRole.BORROWER`, `is_active=True`, `wallet_verified=False`, `wallet_address=None`, kiểm tra trùng lặp không phân biệt hoa thường (`409 Conflict`) kèm xử lý `IntegrityError` (`409 Conflict`), tái sử dụng `hash_password`.
+  3. [backend/app/api/v1/auth.py](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/api/v1/auth.py): mở route công khai `POST /api/v1/auth/register`.
+  4. [backend/tests/test_auth.py](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/tests/test_auth.py): bổ sung 14 unit/integration test cho đăng ký công khai (`23 passed` tổng trong `test_auth.py`).
+- **Thay đổi Frontend:**
+  1. [frontend/src/types/index.ts](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/types/index.ts) & [frontend/src/services/authService.ts](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/services/authService.ts): thêm `PublicRegisterRequest` và `authService.register(payload)`.
+  2. [frontend/src/pages/RegisterPage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/RegisterPage.tsx): thay màn hình placeholder bằng form tự đăng ký đầy đủ validation phía client/server, trạng thái loading, xử lý lỗi trùng email/MSSV/validation/mạng, không có trường chọn `role` hoặc nhập ví, tự điều hướng người đã đăng nhập ra khỏi `/register`, chuyển hướng sang `/login` kèm trạng thái `?borrow=` sau khi đăng ký thành công (không tự đăng nhập giả).
+  3. [frontend/src/pages/LoginPage.tsx](file:///d:/BaiThucHanh/PythonFile/BLockChain/frontend/src/pages/LoginPage.tsx): hiển thị thông báo đăng ký thành công (`registerSuccess`), điền sẵn email định danh từ trạng thái điều hướng và giữ nguyên redirect về `/equipment?borrow=<id>` sau khi đăng nhập.
+- **Phạm vi & Giới hạn hiện tại của luồng xác thực:**
+  - Cổng tự đăng ký `/api/v1/auth/register` chỉ cấp quyền `BORROWER`; tài khoản `ADMIN` vẫn chỉ do Quản trị viên tạo qua `POST /api/v1/admin/users`.
+  - Chưa triển khai xác minh email (Email verification) do chưa tích hợp dịch vụ gửi mail.
+  - Chưa triển khai Refresh Token (hệ thống dùng JWT Access Token đơn).
+  - Đăng xuất (Logout) thực hiện ở phía client bằng cách xóa token lưu cục bộ.
+  - Chưa mở tính năng tự chỉnh sửa hồ sơ hoặc đổi mật khẩu cá nhân trong phạm vi commit này.
+- **Kiểm chứng thực tế:**
+  - `.\backend\.venv\Scripts\python.exe -m pytest backend/tests/test_auth.py -v`: **23 passed** (`9` test đăng nhập/bảo mật cũ + `14` test đăng ký mới).
+  - `.\backend\.venv\Scripts\python.exe -m pytest backend/tests/ -v`: **77 passed, 1 failed** (case `test_cross_wallet_multi_admin_e2e_lifecycle` trong `test_multi_user_e2e.py` thất bại sẵn từ trước khi chạy không có node E2E; toàn bộ 77 test còn lại đạt 100%).
+  - `npx tsc --noEmit --incremental false` & `npm run build` (frontend): Pass (`built in 2.85s`).
+  - Kiểm thử trình duyệt E2E thực tế (`1280x800` & `390x844`): Pass guard chuyển hướng khi đã đăng nhập -> `/register?borrow=1` validate client mật khẩu không khớp (0 API call) -> lỗi `409` trùng email (`sv01@eduvault.edu.vn`) & trùng MSSV (`SV2026001`) -> đăng ký thành công `HTTP 201` (`sv88722991@eduvault.edu.vn`) -> chuyển hướng `/login?borrow=1` kèm banner xanh & prefill email -> đăng nhập mở modal mượn thiết bị -> mobile `390x844` không tràn ngang (`0` console errors).
+
+
 

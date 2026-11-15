@@ -10,13 +10,14 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from web3 import Web3
 from backend.app.core.security import hash_password
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.lending_request import LendingRequest, LoanStatus
 from backend.app.models.user import User, UserRole
-from backend.app.schemas.user import UserCreate
+from backend.app.schemas.user import PublicRegisterRequest, UserCreate
 from backend.app.services.blockchain_service import blockchain_service
 
 WALLET_CHALLENGE_TTL_MINUTES = 5
@@ -83,41 +84,46 @@ def get_users(
     return query.order_by(User.id.asc()).offset(skip).limit(limit).all()
 
 
-def create_user(db: Session, user_in: UserCreate) -> User:
-    """
-    Mục đích: Kiểm tra trùng lặp, băm mật khẩu và tạo tài khoản người dùng mới vào hệ thống.
-    Tham số:
-        - db (Session): Phiên làm việc với CSDL SQLAlchemy.
-        - user_in (UserCreate): Dữ liệu đầu vào đã được Pydantic kiểm thực (email, mã số, mật khẩu,...).
-    Trả về:
-        - User: Thực thể User vừa được tạo thành công trong MySQL.
-    Lỗi:
-        - HTTPException(409 Conflict): Khi email hoặc student_staff_id đã tồn tại trên hệ thống.
-    Tác dụng phụ:
-        - Ghi mới 1 dòng dữ liệu vào bảng `users` trong MySQL (INSERT + COMMIT).
-    """
-    # 1. Kiểm tra trùng lặp email
-    existing_user_by_email: Optional[User] = db.query(User).filter(User.email == user_in.email).first()
+def _create_user_record(
+    db: Session,
+    *,
+    student_staff_id: str,
+    full_name: str,
+    email: str,
+    password: str,
+    role: UserRole,
+    wallet_address: Optional[str] = None,
+) -> User:
+    """Kiểm tra trùng lặp chuẩn hóa, băm mật khẩu và lưu bản ghi User an toàn trước race condition."""
+    normalized_id = student_staff_id.strip()
+    normalized_name = full_name.strip()
+    normalized_email = email.strip().lower()
+
+    existing_user_by_email: Optional[User] = (
+        db.query(User)
+        .filter(func.lower(User.email) == normalized_email)
+        .first()
+    )
     if existing_user_by_email is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Email '{user_in.email}' đã được đăng ký trong hệ thống."
+            detail=f"Email '{normalized_email}' đã được đăng ký trong hệ thống."
         )
 
-    # 2. Kiểm tra trùng lặp student_staff_id
-    existing_user_by_id: Optional[User] = db.query(User).filter(
-        User.student_staff_id == user_in.student_staff_id
-    ).first()
+    existing_user_by_id: Optional[User] = (
+        db.query(User)
+        .filter(func.lower(User.student_staff_id) == normalized_id.lower())
+        .first()
+    )
     if existing_user_by_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Mã số '{user_in.student_staff_id}' đã tồn tại trong hệ thống."
+            detail=f"Mã số '{normalized_id}' đã tồn tại trong hệ thống."
         )
 
-    # 3. Kiểm tra trùng lặp wallet_address nếu có cung cấp
     normalized_wallet: Optional[str] = None
-    if user_in.wallet_address:
-        normalized_wallet = Web3.to_checksum_address(user_in.wallet_address.strip())
+    if wallet_address:
+        normalized_wallet = Web3.to_checksum_address(wallet_address.strip())
         existing_wallet = (
             db.query(User)
             .filter(func.lower(User.wallet_address) == normalized_wallet.lower())
@@ -129,16 +135,14 @@ def create_user(db: Session, user_in: UserCreate) -> User:
                 detail=f"Địa chỉ ví '{normalized_wallet}' đã được gán cho tài khoản khác."
             )
 
-    # 4. Băm mật khẩu an toàn
-    hashed_password: str = hash_password(user_in.password)
+    hashed_password: str = hash_password(password)
 
-    # 5. Khởi tạo thực thể User (ví do Admin nhập chưa được xác minh chữ ký cho tới khi chủ ví ký EIP-191)
     new_user = User(
-        student_staff_id=user_in.student_staff_id.strip(),
-        full_name=user_in.full_name.strip(),
-        email=user_in.email.strip().lower(),
+        student_staff_id=normalized_id,
+        full_name=normalized_name,
+        email=normalized_email,
         password_hash=hashed_password,
-        role=user_in.role,
+        role=role,
         wallet_address=normalized_wallet,
         wallet_verified=False,
         is_active=True,
@@ -147,9 +151,65 @@ def create_user(db: Session, user_in: UserCreate) -> User:
     )
 
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email, mã số sinh viên/cán bộ hoặc địa chỉ ví đã tồn tại trong hệ thống."
+        ) from exc
+
     db.refresh(new_user)
     return new_user
+
+
+def create_user(db: Session, user_in: UserCreate) -> User:
+    """
+    Mục đích: Kiểm tra trùng lặp, băm mật khẩu và tạo tài khoản người dùng mới vào hệ thống (luồng Admin).
+    Tham số:
+        - db (Session): Phiên làm việc với CSDL SQLAlchemy.
+        - user_in (UserCreate): Dữ liệu đầu vào đã được Pydantic kiểm thực (email, mã số, mật khẩu,...).
+    Trả về:
+        - User: Thực thể User vừa được tạo thành công trong CSDL.
+    Lỗi:
+        - HTTPException(409 Conflict): Khi email, student_staff_id hoặc wallet_address đã tồn tại.
+    Tác dụng phụ:
+        - Ghi mới 1 dòng dữ liệu vào bảng `users` trong CSDL (INSERT + COMMIT).
+    """
+    return _create_user_record(
+        db=db,
+        student_staff_id=user_in.student_staff_id,
+        full_name=user_in.full_name,
+        email=user_in.email,
+        password=user_in.password,
+        role=user_in.role,
+        wallet_address=user_in.wallet_address,
+    )
+
+
+def register_borrower(db: Session, register_in: PublicRegisterRequest) -> User:
+    """
+    Mục đích: Đăng ký công khai tài khoản sinh viên/người mượn mới với quyền BORROWER cố định.
+    Tham số:
+        - db (Session): Phiên làm việc với CSDL SQLAlchemy.
+        - register_in (PublicRegisterRequest): Dữ liệu đăng ký đã qua kiểm tra hợp lệ.
+    Trả về:
+        - User: Thực thể User mới với role=BORROWER, is_active=True, wallet_verified=False.
+    Lỗi:
+        - HTTPException(409 Conflict): Khi email hoặc student_staff_id đã tồn tại.
+    Tác dụng phụ:
+        - Ghi mới 1 dòng tài khoản BORROWER vào bảng `users` (INSERT + COMMIT).
+    """
+    return _create_user_record(
+        db=db,
+        student_staff_id=register_in.student_staff_id,
+        full_name=register_in.full_name,
+        email=register_in.email,
+        password=register_in.password,
+        role=UserRole.BORROWER,
+        wallet_address=None,
+    )
 
 
 def _build_wallet_challenge_message(
