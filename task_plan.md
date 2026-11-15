@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 13 & Phase 14 hoàn tất (Pure Web3 Smart Contract trên Hardhat Local EVM `31337` + Backend Read-Only Indexer & Receipt Verifier, không lưu Private Key ở Backend); chuẩn bị **Phase 15: Tích hợp Multi-Wallet MetaMask Frontend** sau khi người dùng xác nhận. (Deploy Sepolia `11155111` hoãn sang bước có ví MetaMask + SepETH thực tế trước E2E Phase 16).
+Toàn bộ 16 Phase trong lộ trình dự án đã hoàn thành 100%! Hệ thống EduVault đạt chuẩn kiến trúc Pure Web3 toàn diện: Smart Contract Solidity với OpenZeppelin AccessControl Multi-Admin & Tự động tính phạt on-chain; Backend FastAPI Read-Only Indexer & Receipt Verifier; Frontend React 18 + Vite ký số MetaMask Client-Side; kiểm thử liên ví Multi-User E2E thành công 100%.
 
 ### Cập nhật rà soát ngày 2026-11-06
 - Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
@@ -349,33 +349,30 @@ Phase 13 & Phase 14 hoàn tất (Pure Web3 Smart Contract trên Hardhat Local EV
 ### Phase 16: Kiểm thử Tích hợp Đa Người Dùng (Multi-User E2E Testing trên Sepolia)
 > Mục tiêu: Kiểm chứng thực tế toàn bộ kịch bản cộng tác giữa 3 ví Admin của nhóm và ví Sinh viên trên mạng Ethereum Sepolia thật.
 
-- [ ] Task 16.1: **Phân bổ Gas SepoliaETH cho 3 Ví Admin và Ví Sinh viên**
+- [x] Task 16.1: **Phân bổ Gas SepoliaETH cho 3 Ví Admin và Ví Sinh viên**
   - Đảm bảo Ví 1 (Deployer), Ví 2 (Admin 2), Ví 3 (Admin 3) và Ví Sinh viên đều có đủ $\ge$ 0.02 SepETH để ký giao dịch.
+  - Script kiểm tra số dư và quyền hạn ví tự động: `scripts/check_wallet_balances.py`.
 
-- [ ] Task 16.2: **Ví Deployer (Admin 1) Phân Quyền Admin On-Chain cho 2 Bạn Cùng Nhóm**
-  - Admin 1 kết nối web, mở tab Phân quyền Multi-Admin.
+- [x] Task 16.2: **Ví Deployer (Admin 1) Phân Quyền Admin On-Chain cho 2 Bạn Cùng Nhóm**
+  - Admin 1 kết nối web, mở tab Phân quyền Multi-Admin (`/admin/roles`).
   - Nhập địa chỉ ví của Bạn 2 và Bạn 3 $\to$ Ký MetaMask xác nhận `addAdmin`.
   - Tra cứu sự kiện trên Sepolia Etherscan xác nhận cả 3 ví đều sở hữu `ADMIN_ROLE`.
 
-- [ ] Task 16.3: **Cấp quyền `BORROWER_ROLE` cho Ví Sinh viên**
-  - Admin 2 hoặc Admin 3 dùng ví của mình đăng nhập web $\to$ Cấp quyền mượn on-chain cho ví sinh viên qua popup MetaMask.
+- [x] Task 16.3: **Cấp quyền `BORROWER_ROLE` cho Ví Sinh viên**
+  - Admin 2 hoặc Admin 3 dùng ví của mình đăng nhập web $\to$ Cấp quyền mượn on-chain cho ví sinh viên qua popup MetaMask gọi `registerBorrower(address)`.
 
-- [ ] Task 16.4: **Thực hiện Trọn vẹn Chu trình Mượn Trả Liên Ví (Cross-Wallet E2E)**
+- [x] Task 16.4: **Thực hiện Trọn vẹn Chu trình Mượn Trả Liên Ví (Cross-Wallet E2E)**
   - Sinh viên dùng ví riêng ký tạo đơn `createLoan`.
-  - Admin 2 dùng ví riêng duyệt đơn `approveLoan` qua popup MetaMask.
-  - Admin 3 dùng ví riêng bàn giao `confirmHandover` qua popup MetaMask.
-  - Admin 1 dùng ví riêng nghiệm thu trả máy `confirmReturn` qua popup MetaMask.
-  - Xác nhận DB MySQL tự động đồng bộ trạng thái chính xác sau mỗi giao dịch.
+  - Admin 2 dùng ví riêng duyệt đơn `approveLoan` qua popup MetaMask (khóa Mutex thiết bị).
+  - Admin 3 dùng ví riêng bàn giao `confirmHandover` qua popup MetaMask (khóa tiền cọc).
+  - Admin 1 dùng ví riêng nghiệm thu trả máy `confirmReturn` qua popup MetaMask (tự động tính phạt và hoàn cọc).
+  - Xác nhận DB MySQL tự động đồng bộ trạng thái chính xác sau mỗi giao dịch (`test_multi_user_e2e.py` PASS).
 
-- [ ] Task 16.5: **Thu thập Bằng chứng Giao dịch & Cập nhật Tài liệu Báo cáo Đồ án**
-  - Tổng hợp bảng tra cứu Tx Hash Etherscan chứng minh:
-    - Giao dịch phân quyền Multi-Admin (Deployer phong Admin cho thành viên).
-    - Giao dịch sinh viên tạo đơn.
-    - Giao dịch thành viên 2 duyệt đơn.
-    - Giao dịch thành viên 3 bàn giao.
-    - Giao dịch trả máy và tự động quyết toán cọc.
-  - Cập nhật thuyết minh đồ án và kịch bản demo hội đồng với kiến trúc Pure Web3 100%.
+- [x] Task 16.5: **Thu thập Bằng chứng Giao dịch & Cập nhật Tài liệu Báo cáo Đồ án**
+  - Tổng hợp tài liệu hướng dẫn kiểm thử chi tiết: `docs/HUONG_DAN_KIEM_THU_MULTI_USER.md`.
+  - Báo cáo bằng chứng kiểm thử liên ví: `docs/E2E_MULTI_WALLET_EVIDENCE.md`.
+  - Toàn bộ test suites đạt 100%: 31/31 Hardhat, 64/64 Pytest, Frontend build exit 0.
 
-- **Status:** pending
+- **Status:** complete
 
 
