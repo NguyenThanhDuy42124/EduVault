@@ -78,17 +78,17 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-2 sm:gap-4">
           {/* Brand + Main Nav */}
-          <div className="flex items-center space-x-6 min-w-0">
-            <Link to="/" className="flex items-center space-x-2.5 shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white">
+          <div className="flex items-center space-x-4 xl:space-x-6 shrink-0 lg:shrink lg:min-w-0">
+            <Link to="/" className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shrink-0">
                 <ShieldCheck className="w-4 h-4 text-slate-100" aria-hidden="true" />
               </div>
-              <span className="font-bold text-slate-900 text-base tracking-tight">EduVault</span>
+              <span className="font-bold text-slate-900 text-base tracking-tight whitespace-nowrap">EduVault</span>
             </Link>
 
-            <nav aria-label="Điều hướng chính" className="hidden md:flex items-center space-x-1">
+            <nav aria-label="Điều hướng chính" className="hidden lg:flex items-center space-x-1">
               {navLinks.map((link) => {
                 const Icon = link.icon;
                 const active = isActive(link.path);
@@ -96,7 +96,7 @@ export const Navbar: React.FC = () => {
                   <Link
                     key={link.path}
                     to={link.path}
-                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                    className={`inline-flex items-center space-x-1.5 px-2.5 xl:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-slate-900 text-white'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -111,7 +111,7 @@ export const Navbar: React.FC = () => {
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center space-x-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {user ? (
               <>
                 {/* Compact Web3 Status (preserved for authenticated Pure Web3 flows) */}
@@ -165,13 +165,13 @@ export const Navbar: React.FC = () => {
                 {/* Required "Xem đơn mượn" CTA for authenticated users */}
                 <Link
                   to={loansTarget}
-                  className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                  className={`inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                     isActive(loansTarget)
                       ? 'bg-indigo-600 text-white'
                       : 'bg-slate-900 text-white hover:bg-slate-800'
                   }`}
                 >
-                  <ClipboardList className="w-3.5 h-3.5" aria-hidden="true" />
+                  <ClipboardList className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>Xem đơn mượn</span>
                 </Link>
 
@@ -187,10 +187,13 @@ export const Navbar: React.FC = () => {
                   <span>{role === 'ADMIN' ? 'Đổi sang SV' : 'Đổi sang Admin'}</span>
                 </button>
 
-                {/* User Name + Logout */}
-                <div className="flex items-center space-x-2 pl-2.5 border-l border-slate-200 shrink-0">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-xs font-semibold text-slate-900 leading-tight whitespace-nowrap">
+                {/* User Name + Logout (hidden on <640px mobile to prevent crowding brand; shown in mobile drawer) */}
+                <div className="hidden sm:flex items-center space-x-2 pl-2.5 border-l border-slate-200 shrink-0">
+                  <div className="text-right">
+                    <p
+                      className="text-xs font-semibold text-slate-900 leading-tight truncate max-w-[130px] xl:max-w-[180px]"
+                      title={user.full_name}
+                    >
                       {user.full_name}
                     </p>
                     <span
@@ -232,35 +235,35 @@ export const Navbar: React.FC = () => {
               </div>
             )}
 
-            {/* Mobile Menu Toggle */}
+            {/* Mobile & Tablet Menu Toggle */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-nav-drawer"
               aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
-              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Drawer */}
+        {/* Mobile & Tablet Drawer */}
         {mobileMenuOpen && (
           <nav
             id="mobile-nav-drawer"
             aria-label="Điều hướng di động"
-            className="md:hidden py-3 border-t border-slate-200 space-y-1.5"
+            className="lg:hidden py-3 border-t border-slate-200 space-y-1.5"
           >
             {user && (
-              <div className="px-3 py-2 mb-1 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{user.full_name}</p>
-                  <p className="text-xs font-mono text-slate-600">{user.student_staff_id}</p>
+              <div className="px-3 py-2 mb-1 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{user.full_name}</p>
+                  <p className="text-xs font-mono text-slate-600 truncate">{user.student_staff_id}</p>
                 </div>
                 <span
-                  className={`text-xs px-2 py-0.5 rounded font-semibold uppercase border ${
+                  className={`text-xs px-2 py-0.5 rounded font-semibold uppercase border shrink-0 ${
                     role === 'ADMIN'
                       ? 'bg-slate-900 text-white border-slate-900'
                       : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -320,6 +323,14 @@ export const Navbar: React.FC = () => {
                 >
                   <RefreshCw className={`w-4 h-4 ${switching ? 'animate-spin' : ''}`} aria-hidden="true" />
                   <span>Chuyển sang {role === 'ADMIN' ? 'Sinh viên' : 'Quản lý kho'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="sm:hidden w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-sm font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer text-left"
+                >
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
+                  <span>Đăng xuất khỏi hệ thống</span>
                 </button>
               </div>
             ) : (
