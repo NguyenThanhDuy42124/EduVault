@@ -26,20 +26,18 @@ export const loanService = {
     return res.data;
   },
 
-  approveLoan: async (id: number): Promise<Loan> => {
-    const res = await api.post<Loan>(`/loans/${id}/approve`);
+  approveLoan: async (id: number, data: { tx_hash: string; notes?: string }): Promise<Loan> => {
+    const res = await api.post<Loan>(`/loans/${id}/approve`, data);
     return res.data;
   },
 
-  rejectLoan: async (id: number, adminNotes?: string): Promise<Loan> => {
-    const res = await api.post<Loan>(`/loans/${id}/reject`, null, {
-      params: adminNotes ? { admin_notes: adminNotes } : undefined,
-    });
+  rejectLoan: async (id: number, data: { tx_hash?: string; reason?: string }): Promise<Loan> => {
+    const res = await api.post<Loan>(`/loans/${id}/reject`, data);
     return res.data;
   },
 
-  handoverLoan: async (id: number): Promise<Loan> => {
-    const res = await api.post<Loan>(`/loans/${id}/handover`);
+  handoverLoan: async (id: number, data: { tx_hash: string }): Promise<Loan> => {
+    const res = await api.post<Loan>(`/loans/${id}/handover`, data);
     return res.data;
   },
 

@@ -5,6 +5,8 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
+import { useWeb3 } from '../context/Web3Context';
+import { TARGET_CHAIN_NAME } from '../contracts/contractConfig';
 import {
   CheckCircle,
   XCircle,
@@ -21,6 +23,8 @@ export const AdminLoansPage: React.FC = () => {
   const [tab, setTab] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'ACTIVE' | 'FINISHED'>('ALL');
   const [search, setSearch] = useState('');
 
+  const { isConnected, isCorrectNetwork, isAdmin, getContract, parseWeb3Error } = useWeb3();
+
   // Processing state
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -29,7 +33,6 @@ export const AdminLoansPage: React.FC = () => {
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [returnCondition, setReturnCondition] = useState<ReturnCondition>('GOOD');
-  const [manualPenalty, setManualPenalty] = useState<string>('');
   const [inspectionNotes, setInspectionNotes] = useState('');
 
   // Reject Modal State
@@ -54,7 +57,6 @@ export const AdminLoansPage: React.FC = () => {
 
   const filteredLoans = useMemo(() => {
     return loans.filter((loan) => {
-      // Tab filter
       let matchTab = true;
       if (tab === 'PENDING') matchTab = loan.status === 'PENDING';
       else if (tab === 'APPROVED') matchTab = loan.status === 'APPROVED';
@@ -62,7 +64,6 @@ export const AdminLoansPage: React.FC = () => {
       else if (tab === 'FINISHED')
         matchTab = ['RETURNED', 'DISPUTED', 'CANCELLED', 'REJECTED'].includes(loan.status);
 
-      // Search filter
       const matchSearch =
         loan.id.toString().includes(search) ||
         (loan.user?.full_name && loan.user.full_name.toLowerCase().includes(search.toLowerCase())) ||
@@ -76,16 +77,44 @@ export const AdminLoansPage: React.FC = () => {
     });
   }, [loans, tab, search]);
 
+  const checkWeb3AdminReady = () => {
+    if (!isConnected) {
+      setActionError('Vui lòng kết nối ví MetaMask của Admin trước khi thực hiện.');
+      return false;
+    }
+    if (!isCorrectNetwork) {
+      setActionError(`MetaMask đang sai mạng. Vui lòng chuyển sang ${TARGET_CHAIN_NAME}.`);
+      return false;
+    }
+    if (!isAdmin) {
+      setActionError('Ví MetaMask hiện tại chưa được cấp quyền ADMIN_ROLE on-chain.');
+      return false;
+    }
+    return true;
+  };
+
   // Actions
-  const handleApprove = async (loanId: number) => {
+  const handleApprove = async (loan: Loan) => {
+    if (!checkWeb3AdminReady()) return;
+    if (!loan.on_chain_loan_id) {
+      setActionError('Đơn mượn chưa có mã on-chain. Không thể duyệt.');
+      return;
+    }
+
     setActionLoading(true);
     setActionError(null);
     try {
-      await loanService.approveLoan(loanId);
+      const contract = await getContract(true);
+      if (!contract) throw new Error('Không thể kết nối Smart Contract.');
+
+      const tx = await contract.approveLoan(loan.on_chain_loan_id);
+      const receipt = await tx.wait();
+
+      await loanService.approveLoan(loan.id, { tx_hash: receipt.hash });
       await fetchLoans();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(axiosErr.response?.data?.detail || 'Không thể duyệt đơn mượn.');
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
     } finally {
       setActionLoading(false);
     }
@@ -105,26 +134,52 @@ export const AdminLoansPage: React.FC = () => {
     setActionLoading(true);
     setActionError(null);
     try {
-      await loanService.rejectLoan(selectedLoan.id, rejectReason);
+      let txHash: string | undefined = undefined;
+      if (selectedLoan.on_chain_loan_id && isConnected && isAdmin) {
+        const contract = await getContract(true);
+        if (contract) {
+          try {
+            const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id);
+            const receipt = await tx.wait();
+            txHash = receipt.hash;
+          } catch {
+            // If cancel on-chain reverts (e.g. not created yet), proceed to DB reject
+          }
+        }
+      }
+
+      await loanService.rejectLoan(selectedLoan.id, { tx_hash: txHash, reason: rejectReason });
       setRejectModalOpen(false);
       await fetchLoans();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(axiosErr.response?.data?.detail || 'Không thể từ chối đơn mượn.');
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleHandover = async (loanId: number) => {
+  const handleHandover = async (loan: Loan) => {
+    if (!checkWeb3AdminReady()) return;
+    if (!loan.on_chain_loan_id) {
+      setActionError('Đơn mượn chưa có mã on-chain. Không thể bàn giao.');
+      return;
+    }
+
     setActionLoading(true);
     setActionError(null);
     try {
-      await loanService.handoverLoan(loanId);
+      const contract = await getContract(true);
+      if (!contract) throw new Error('Không thể kết nối Smart Contract.');
+
+      const tx = await contract.confirmHandover(loan.on_chain_loan_id);
+      const receipt = await tx.wait();
+
+      await loanService.handoverLoan(loan.id, { tx_hash: receipt.hash });
       await fetchLoans();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(axiosErr.response?.data?.detail || 'Không thể xác nhận bàn giao.');
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
     } finally {
       setActionLoading(false);
     }
@@ -133,7 +188,6 @@ export const AdminLoansPage: React.FC = () => {
   const handleOpenReturnModal = (loan: Loan) => {
     setSelectedLoan(loan);
     setReturnCondition('GOOD');
-    setManualPenalty('');
     setInspectionNotes('');
     setActionError(null);
     setReturnModalOpen(true);
@@ -142,34 +196,31 @@ export const AdminLoansPage: React.FC = () => {
   const handleReturnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLoan) return;
+    if (!checkWeb3AdminReady()) return;
+    if (!selectedLoan.on_chain_loan_id) {
+      setActionError('Đơn mượn chưa có mã on-chain. Không thể nghiệm thu trả.');
+      return;
+    }
 
     setActionLoading(true);
     setActionError(null);
     try {
-      let penaltyNum: number | null = null;
-      if (returnCondition === 'GOOD') {
-        const trimmed = manualPenalty.trim();
-        if (trimmed !== '') {
-          const parsed = Number(trimmed);
-          if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
-            setActionError('Phần trăm phạt phải là số nguyên từ 0 đến 100.');
-            setActionLoading(false);
-            return;
-          }
-          if (selectedLoan.is_overdue && parsed === 0) {
-            setActionError(
-              'Đơn quá hạn không hỗ trợ nhập 0% thủ công (0 được hợp đồng dùng cho chế độ tự tính 10%/50%). Hãy để trống hoặc nhập 1–100%.'
-            );
-            setActionLoading(false);
-            return;
-          }
-          penaltyNum = parsed;
-        }
-      }
+      const conditionMap: Record<ReturnCondition, number> = {
+        GOOD: 0,
+        DAMAGED: 1,
+        LOST: 2,
+      };
+      const conditionNum = conditionMap[returnCondition] ?? 0;
+
+      const contract = await getContract(true);
+      if (!contract) throw new Error('Không thể kết nối Smart Contract.');
+
+      const tx = await contract.confirmReturn(selectedLoan.on_chain_loan_id, conditionNum);
+      const receipt = await tx.wait();
 
       await loanService.returnLoan(selectedLoan.id, {
+        tx_hash: receipt.hash,
         return_condition: returnCondition,
-        manual_penalty_percent: penaltyNum,
         admin_notes: inspectionNotes || undefined,
       });
 
@@ -177,7 +228,7 @@ export const AdminLoansPage: React.FC = () => {
       await fetchLoans();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(axiosErr.response?.data?.detail || 'Không thể xử lý trả máy.');
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
     } finally {
       setActionLoading(false);
     }
@@ -185,7 +236,8 @@ export const AdminLoansPage: React.FC = () => {
 
   const formatDate = (isoString?: string | null) => {
     if (!isoString) return '--';
-    return new Date(isoString).toLocaleString('vi-VN', {
+    const d = new Date(isoString);
+    return d.toLocaleString('vi-VN', {
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
@@ -196,68 +248,57 @@ export const AdminLoansPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Điều phối mượn trả thiết bị
+            Điều phối & Quản lý Mượn trả
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
-            Xét duyệt yêu cầu mượn, bàn giao và nghiệm thu hoàn trả.
+            Duyệt đơn, bàn giao và nghiệm thu thiết bị ký trực tiếp qua ví MetaMask Admin.
           </p>
         </div>
 
-        {/* Global Stats */}
-        <div className="flex items-center space-x-2 text-xs">
-          <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200/60 rounded-xl font-semibold">
-            Chờ duyệt: {loans.filter((l) => l.status === 'PENDING').length}
-          </span>
-          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-xl font-semibold">
-            Đang mượn: {loans.filter((l) => l.status === 'ACTIVE').length}
-          </span>
-        </div>
+        {/* Global Action Error Alert */}
+        {actionError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center space-x-2 text-xs text-rose-700">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+            <span>{actionError}</span>
+          </div>
+        )}
       </div>
 
-      {actionError && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center space-x-2 text-xs text-rose-700">
-          <ShieldAlert className="w-4 h-4 flex-shrink-0 text-rose-600" />
-          <span>{actionError}</span>
-        </div>
-      )}
-
-      {/* Filter and Tab Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
-        {/* Tab Buttons */}
-        <div className="flex items-center space-x-1 overflow-x-auto">
+      {/* Tabs & Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-1 border border-slate-200 p-1 rounded-xl bg-white shadow-2xs">
           {[
             { id: 'ALL', label: 'Tất cả đơn' },
             { id: 'PENDING', label: 'Chờ duyệt' },
             { id: 'APPROVED', label: 'Đã duyệt (Chờ lấy)' },
             { id: 'ACTIVE', label: 'Đang mượn' },
             { id: 'FINISHED', label: 'Đã hoàn tất / Khác' },
-          ].map((item) => (
+          ].map((t) => (
             <button
-              key={item.id}
-              onClick={() => setTab(item.id as typeof tab)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-colors ${
-                tab === item.id
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              key={t.id}
+              onClick={() => setTab(t.id as any)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                tab === t.id
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {item.label}
+              {t.label}
             </button>
           ))}
         </div>
 
-        {/* Search Input */}
-        <div className="relative w-full md:w-64">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="relative w-full sm:w-72">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo MSSV, tên SV, thiết bị..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs"
           />
         </div>
       </div>
@@ -268,13 +309,15 @@ export const AdminLoansPage: React.FC = () => {
       ) : filteredLoans.length === 0 ? (
         <EmptyState
           title="Không tìm thấy đơn mượn nào"
-          description="Hiện tại không có đơn mượn nào phù hợp với bộ lọc đã chọn."
+          description={
+            search ? 'Không có đơn nào khớp với từ khóa tìm kiếm.' : 'Chưa có dữ liệu đơn mượn nào ở mục này.'
+          }
         />
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-xs tracking-wider">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px] tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Đơn #</th>
                   <th className="py-3 px-4">Người mượn</th>
@@ -287,81 +330,55 @@ export const AdminLoansPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredLoans.map((loan) => {
-                  const depositVND = Number(loan.deposit_amount).toLocaleString('vi-VN');
-
                   return (
                     <tr key={loan.id} className="hover:bg-slate-50/50 transition-colors">
-                      {/* ID & Overdue */}
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
                         #{loan.id}
-                        {loan.is_overdue && (
-                          <span className="block text-xs text-rose-600 font-semibold tracking-wider uppercase mt-0.5">
-                            Quá hạn
-                          </span>
-                        )}
                       </td>
-
-                      {/* User */}
                       <td className="py-3.5 px-4">
-                        <span className="font-semibold text-slate-900 block truncate max-w-[160px]">
+                        <div className="font-semibold text-slate-900">
                           {loan.user?.full_name || 'N/A'}
-                        </span>
-                        <span className="text-xs text-slate-500 font-mono block">
-                          {loan.user?.student_staff_id}
-                        </span>
-                      </td>
-
-                      {/* Equipment */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-semibold text-slate-900 block truncate max-w-[180px]">
-                          {loan.equipment?.name || 'N/A'}
-                        </span>
-                        <span className="text-xs text-slate-500 font-mono block">
-                          {loan.equipment?.serial_number}
-                        </span>
-                      </td>
-
-                      {/* Dates */}
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <span className="text-slate-600 block">
-                            Nhận: {formatDate(loan.expected_handover_date)}
-                          </span>
-                          <span
-                            className={`block font-medium ${
-                              loan.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-900'
-                            }`}
-                          >
-                            Hạn: {formatDate(loan.due_date)}
-                          </span>
+                        </div>
+                        <div className="text-slate-500 font-mono text-[11px]">
+                          {loan.user?.student_staff_id || 'N/A'}
                         </div>
                       </td>
-
-                      {/* Deposit */}
                       <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-slate-900 block">
-                          {depositVND} đ
-                        </span>
-                        <span className="text-xs text-slate-500 block">
-                          {loan.deposit_status}
-                        </span>
+                        <div className="font-semibold text-slate-900 max-w-[200px] truncate" title={loan.equipment?.name}>
+                          {loan.equipment?.name || 'N/A'}
+                        </div>
+                        <div className="text-slate-500 font-mono text-[11px]">
+                          {loan.equipment?.serial_number || 'N/A'}
+                        </div>
                       </td>
-
-                      {/* Status */}
+                      <td className="py-3.5 px-4 space-y-0.5">
+                        <div className="text-slate-600 font-mono text-[11px]">
+                          Nhận: {formatDate(loan.expected_handover_date)}
+                        </div>
+                        <div className="font-mono text-[11px] font-semibold text-slate-900">
+                          Hạn: {formatDate(loan.due_date)}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold font-mono text-slate-900">
+                          {Number(loan.deposit_amount).toLocaleString('vi-VN')} đ
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          {loan.deposit_status}
+                        </div>
+                      </td>
                       <td className="py-3.5 px-4">
                         <StatusBadge status={loan.status} />
                       </td>
-
-                      {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
                           {loan.status === 'PENDING' && (
                             <>
                               <button
-                                onClick={() => handleApprove(loan.id)}
+                                onClick={() => handleApprove(loan)}
                                 disabled={actionLoading}
-                                className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
-                                title="Duyệt đơn và ký khóa Mutex trên Blockchain"
+                                className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-2xs disabled:opacity-50"
+                                title="Duyệt đơn và kích hoạt Mutex thiết bị qua MetaMask"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
                                 <span>Duyệt</span>
@@ -369,20 +386,21 @@ export const AdminLoansPage: React.FC = () => {
                               <button
                                 onClick={() => handleOpenReject(loan)}
                                 disabled={actionLoading}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="Từ chối đơn"
+                                className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-2xs disabled:opacity-50"
+                                title="Từ chối yêu cầu mượn"
                               >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Từ chối</span>
                               </button>
                             </>
                           )}
 
                           {loan.status === 'APPROVED' && (
                             <button
-                              onClick={() => handleHandover(loan.id)}
+                              onClick={() => handleHandover(loan)}
                               disabled={actionLoading}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
-                              title="Xác nhận bàn giao thiết bị thực tế cho sinh viên"
+                              className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-2xs disabled:opacity-50"
+                              title="Xác nhận bàn giao thiết bị thực tế qua MetaMask"
                             >
                               <PackageCheck className="w-3.5 h-3.5" />
                               <span>Bàn giao</span>
@@ -393,8 +411,8 @@ export const AdminLoansPage: React.FC = () => {
                             <button
                               onClick={() => handleOpenReturnModal(loan)}
                               disabled={actionLoading}
-                              className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
-                              title="Kiểm định thiết bị và xác nhận thu hồi cọc / hoàn cọc"
+                              className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-2xs disabled:opacity-50"
+                              title="Kiểm định thiết bị và xác nhận thu hồi cọc / hoàn cọc qua MetaMask"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                               <span>Nhận lại</span>
@@ -419,7 +437,7 @@ export const AdminLoansPage: React.FC = () => {
       <Modal
         isOpen={returnModalOpen}
         onClose={() => !actionLoading && setReturnModalOpen(false)}
-        title="Nghiệm thu hoàn trả & Quyết toán cọc"
+        title="Nghiệm thu hoàn trả & Quyết toán cọc on-chain"
         subtitle={
           selectedLoan
             ? `Đơn #${selectedLoan.id} - ${selectedLoan.equipment?.name} (${selectedLoan.user?.full_name})`
@@ -434,14 +452,13 @@ export const AdminLoansPage: React.FC = () => {
             </div>
           )}
 
-          {/* Condition radio cards */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Hiện trạng thiết bị sau kiểm tra
             </label>
             <div className="grid grid-cols-3 gap-2.5">
               {[
-                { id: 'GOOD', label: 'Nguyên vẹn', desc: 'Hoàn trả cọc 100% (nếu đúng hạn)' },
+                { id: 'GOOD', label: 'Nguyên vẹn', desc: 'Tự động tính phạt 0% đúng hạn hoặc 10%/50% nếu quá hạn' },
                 { id: 'DAMAGED', label: 'Hư hại', desc: 'Khấu trừ 100% cọc sửa chữa' },
                 { id: 'LOST', label: 'Thất lạc/Mất', desc: 'Thu hồi 100% + khóa tài khoản' },
               ].map((c) => (
@@ -464,29 +481,6 @@ export const AdminLoansPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Penalty Override (Only when GOOD) */}
-          {returnCondition === 'GOOD' && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Phạt phần trăm cọc tùy chỉnh (Để trống để Smart Contract tự động áp dụng)
-              </label>
-              <input
-                type="number"
-                min={selectedLoan?.is_overdue ? 1 : 0}
-                max={100}
-                value={manualPenalty}
-                onChange={(e) => setManualPenalty(e.target.value)}
-                placeholder={
-                  selectedLoan?.is_overdue
-                    ? 'Đang quá hạn: Để trống để tự tính (10% <=24h, 50% >24h) hoặc nhập 1-100'
-                    : 'Mặc định: Tự động (0% đúng hạn)'
-                }
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
-            </div>
-          )}
-
-          {/* Inspection Notes */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Ghi chú biên bản kiểm tra
@@ -500,12 +494,10 @@ export const AdminLoansPage: React.FC = () => {
             />
           </div>
 
-          {/* Smart Contract Automated Settlement Notice */}
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
             <Info className="w-4 h-4 flex-shrink-0 text-slate-700 mt-0.5" />
             <p>
-              Giao dịch <code>confirmReturn</code> sẽ được Backend Relayer ký và phát lên Smart Contract.
-              Khoản cọc mô phỏng sẽ chuyển trạng thái <strong>REFUNDED</strong> hoặc <strong>FORFEITED</strong> và thiết bị được giải phóng Mutex tự động.
+              Smart Contract sẽ tự động tính phạt và hoàn/khấu trừ cọc on-chain. Admin sẽ ký giao dịch trực tiếp qua popup MetaMask.
             </p>
           </div>
 
@@ -523,7 +515,7 @@ export const AdminLoansPage: React.FC = () => {
               disabled={actionLoading}
               className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
             >
-              {actionLoading ? 'Đang xác nhận on-chain...' : 'Xác nhận hoàn tất đơn'}
+              {actionLoading ? 'Đang ký MetaMask...' : 'Xác nhận ký on-chain'}
             </button>
           </div>
         </form>
@@ -539,7 +531,6 @@ export const AdminLoansPage: React.FC = () => {
             ? `Đơn #${selectedLoan.id} - ${selectedLoan.equipment?.name} (${selectedLoan.user?.full_name})`
             : ''
         }
-        maxWidth="md"
       >
         <form onSubmit={handleRejectSubmit} className="space-y-4">
           <div>
@@ -547,11 +538,11 @@ export const AdminLoansPage: React.FC = () => {
               Lý do từ chối
             </label>
             <textarea
-              rows={2}
+              rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               required
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
 
@@ -569,7 +560,7 @@ export const AdminLoansPage: React.FC = () => {
               disabled={actionLoading}
               className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-xl hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50"
             >
-              {actionLoading ? 'Đang từ chối...' : 'Xác nhận từ chối'}
+              {actionLoading ? 'Đang xử lý...' : 'Xác nhận từ chối'}
             </button>
           </div>
         </form>

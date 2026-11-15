@@ -33,6 +33,7 @@ export const EquipmentPage: React.FC = () => {
     account,
     isConnected,
     isCorrectNetwork,
+    isBorrower,
     connectWallet,
     switchNetwork,
     getContract,
@@ -223,6 +224,12 @@ export const EquipmentPage: React.FC = () => {
         }
         if (!account || !user.wallet_verified || !user.wallet_address || user.wallet_address.toLowerCase() !== account.toLowerCase()) {
           setActionError('Vui lòng bấm "Liên kết & Xác minh ví MetaMask" khớp với tài khoản hiện tại trước khi ký giao dịch on-chain.');
+          setSubmitting(false);
+          return;
+        }
+
+        if (!isBorrower) {
+          setActionError('Ví của bạn chưa được Admin cấp BORROWER_ROLE trên Smart Contract. Vui lòng liên hệ Admin để kích hoạt quyền mượn.');
           setSubmitting(false);
           return;
         }

@@ -9,12 +9,20 @@ import {
   IS_SEPOLIA,
 } from '../contracts/contractConfig';
 
+export const ADMIN_ROLE_HASH = ethers.keccak256(ethers.toUtf8Bytes('ADMIN_ROLE'));
+export const BORROWER_ROLE_HASH = ethers.keccak256(ethers.toUtf8Bytes('BORROWER_ROLE'));
+export const DEFAULT_ADMIN_ROLE_HASH = ethers.ZeroHash;
+
 interface Web3ContextType {
   account: string | null;
   chainId: number | null;
   balanceEth: string | null;
   isConnected: boolean;
   isCorrectNetwork: boolean;
+  isDeployer: boolean;
+  isAdmin: boolean;
+  isBorrower: boolean;
+  checkingRoles: boolean;
   web3Error: string | null;
   clearWeb3Error: () => void;
   parseWeb3Error: (err: unknown) => string;
@@ -23,6 +31,7 @@ interface Web3ContextType {
   switchNetwork: () => Promise<void>;
   signMessage: (message: string) => Promise<string>;
   verifyDeployedContract: () => Promise<{ ok: boolean; error?: string }>;
+  refreshRoles: () => Promise<void>;
   getSigner: () => Promise<ethers.Signer | null>;
   getContract: (withSigner?: boolean) => Promise<ethers.Contract | null>;
 }
@@ -49,13 +58,13 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
   const rawMsg = `${e?.shortMessage || ''} ${e?.reason || ''} ${e?.message || ''} ${e?.data?.message || ''}`.toLowerCase();
 
   if (rawCode === 4001 || rawCode === 'ACTION_REJECTED' || rawMsg.includes('user rejected')) {
-    return 'Bạn đã từ chối thao tác ký hoặc kết nối trên ví MetaMask.';
+    return 'Ban da tu choi thao tac ky hoac ket noi tren vi MetaMask.';
   }
   if (rawCode === -32002 || rawMsg.includes('already processing')) {
-    return 'MetaMask đang có một yêu cầu chờ xác nhận. Vui lòng mở popup MetaMask để hoàn tất.';
+    return 'MetaMask dang co mot yeu cau cho xac nhan. Vui long mo popup MetaMask.';
   }
   if (rawCode === 'INSUFFICIENT_FUNDS' || rawMsg.includes('insufficient funds')) {
-    return 'Số dư ETH trong ví không đủ để thanh toán phí gas giao dịch.';
+    return 'So du ETH trong vi khong du de thanh toan phi gas giao dich.';
   }
   if (
     rawCode === 'NETWORK_ERROR' ||
@@ -63,10 +72,10 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
     rawMsg.includes('econnrefused') ||
     rawMsg.includes('could not coalesce error')
   ) {
-    return `Không thể kết nối tới RPC mạng ${TARGET_CHAIN_NAME}. Vui lòng kiểm tra node hoặc thử lại.`;
+    return `Khong the ket noi toi RPC mang ${TARGET_CHAIN_NAME}. Vui long kiem tra node hoac thu lai.`;
   }
   if (e?.reason) {
-    return `Hợp đồng thông minh từ chối: ${e.reason}`;
+    return `Hop dong thong minh tu choi: ${e.reason}`;
   }
   if (e?.shortMessage) {
     return e.shortMessage;
@@ -74,7 +83,7 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
   if (e?.message && e.message.length < 180) {
     return e.message;
   }
-  return 'Thao tác Web3 trên MetaMask không thành công. Vui lòng thử lại.';
+  return 'Thao tac Web3 tren MetaMask khong thanh cong. Vui long thu lai.';
 };
 
 export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -82,6 +91,11 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   const [chainId, setChainId] = useState<number | null>(null);
   const [balanceEth, setBalanceEth] = useState<string | null>(null);
   const [web3Error, setWeb3Error] = useState<string | null>(null);
+
+  const [isDeployer, setIsDeployer] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isBorrower, setIsBorrower] = useState(false);
+  const [checkingRoles, setCheckingRoles] = useState(false);
 
   const accountRef = useRef<string | null>(null);
   accountRef.current = account;
@@ -103,9 +117,48 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const refreshRoles = useCallback(async () => {
+    const currentAddr = accountRef.current;
+    if (!window.ethereum || !currentAddr || !CONTRACT_ADDRESS) {
+      setIsDeployer(false);
+      setIsAdmin(false);
+      setIsBorrower(false);
+      return;
+    }
+    setCheckingRoles(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const [deployerRole, adminRole, borrowerRole] = await Promise.all([
+        contract.hasRole(DEFAULT_ADMIN_ROLE_HASH, currentAddr).catch(() => false),
+        contract.hasRole(ADMIN_ROLE_HASH, currentAddr).catch(() => false),
+        contract.hasRole(BORROWER_ROLE_HASH, currentAddr).catch(() => false),
+      ]);
+      setIsDeployer(Boolean(deployerRole));
+      setIsAdmin(Boolean(adminRole));
+      setIsBorrower(Boolean(borrowerRole));
+    } catch {
+      setIsDeployer(false);
+      setIsAdmin(false);
+      setIsBorrower(false);
+    } finally {
+      setCheckingRoles(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (account && isCorrectNetwork) {
+      refreshRoles();
+    } else {
+      setIsDeployer(false);
+      setIsAdmin(false);
+      setIsBorrower(false);
+    }
+  }, [account, isCorrectNetwork, refreshRoles]);
+
   const switchNetwork = useCallback(async () => {
     if (!window.ethereum) {
-      setWeb3Error('Không tìm thấy ví MetaMask.');
+      setWeb3Error('Khong tim thay vi MetaMask.');
       return;
     }
     setWeb3Error(null);
@@ -145,7 +198,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const connectWallet = useCallback(async () => {
     if (!window.ethereum) {
-      setWeb3Error('Không tìm thấy MetaMask! Vui lòng cài đặt tiện ích mở rộng MetaMask để tiếp tục.');
+      setWeb3Error('Khong tim thay MetaMask! Vui long cai dat tien ich mo rong MetaMask.');
       return;
     }
     setWeb3Error(null);
@@ -173,12 +226,15 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccount(null);
     setChainId(null);
     setBalanceEth(null);
+    setIsDeployer(false);
+    setIsAdmin(false);
+    setIsBorrower(false);
     setWeb3Error(null);
   }, []);
 
   const signMessage = useCallback(async (message: string): Promise<string> => {
     if (!window.ethereum) {
-      throw new Error('Không tìm thấy tiện ích mở rộng MetaMask.');
+      throw new Error('Khong tim thay tien ich mo rong MetaMask.');
     }
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
@@ -187,10 +243,10 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const verifyDeployedContract = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
     if (!window.ethereum) {
-      return { ok: false, error: 'Chưa cài đặt MetaMask.' };
+      return { ok: false, error: 'Chua cai dat MetaMask.' };
     }
     if (!CONTRACT_ADDRESS) {
-      return { ok: false, error: `Chưa cấu hình địa chỉ Smart Contract cho mạng ${TARGET_CHAIN_NAME}.` };
+      return { ok: false, error: `Chua cau hinh dia chi Smart Contract cho mang ${TARGET_CHAIN_NAME}.` };
     }
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -200,14 +256,14 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       if (liveChain !== TARGET_CHAIN_ID) {
         return {
           ok: false,
-          error: `MetaMask đang ở Chain ID ${liveChain}, vui lòng chuyển sang ${TARGET_CHAIN_NAME} (Chain ID ${TARGET_CHAIN_ID}).`,
+          error: `MetaMask dang o Chain ID ${liveChain}, vui long chuyen sang ${TARGET_CHAIN_NAME} (Chain ID ${TARGET_CHAIN_ID}).`,
         };
       }
       const code = await provider.getCode(CONTRACT_ADDRESS);
       if (!code || code === '0x') {
         return {
           ok: false,
-          error: `Chưa tìm thấy Smart Contract tại ${CONTRACT_ADDRESS} trên ${TARGET_CHAIN_NAME}. Vui lòng kiểm tra deploy/RPC.`,
+          error: `Chua tim thay Smart Contract tai ${CONTRACT_ADDRESS} tren ${TARGET_CHAIN_NAME}.`,
         };
       }
       return { ok: true };
@@ -232,7 +288,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
   }, []);
 
-  // Hydrate phiên MetaMask hiện có và đăng ký listener một lần duy nhất
   useEffect(() => {
     if (!window.ethereum) return;
     let mounted = true;
@@ -249,7 +304,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
           updateBalance(checksumAcc);
         }
       } catch {
-        // Bỏ qua lỗi khởi tạo thụ động
+        // Silent ignore
       }
     };
 
@@ -302,6 +357,10 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         balanceEth,
         isConnected,
         isCorrectNetwork,
+        isDeployer,
+        isAdmin,
+        isBorrower,
+        checkingRoles,
         web3Error,
         clearWeb3Error,
         parseWeb3Error: parseWeb3ErrorMessage,
@@ -310,6 +369,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         switchNetwork,
         signMessage,
         verifyDeployedContract,
+        refreshRoles,
         getSigner,
         getContract,
       }}

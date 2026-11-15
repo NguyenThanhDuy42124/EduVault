@@ -72,6 +72,12 @@ export const Navbar: React.FC = () => {
       roles: ['ADMIN'],
     },
     {
+      name: 'Phân quyền Web3',
+      path: '/admin/roles',
+      icon: ShieldCheck,
+      roles: ['ADMIN'],
+    },
+    {
       name: 'Kiểm toán Blockchain',
       path: '/audit',
       icon: Activity,

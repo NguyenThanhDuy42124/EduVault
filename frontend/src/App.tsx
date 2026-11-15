@@ -11,6 +11,7 @@ import { EquipmentPage } from './pages/EquipmentPage';
 import { MyLoansPage } from './pages/MyLoansPage';
 import { AdminLoansPage } from './pages/AdminLoansPage';
 import { AdminInventoryPage } from './pages/AdminInventoryPage';
+import { AdminRolesPage } from './pages/AdminRolesPage';
 import { AuditPage } from './pages/AuditPage';
 import { ShowcasePage } from './pages/ShowcasePage';
 
@@ -63,6 +64,17 @@ export const App: React.FC = () => {
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <Layout>
                   <AdminInventoryPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/roles"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <Layout>
+                  <AdminRolesPage />
                 </Layout>
               </ProtectedRoute>
             }

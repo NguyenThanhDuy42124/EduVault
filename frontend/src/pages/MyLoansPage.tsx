@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
+import { useWeb3 } from '../context/Web3Context';
 import {
   ClipboardList,
   AlertTriangle,
@@ -14,6 +15,8 @@ import {
 export const MyLoansPage: React.FC = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { isConnected, getContract, parseWeb3Error } = useWeb3();
 
   // Cancel Modal State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -52,12 +55,22 @@ export const MyLoansPage: React.FC = () => {
     setCancelling(true);
     setActionError(null);
     try {
-      await loanService.cancelLoan(selectedLoan.id, { reason: cancelReason });
+      let txHash: string | undefined = undefined;
+      if (selectedLoan.on_chain_loan_id && isConnected) {
+        const contract = await getContract(true);
+        if (contract) {
+          const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id);
+          const receipt = await tx.wait();
+          txHash = receipt.hash;
+        }
+      }
+
+      await loanService.cancelLoan(selectedLoan.id, { tx_hash: txHash, reason: cancelReason });
       setCancelModalOpen(false);
       fetchLoans();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setActionError(axiosErr.response?.data?.detail || 'Không thể hủy đơn mượn.');
+      setActionError(axiosErr.response?.data?.detail || parseWeb3Error(err));
     } finally {
       setCancelling(false);
     }

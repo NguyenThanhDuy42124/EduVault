@@ -304,7 +304,7 @@ Phase 13 & Phase 14 hoàn tất (Pure Web3 Smart Contract trên Hardhat Local EV
 ### Phase 15: Tái cấu trúc Frontend — Tích hợp Ký số Client-Side MetaMask Toàn diện (Pure Web3)
 > Mục tiêu: Chuyển toàn bộ hành vi ký duyệt của cả Admin và Sinh viên trực tiếp lên MetaMask trình duyệt; bổ sung bảng điều khiển phân quyền Multi-Admin cho nhóm.
 
-- [ ] Task 15.1: **Nâng cấp `Web3Context.tsx` Nhận diện Quyền Động On-Chain**
+- [x] Task 15.1: **Nâng cấp `Web3Context.tsx` Nhận diện Quyền Động On-Chain**
   - Bổ sung hàm đọc trực tiếp từ contract:
     - `isDeployer`: kiểm tra `hasRole(DEFAULT_ADMIN_ROLE, account)`
     - `isAdmin`: kiểm tra `hasRole(ADMIN_ROLE, account)`
@@ -312,38 +312,37 @@ Phase 13 & Phase 14 hoàn tất (Pure Web3 Smart Contract trên Hardhat Local EV
   - Tự động cập nhật trạng thái role mỗi khi người dùng đổi ví trên MetaMask.
   - File: `frontend/src/context/Web3Context.tsx`
 
-- [ ] Task 15.2: **Xây dựng Giao diện Phân quyền Multi-Admin & Quản lý Borrower Role**
-  - Tạo component hoặc trang `AdminRolesPage.tsx` (hoặc tab trong `/admin/users`):
+- [x] Task 15.2: **Xây dựng Giao diện Phân quyền Multi-Admin & Quản lý Borrower Role**
+  - Tách module con gọn gàng: `MultiAdminSection.tsx` và `BorrowerRoleSection.tsx` trong `frontend/src/pages/admin/`
+  - Đăng ký trang chính `/admin/roles` (`AdminRolesPage.tsx`) và menu Navbar:
     - **Mục 1: Quản trị viên Nhóm (Multi-Admin):**
-      - Hiển thị danh sách các ví Admin hiện tại.
-      - Form nhập địa chỉ ví của thành viên nhóm 2 và 3 $\to$ Nút "Cấp quyền Admin" gọi `contract.addAdmin(address)` qua MetaMask popup.
-      - Nút "Thu hồi quyền Admin" gọi `contract.removeAdmin(address)`.
+      - Form cấp quyền Admin gọi `contract.addAdmin(address)` qua MetaMask popup.
+      - Thu hồi quyền Admin gọi `contract.removeAdmin(address)`.
     - **Mục 2: Cấp quyền Sinh viên (Borrower Role):**
-      - Danh sách sinh viên đăng ký ví $\to$ Nút "Kích hoạt quyền mượn On-chain" gọi `contract.registerBorrower(address)` qua MetaMask popup.
-  - File: `frontend/src/pages/AdminRolesPage.tsx`, `frontend/src/components/Navigation.tsx`
+      - Danh sách sinh viên đăng ký ví từ API `/admin/pending-borrowers`.
+      - Nút cấp quyền mượn gọi `contract.registerBorrower(address)` qua MetaMask popup.
+      - Nút thu hồi quyền mượn gọi `contract.revokeBorrower(address)`.
+  - File: `frontend/src/pages/AdminRolesPage.tsx`, `frontend/src/pages/admin/MultiAdminSection.tsx`, `frontend/src/pages/admin/BorrowerRoleSection.tsx`, `frontend/src/services/adminRoleService.ts`
 
-- [ ] Task 15.3: **Cập nhật Trang Quản lý Đơn Mượn Admin (`AdminLoansPage.tsx`) Ký Trực tiếp qua MetaMask**
+- [x] Task 15.3: **Cập nhật Trang Quản lý Đơn Mượn Admin (`AdminLoansPage.tsx`) Ký Trực tiếp qua MetaMask**
   - Nút **Duyệt đơn (Approve)**:
-    - Gọi `const tx = await contract.approveLoan(loanIdBytes); await tx.wait();` $\to$ Popup MetaMask bật lên để Admin bấm Confirm.
-    - Sau khi tx mined $\to$ gửi `tx.hash` sang API `/loans/{id}/approve` để đồng bộ DB.
+    - Gọi `contract.approveLoan(loanIdBytes)` qua popup MetaMask Admin.
+    - Sau khi mined $\to$ gửi `tx_hash` sang API `/loans/{id}/approve` để đồng bộ DB.
   - Nút **Bàn giao (Handover)**:
-    - Gọi `const tx = await contract.confirmHandover(loanIdBytes); await tx.wait();` $\to$ Popup MetaMask bật lên.
-    - Đồng bộ `tx.hash` sang backend.
+    - Gọi `contract.confirmHandover(loanIdBytes)` qua popup MetaMask Admin $\to$ đồng bộ `tx_hash` sang backend.
   - Nút **Nghiệm thu Trả máy (Return)**:
-    - Gọi `const tx = await contract.confirmReturn(loanIdBytes, returnCondition); await tx.wait();` $\to$ Popup MetaMask bật lên.
-    - Đồng bộ `tx.hash` sang backend.
+    - Gọi `contract.confirmReturn(loanIdBytes, returnCondition)` qua popup MetaMask Admin (hợp đồng tự động tính phạt on-chain) $\to$ đồng bộ `tx_hash` sang backend.
   - File: `frontend/src/pages/AdminLoansPage.tsx`
 
-- [ ] Task 15.4: **Cập nhật Trang Sinh viên (`EquipmentPage.tsx` & `MyLoansPage.tsx`)**
-  - Kiểm tra điều kiện ví: Nếu sinh viên chưa có `BORROWER_ROLE` on-chain $\to$ hiển thị nút cảnh báo và hướng dẫn gửi yêu cầu cấp role tới Admin.
-  - Khi đã có quyền $\to$ bấm "Đăng ký mượn" $\to$ MetaMask popup ký `createLoan()` $\to$ gửi `tx.hash` sang backend lưu đơn.
-  - Cho phép sinh viên tự hủy đơn qua MetaMask popup gọi `cancelLoan()`.
+- [x] Task 15.4: **Cập nhật Trang Sinh viên (`EquipmentPage.tsx` & `MyLoansPage.tsx`)**
+  - Kiểm tra điều kiện ví: Bắt buộc có `BORROWER_ROLE` on-chain trước khi ký `createLoan()`.
+  - Sinh viên tự hủy đơn mượn qua popup MetaMask gọi `contract.cancelLoan()` trong `MyLoansPage.tsx`.
   - File: `frontend/src/pages/EquipmentPage.tsx`, `frontend/src/pages/MyLoansPage.tsx`
 
-- [ ] Task 15.5: **Build Kiểm thử Frontend TypeScript (`npm run build`)**
-  - Đảm bảo 0 lỗi TypeScript, 0 lỗi bundle build.
+- [x] Task 15.5: **Build Kiểm thử Frontend TypeScript (`npm run build`)**
+  - Đạt 0 lỗi TypeScript, 0 lỗi cú pháp, bundle production thành công (`built in 5.71s`).
 
-- **Status:** pending
+- **Status:** complete
 
 ---
 

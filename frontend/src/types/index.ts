@@ -116,12 +116,13 @@ export interface LoanCreateRequest {
 }
 
 export interface LoanReturnRequest {
+  tx_hash: string;
   return_condition: ReturnCondition;
-  manual_penalty_percent?: number | null;
   admin_notes?: string;
 }
 
 export interface LoanCancelRequest {
+  tx_hash?: string;
   reason?: string;
 }
 
