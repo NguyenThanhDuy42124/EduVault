@@ -7,22 +7,39 @@ from datetime import datetime, timedelta
 from backend.app.models.equipment import Equipment, EquipmentStatus
 
 
-def test_verify_loan_integrity_endpoint(client, borrower_token_headers, available_equipment):
+def _seed_pure_web3_loan(db_session, borrower_user, equipment, status_val=None, on_chain_id=None):
+    from datetime import datetime, timedelta
+    from backend.app.models.lending_request import DepositStatus, LendingRequest, LoanStatus
+
+    now = datetime.now().replace(microsecond=0)
+    loan = LendingRequest(
+        user_id=borrower_user.id,
+        equipment_id=equipment.id,
+        expected_handover_date=now + timedelta(days=1),
+        due_date=now + timedelta(days=5),
+        status=status_val or LoanStatus.PENDING,
+        deposit_amount=equipment.deposit_amount,
+        deposit_status=DepositStatus.PENDING,
+        on_chain_loan_id=on_chain_id,
+    )
+    db_session.add(loan)
+    db_session.commit()
+    db_session.refresh(loan)
+    return loan
+
+
+def test_verify_loan_integrity_endpoint(
+    client, borrower_token_headers, test_borrower_user, available_equipment, db_session
+):
     """
     Mục đích: Kiểm thử API verify độc lập tính toàn vẹn của một đơn mượn.
     """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
+    loan = _seed_pure_web3_loan(db_session, test_borrower_user, available_equipment)
 
-    verify_res = client.get(f"/api/v1/audit/loans/{loan_id}/verify", headers=borrower_token_headers)
+    verify_res = client.get(f"/api/v1/audit/loans/{loan.id}/verify", headers=borrower_token_headers)
     assert verify_res.status_code == 200
     data = verify_res.json()
-    assert data["loan_id"] == loan_id
+    assert data["loan_id"] == loan.id
     assert data["is_synced"] is False
     assert data["sync_status"] == "NOT_ON_CHAIN"
     assert "mysql_state" in data
@@ -66,30 +83,26 @@ def test_reconcile_offline_returns_503_safely(client, admin_token_headers):
 
 
 def test_verify_detects_missing_onchain_and_reconcile_never_overwrites_zero_struct(
-    client, admin_token_headers, borrower_token_headers, available_equipment, db_session, monkeypatch
+    client, admin_token_headers, borrower_token_headers, test_borrower_user, available_equipment, db_session, monkeypatch
 ):
     """
     Mục đích: Khi on_chain_loan_id chưa tồn tại trên Contract (request_time=0), verify phải báo MISSING_ON_CHAIN
              và reconcile tuyệt đối không ghi đè MySQL thành PENDING từ struct rỗng state=0.
     """
-    from backend.app.models.lending_request import LendingRequest, LoanStatus
+    from backend.app.models.lending_request import LoanStatus
     from backend.app.services import reconciliation_service as rs
     from backend.app.services.blockchain_service import ZERO_BYTES32_HEX
 
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=4)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
+    loan = _seed_pure_web3_loan(
+        db_session,
+        test_borrower_user,
+        available_equipment,
+        status_val=LoanStatus.APPROVED,
+        on_chain_id="0x" + "aa" * 32,
+    )
+    loan_id = loan.id
 
-    loan = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    loan.status = LoanStatus.APPROVED
-    loan.on_chain_loan_id = "0x" + "aa" * 32
-    db_session.commit()
-
-    monkeypatch.setattr(rs.blockchain_service, "ensure_ready", lambda require_admin=False: None)
+    monkeypatch.setattr(rs.blockchain_service, "ensure_ready", lambda: None)
     monkeypatch.setattr(rs.blockchain_service, "get_active_equipment_loan", lambda eq_id: ZERO_BYTES32_HEX)
     monkeypatch.setattr(rs.blockchain_service, "get_loan", lambda lid: {
         "loan_id": ZERO_BYTES32_HEX,
@@ -123,29 +136,30 @@ def test_verify_detects_all_field_and_mutex_mismatches_and_reconcile_repairs(
     client, admin_token_headers, borrower_token_headers, available_equipment, test_borrower_user, db_session, monkeypatch
 ):
     """
-    Mục đích: Verify phát hiện lệch student_id, borrower, deposit, timestamps và mutex DISPUTED;
+    Mục đích: Verify phát hiện lệch student_id, borrower (Pure Web3 phải khớp ví đã xác minh), deposit, timestamps và mutex DISPUTED;
              Reconcile sửa đúng trạng thái từ Smart Contract.
     """
-    from backend.app.models.lending_request import DepositStatus, LendingRequest, LoanStatus
+    from backend.app.models.lending_request import DepositStatus, LoanStatus
     from backend.app.services import reconciliation_service as rs
-    from backend.app.services.blockchain_service import ZERO_BYTES32_HEX
 
-    now = datetime.now().replace(microsecond=0)
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=4)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    chain_id_hex = "0x" + "bb" * 32
-    loan = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    loan.status = LoanStatus.DISPUTED
-    loan.deposit_status = DepositStatus.REFUNDED
-    loan.on_chain_loan_id = chain_id_hex
+    test_borrower_user.wallet_address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    test_borrower_user.wallet_verified = True
     db_session.commit()
 
-    monkeypatch.setattr(rs.blockchain_service, "ensure_ready", lambda require_admin=False: None)
+    now = datetime.now().replace(microsecond=0)
+    chain_id_hex = "0x" + "bb" * 32
+    loan = _seed_pure_web3_loan(
+        db_session,
+        test_borrower_user,
+        available_equipment,
+        status_val=LoanStatus.DISPUTED,
+        on_chain_id=chain_id_hex,
+    )
+    loan.deposit_status = DepositStatus.REFUNDED
+    db_session.commit()
+    loan_id = loan.id
+
+    monkeypatch.setattr(rs.blockchain_service, "ensure_ready", lambda: None)
     monkeypatch.setattr(rs.blockchain_service, "get_active_equipment_loan", lambda eq_id: chain_id_hex)
     monkeypatch.setattr(rs.blockchain_service, "get_loan", lambda lid: {
         "loan_id": chain_id_hex,

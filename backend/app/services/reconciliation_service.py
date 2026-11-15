@@ -83,7 +83,7 @@ def verify_loan_integrity(db: Session, loan_id: int) -> Dict[str, Any]:
         }
 
     try:
-        blockchain_service.ensure_ready(require_admin=False)
+        blockchain_service.ensure_ready()
     except Exception as exc:
         return {
             "loan_id": loan.id,
@@ -144,35 +144,14 @@ def verify_loan_integrity(db: Session, loan_id: int) -> Dict[str, Any]:
                 f"Lệch mã sinh viên: MySQL={loan.user.student_staff_id}, On-chain={blockchain_state.get('student_id')}"
             )
 
-        # 4. So khớp địa chỉ ví borrower (phân biệt client MetaMask vs Admin Relayer)
+        # 4. So khớp địa chỉ ví borrower (Pure Web3: phải khớp ví đã xác minh của người mượn)
         chain_borrower = str(blockchain_state.get("borrower", "")).lower()
-        admin_addr = (
-            blockchain_service.admin_account.address.lower()
-            if blockchain_service.admin_account
-            else ""
-        )
-        create_tx = db.query(BlockchainTransaction).filter(
-            BlockchainTransaction.request_id == loan.id,
-            BlockchainTransaction.action_type == TxActionType.CREATE_LOAN,
-            BlockchainTransaction.status == TxStatus.CONFIRMED,
-        ).first()
-
-        if create_tx and create_tx.from_address and create_tx.from_address.lower() != admin_addr:
-            if not (loan.user and loan.user.wallet_verified and loan.user.wallet_address):
-                mismatches.append("Giao dịch do ví client tạo nhưng tài khoản MySQL chưa xác minh ví hợp lệ.")
+        if loan.user:
+            if not (loan.user.wallet_verified and loan.user.wallet_address):
+                mismatches.append("Tài khoản người mượn trong MySQL chưa xác minh địa chỉ ví MetaMask.")
             elif chain_borrower != loan.user.wallet_address.lower():
                 mismatches.append(
                     f"Lệch ví borrower: MySQL={loan.user.wallet_address}, On-chain={blockchain_state.get('borrower')}"
-                )
-        elif loan.user:
-            allowed_borrowers = set()
-            if loan.user.wallet_verified and loan.user.wallet_address:
-                allowed_borrowers.add(loan.user.wallet_address.lower())
-            if admin_addr:
-                allowed_borrowers.add(admin_addr)
-            if allowed_borrowers and chain_borrower not in allowed_borrowers:
-                mismatches.append(
-                    f"Lệch ví borrower không hợp lệ trên chain: On-chain={blockchain_state.get('borrower')}"
                 )
 
         # 5. So khớp tiền cọc & trạng thái tiền cọc
@@ -246,7 +225,7 @@ def reconcile_database_with_blockchain(
     Mục đích: Quét và khôi phục đồng bộ từ nguồn chân lý Smart Contract sang MySQL một cách an toàn.
     """
     try:
-        blockchain_service.ensure_ready(require_admin=False)
+        blockchain_service.ensure_ready()
     except ConnectionError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -21,7 +21,7 @@ def _resolve_network_name(chain_id: int) -> str:
 
 def _is_contract_deployed() -> bool:
     try:
-        blockchain_service.ensure_ready(require_admin=False)
+        blockchain_service.ensure_ready()
         return True
     except Exception:
         return False
@@ -31,7 +31,7 @@ def _is_contract_deployed() -> bool:
     "/status",
     status_code=status.HTTP_200_OK,
     summary="Kiểm tra trạng thái kết nối Blockchain EVM",
-    description="Truy vấn thông số mạng EVM hiện hành: RPC URL, Chain ID, Contract Address, Block Number và ví Relayer."
+    description="Truy vấn thông số mạng EVM hiện hành ở chế độ Pure Web3 Read-Only: RPC URL, Chain ID, Contract Address và Block Number."
 )
 def get_blockchain_status() -> Dict[str, Any]:
     """
@@ -40,10 +40,10 @@ def get_blockchain_status() -> Dict[str, Any]:
     is_online: bool = blockchain_service.is_connected()
     live_chain_id = blockchain_service.get_chain_id()
     effective_chain_id = live_chain_id or settings.CHAIN_ID
-    admin_addr = blockchain_service.admin_account.address if blockchain_service.admin_account else None
-    balance_eth = str(blockchain_service.get_admin_balance())
     return {
         "status": "online" if is_online else "offline",
+        "mode": "pure-web3-verifier",
+        "has_signer": False,
         "is_connected": is_online,
         "network": _resolve_network_name(int(effective_chain_id)),
         "rpc_url": settings.BLOCKCHAIN_RPC_URL,
@@ -52,10 +52,10 @@ def get_blockchain_status() -> Dict[str, Any]:
         "contract_address": blockchain_service.contract_address,
         "contract_deployed": _is_contract_deployed(),
         "latest_block": blockchain_service.get_block_number(),
-        "admin_wallet_address": admin_addr,
-        "admin_balance_eth": balance_eth,
-        "relayer_address": admin_addr,
-        "relayer_balance_eth": balance_eth,
+        "admin_wallet_address": None,
+        "admin_balance_eth": "0.00",
+        "relayer_address": None,
+        "relayer_balance_eth": "0.00",
     }
 
 
@@ -63,7 +63,7 @@ def get_blockchain_status() -> Dict[str, Any]:
     "/contract-info",
     status_code=status.HTTP_200_OK,
     summary="Lấy chi tiết thông tin Smart Contract",
-    description="Trả về địa chỉ contract, tên contract, chainId và thông tin ví Relayer trên Smart Contract."
+    description="Trả về địa chỉ contract, tên contract, chainId và trạng thái triển khai (Pure Web3 Read-Only)."
 )
 def get_contract_info() -> Dict[str, Any]:
     """
@@ -72,18 +72,18 @@ def get_contract_info() -> Dict[str, Any]:
     is_online: bool = blockchain_service.is_connected()
     live_chain_id = blockchain_service.get_chain_id()
     effective_chain_id = live_chain_id or settings.CHAIN_ID
-    admin_addr = blockchain_service.admin_account.address if blockchain_service.admin_account else None
-    balance_eth = str(blockchain_service.get_admin_balance())
     return {
         "contract_name": "EquipmentLending",
+        "mode": "pure-web3-verifier",
+        "has_signer": False,
         "contract_address": blockchain_service.contract_address,
         "chain_id": effective_chain_id,
         "network": _resolve_network_name(int(effective_chain_id)),
-        "admin_wallet_address": admin_addr,
-        "owner_address": admin_addr,
-        "relayer_address": admin_addr,
-        "relayer_balance_eth": balance_eth,
-        "admin_balance_eth": balance_eth,
+        "admin_wallet_address": None,
+        "owner_address": None,
+        "relayer_address": None,
+        "relayer_balance_eth": "0.00",
+        "admin_balance_eth": "0.00",
         "latest_block": blockchain_service.get_block_number(),
         "contract_deployed": _is_contract_deployed(),
         "is_connected": is_online,

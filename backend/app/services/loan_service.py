@@ -3,7 +3,7 @@ Module: backend.app.services.loan_service
 Mục đích: Xử lý toàn bộ logic nghiệp vụ vòng đời mượn trả thiết bị học tập, tích hợp MySQL và Blockchain EVM.
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,9 +12,15 @@ from backend.app.models.blockchain_tx import BlockchainTransaction, TxActionType
 from backend.app.models.equipment import Equipment, EquipmentStatus
 from backend.app.models.lending_request import DepositStatus, LendingRequest, LoanStatus, ReturnCondition
 from backend.app.models.user import User, UserRole
-from backend.app.schemas.loan import LoanCancelRequest, LoanCreateRequest, LoanReturnRequest
+from backend.app.schemas.loan import (
+    LoanApproveRequest,
+    LoanCancelRequest,
+    LoanCreateRequest,
+    LoanHandoverRequest,
+    LoanRejectRequest,
+    LoanReturnRequest,
+)
 from backend.app.services.blockchain_service import (
-    ZERO_BYTES32_HEX,
     blockchain_service,
     normalize_hex_bytes32,
 )
@@ -71,12 +77,12 @@ def _upsert_tx_record(
     return tx_row
 
 
-def _ensure_chain_ready_or_http(require_admin: bool = True) -> None:
+def _ensure_chain_ready_or_http() -> None:
     """
     Mục đích: Kiểm tra kết nối node RPC, đúng Chain ID và Contract bytecode; ném HTTP 503 nếu offline.
     """
     try:
-        blockchain_service.ensure_ready(require_admin=require_admin)
+        blockchain_service.ensure_ready()
     except ConnectionError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -89,93 +95,133 @@ def _ensure_chain_ready_or_http(require_admin: bool = True) -> None:
         ) from exc
 
 
-def _send_durable_tx(
+def _require_verified_wallet(user: User) -> str:
+    """
+    Mục đích: Đảm bảo người thực hiện đã liên kết và xác minh quyền sở hữu ví MetaMask (EIP-191).
+    """
+    if not user.wallet_address or not user.wallet_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tài khoản chưa liên kết và xác minh quyền sở hữu ví MetaMask (EIP-191). Vui lòng xác minh ví trước."
+        )
+    return user.wallet_address
+
+
+def _normalize_hash_or_400(raw_value: Optional[str], field_name: str = "tx_hash") -> str:
+    """
+    Mục đích: Chuẩn hóa chuỗi hash 32 bytes (tx_hash hoặc loanId) và ném HTTP 400 nếu thiếu hoặc sai định dạng.
+    """
+    if not raw_value or not raw_value.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thiếu mã `{field_name}` từ giao dịch MetaMask."
+        )
+    try:
+        return normalize_hex_bytes32(raw_value, 32)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Định dạng `{field_name}` không hợp lệ: {exc}"
+        ) from exc
+
+
+def _check_tx_idempotency_or_replay(
     db: Session,
-    request_id: int,
+    loan_id: int,
     action_type: TxActionType,
-    sender_fn: Any,
-    **kwargs: Any,
+    norm_tx_hash: str,
+) -> bool:
+    """
+    Mục đích: Kiểm tra chống replay tx_hash hoặc phát hiện retry idempotent cho cùng đơn và hành động.
+    Trả về:
+        - True nếu giao dịch này đã CONFIRMED cho đúng `(loan_id, action_type)`.
+        - False nếu tx_hash chưa từng được ghi nhận.
+    Lỗi:
+        - HTTPException(409 Conflict): Nếu tx_hash đã được dùng cho đơn hoặc bước xử lý khác.
+    """
+    existing = db.query(BlockchainTransaction).filter(
+        BlockchainTransaction.tx_hash == norm_tx_hash
+    ).first()
+    if existing is None:
+        return False
+
+    if (
+        existing.request_id == loan_id
+        and existing.action_type == action_type
+        and existing.status == TxStatus.CONFIRMED
+    ):
+        return True
+
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Transaction hash đã được sử dụng cho một thao tác hoặc đơn mượn khác (chống replay)."
+    )
+
+
+def _verify_and_record_lifecycle_tx(
+    db: Session,
+    loan: LendingRequest,
+    actor: User,
+    raw_tx_hash: Optional[str],
+    action_type: TxActionType,
+    expected_event: str,
+    expected_args: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Mục đích: Thực thi giao dịch on-chain kèm durable outbox (ghi PENDING ngay khi broadcast, cập nhật CONFIRMED/FAILED).
+    Mục đích: Xác thực biên lai MetaMask cho các bước vòng đời đơn mượn và lưu bản ghi `CONFIRMED`.
     """
-    def _on_broadcast(tx_hash: str, from_addr: str, to_addr: Optional[str]) -> None:
-        _upsert_tx_record(
-            db=db,
-            request_id=request_id,
-            tx_hash=tx_hash,
-            action_type=action_type,
-            from_address=from_addr,
-            to_address=to_addr or (blockchain_service.contract_address or "contract"),
-            tx_status=TxStatus.PENDING,
+    if not loan.on_chain_loan_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn mượn chưa có mã định danh `on_chain_loan_id` trên Smart Contract."
         )
-        db.commit()
 
-    def _on_failed(tx_hash: str, block_number: Optional[int], gas_used: Optional[int], reason: str) -> None:
-        _upsert_tx_record(
-            db=db,
-            request_id=request_id,
-            tx_hash=tx_hash,
-            action_type=action_type,
-            from_address=blockchain_service.admin_account.address if blockchain_service.admin_account else "relayer",
-            to_address=blockchain_service.contract_address or "contract",
-            tx_status=TxStatus.FAILED,
-            block_number=block_number,
-            gas_used=gas_used,
-            error_message=reason,
-        )
-        db.commit()
+    sender_wallet = _require_verified_wallet(actor)
+    norm_tx_hash = _normalize_hash_or_400(raw_tx_hash, "tx_hash")
+    _check_tx_idempotency_or_replay(db, loan.id, action_type, norm_tx_hash)
+    _ensure_chain_ready_or_http()
 
     try:
-        tx_result = sender_fn(on_broadcast=_on_broadcast, on_failed=_on_failed, **kwargs)
+        verified = blockchain_service.verify_transaction_receipt(
+            tx_hash=norm_tx_hash,
+            expected_event=expected_event,
+            expected_loan_id=loan.on_chain_loan_id,
+            expected_sender=sender_wallet,
+            expected_args=expected_args,
+        )
     except ConnectionError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Mất kết nối node Blockchain khi xử lý {action_type.value}: {exc}"
-        ) from exc
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Giao dịch Blockchain {action_type.value} thất bại: {exc}"
+            detail=f"Mất kết nối node Blockchain khi xác thực {action_type.value}: {exc}"
         ) from exc
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Biên lai giao dịch {action_type.value} không hợp lệ: {exc}"
         ) from exc
 
     _upsert_tx_record(
         db=db,
-        request_id=request_id,
-        tx_hash=tx_result["tx_hash"],
+        request_id=loan.id,
+        tx_hash=verified["tx_hash"],
         action_type=action_type,
-        from_address=tx_result["from_address"],
-        to_address=tx_result["to_address"],
+        from_address=verified["from_address"],
+        to_address=verified["to_address"],
         tx_status=TxStatus.CONFIRMED,
-        block_number=tx_result.get("block_number"),
-        gas_used=tx_result.get("gas_used"),
+        block_number=verified.get("block_number"),
+        gas_used=verified.get("gas_used"),
     )
-    return tx_result
+    return verified
 
 
-def _sync_confirmed_pending_txs(db: Session, loan_id: int, action_type: TxActionType) -> None:
-    """
-    Mục đích: Khi phục hồi sau lỗi/crash và xác nhận bước đó đã xong on-chain, đối chiếu biên lai PENDING nếu có.
-    """
-    pending_rows = db.query(BlockchainTransaction).filter(
-        BlockchainTransaction.request_id == loan_id,
-        BlockchainTransaction.action_type == action_type,
-        BlockchainTransaction.status == TxStatus.PENDING,
-    ).all()
-    for row in pending_rows:
-        try:
-            receipt = blockchain_service.web3.eth.get_transaction_receipt(row.tx_hash)
-            if receipt and getattr(receipt, "status", 0) == 1:
-                row.block_number = getattr(receipt, "block_number", getattr(receipt, "blockNumber", None))
-                row.gas_used = getattr(receipt, "gas_used", getattr(receipt, "gasUsed", None))
-                row.status = TxStatus.CONFIRMED
-        except Exception:
-            continue
+def _get_onchain_loan_or_503(on_chain_loan_id: str) -> Dict[str, Any]:
+    try:
+        return blockchain_service.get_loan(normalize_hex_bytes32(on_chain_loan_id, 32))
+    except ConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Mất kết nối node Blockchain khi đọc trạng thái đơn: {exc}"
+        ) from exc
 
 
 def compute_is_overdue(loan: LendingRequest) -> bool:
@@ -260,73 +306,70 @@ def create_loan_request(
             detail="Thời gian hạn chót trả máy phải sau thời gian dự kiến nhận máy."
         )
 
-    has_chain_id = bool(loan_in.on_chain_loan_id and loan_in.on_chain_loan_id.strip())
-    has_tx_hash = bool(loan_in.client_tx_hash and loan_in.client_tx_hash.strip())
-    if has_chain_id != has_tx_hash:
+    raw_tx = loan_in.tx_hash.strip() if loan_in.tx_hash and loan_in.tx_hash.strip() else None
+    raw_client_tx = (
+        loan_in.client_tx_hash.strip() if loan_in.client_tx_hash and loan_in.client_tx_hash.strip() else None
+    )
+    effective_tx = raw_tx or raw_client_tx
+    if not (loan_in.on_chain_loan_id and loan_in.on_chain_loan_id.strip()) or not effective_tx:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phải cung cấp đồng thời cả `on_chain_loan_id` và `client_tx_hash` khi đăng ký đơn đã ký MetaMask."
+            detail="Kiến trúc Pure Web3 yêu cầu cung cấp đồng thời `on_chain_loan_id` và `tx_hash` đã ký `createLoan` qua MetaMask."
         )
 
-    norm_loan_id: Optional[str] = None
-    norm_tx_hash: Optional[str] = None
-    verified_tx_info: Optional[Dict[str, Any]] = None
-
-    if has_chain_id and has_tx_hash:
-        try:
-            norm_loan_id = normalize_hex_bytes32(loan_in.on_chain_loan_id, 32)
-            norm_tx_hash = normalize_hex_bytes32(loan_in.client_tx_hash, 32)
-        except ValueError as exc:
+    norm_loan_id = _normalize_hash_or_400(loan_in.on_chain_loan_id, "on_chain_loan_id")
+    norm_tx_hash = _normalize_hash_or_400(effective_tx, "tx_hash")
+    if raw_tx and raw_client_tx:
+        norm_client_tx = _normalize_hash_or_400(raw_client_tx, "client_tx_hash")
+        norm_primary_tx = _normalize_hash_or_400(raw_tx, "tx_hash")
+        if norm_client_tx != norm_primary_tx:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Định dạng mã hash Blockchain không hợp lệ: {exc}"
-            ) from exc
-
-        # Kiểm tra replay / idempotent retry theo on_chain_loan_id
-        existing_by_chain = db.query(LendingRequest).filter(
-            LendingRequest.on_chain_loan_id == norm_loan_id
-        ).first()
-        if existing_by_chain is not None:
-            if existing_by_chain.user_id != borrower_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Mã on_chain_loan_id đã được sử dụng bởi tài khoản khác (chống replay)."
-                )
-            matching_tx = db.query(BlockchainTransaction).filter(
-                BlockchainTransaction.tx_hash == norm_tx_hash,
-                BlockchainTransaction.request_id == existing_by_chain.id,
-            ).first()
-            same_payload = (
-                matching_tx is not None
-                and existing_by_chain.equipment_id == loan_in.equipment_id
-                and int(normalize_naive_dt(existing_by_chain.expected_handover_date).timestamp())
-                == int(expected_handover_dt.timestamp())
-                and int(normalize_naive_dt(existing_by_chain.due_date).timestamp())
-                == int(due_dt.timestamp())
+                detail="Giá trị `tx_hash` và `client_tx_hash` không khớp nhau."
             )
-            if same_payload:
-                return existing_by_chain
+
+    # Kiểm tra replay / idempotent retry theo on_chain_loan_id
+    existing_by_chain = db.query(LendingRequest).filter(
+        LendingRequest.on_chain_loan_id == norm_loan_id
+    ).first()
+    if existing_by_chain is not None:
+        if existing_by_chain.user_id != borrower_user.id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Mã on_chain_loan_id đã được gắn với một đơn mượn khác."
+                detail="Mã on_chain_loan_id đã được sử dụng bởi tài khoản khác (chống replay)."
             )
-
-        # Kiểm tra replay theo client_tx_hash
-        existing_tx = db.query(BlockchainTransaction).filter(
-            BlockchainTransaction.tx_hash == norm_tx_hash
+        matching_tx = db.query(BlockchainTransaction).filter(
+            BlockchainTransaction.tx_hash == norm_tx_hash,
+            BlockchainTransaction.request_id == existing_by_chain.id,
+            BlockchainTransaction.action_type == TxActionType.CREATE_LOAN,
         ).first()
-        if existing_tx is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Transaction hash (client_tx_hash) đã được sử dụng trước đó (chống replay)."
-            )
+        same_payload = (
+            matching_tx is not None
+            and existing_by_chain.equipment_id == loan_in.equipment_id
+            and int(normalize_naive_dt(existing_by_chain.expected_handover_date).timestamp())
+            == int(expected_handover_dt.timestamp())
+            and int(normalize_naive_dt(existing_by_chain.due_date).timestamp())
+            == int(due_dt.timestamp())
+        )
+        if same_payload:
+            return existing_by_chain
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Mã on_chain_loan_id đã được gắn với một đơn mượn khác."
+        )
 
-        # Bắt buộc ví MetaMask đã được xác minh chữ ký EIP-191 và thuộc chính người dùng
-        if not borrower_user.wallet_address or not borrower_user.wallet_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tài khoản chưa liên kết và xác minh quyền sở hữu ví MetaMask (EIP-191). Vui lòng xác minh ví trước."
-            )
+    # Kiểm tra replay theo tx_hash
+    existing_tx = db.query(BlockchainTransaction).filter(
+        BlockchainTransaction.tx_hash == norm_tx_hash
+    ).first()
+    if existing_tx is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Transaction hash (tx_hash) đã được sử dụng trước đó (chống replay)."
+        )
+
+    # Bắt buộc ví MetaMask đã được xác minh chữ ký EIP-191 và thuộc chính người dùng
+    borrower_wallet = _require_verified_wallet(borrower_user)
 
     # 1. Kiểm tra tồn tại và khả dụng của thiết bị
     equipment = get_equipment_by_id(db, loan_in.equipment_id)
@@ -356,30 +399,29 @@ def create_loan_request(
         )
 
     # 3. Xác thực biên lai giao dịch MetaMask on-chain trước khi lưu đơn
-    if norm_loan_id and norm_tx_hash:
-        _ensure_chain_ready_or_http(require_admin=False)
-        try:
-            verified_tx_info = blockchain_service.verify_create_loan_tx(
-                tx_hash=norm_tx_hash,
-                expected_loan_id=norm_loan_id,
-                expected_equipment_id=equipment.id,
-                expected_student_id=borrower_user.student_staff_id,
-                expected_borrower_address=borrower_user.wallet_address,
-                expected_handover_ts=int(expected_handover_dt.timestamp()),
-                expected_due_ts=int(due_dt.timestamp()),
-                expected_deposit=int(equipment.deposit_amount),
-                expected_sender_address=borrower_user.wallet_address,
-            )
-        except ConnectionError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Không thể xác thực giao dịch MetaMask do mất kết nối Blockchain: {exc}"
-            ) from exc
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Biên lai giao dịch MetaMask không hợp lệ: {exc}"
-            ) from exc
+    _ensure_chain_ready_or_http()
+    try:
+        verified_tx_info = blockchain_service.verify_create_loan_tx(
+            tx_hash=norm_tx_hash,
+            expected_loan_id=norm_loan_id,
+            expected_equipment_id=equipment.id,
+            expected_student_id=borrower_user.student_staff_id,
+            expected_borrower_address=borrower_wallet,
+            expected_handover_ts=int(expected_handover_dt.timestamp()),
+            expected_due_ts=int(due_dt.timestamp()),
+            expected_deposit=int(equipment.deposit_amount),
+            expected_sender_address=borrower_wallet,
+        )
+    except ConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Không thể xác thực giao dịch MetaMask do mất kết nối Blockchain: {exc}"
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Biên lai giao dịch MetaMask không hợp lệ: {exc}"
+        ) from exc
 
     # 4. Tạo bản ghi yêu cầu mượn
     new_loan = LendingRequest(
@@ -432,25 +474,10 @@ def approve_loan_request(
     db: Session,
     admin_user: User,
     loan_id: int,
-    notes: Optional[str] = None
+    approve_in: LoanApproveRequest,
 ) -> LendingRequest:
     """
-    Mục đích: Admin duyệt đơn mượn, áp dụng Pessimistic Lock khóa thiết bị sang RESERVED và đẩy giao dịch lên Smart Contract.
-    Tham số:
-        - db (Session): Phiên làm việc CSDL.
-        - admin_user (User): Quản trị viên duyệt đơn.
-        - loan_id (int): Khóa chính ID đơn mượn cần duyệt.
-        - notes (Optional[str]): Ghi chú bổ sung từ quản trị viên.
-    Trả về:
-        - LendingRequest: Bản ghi đơn mượn đã chuyển trạng thái APPROVED kèm on_chain_loan_id.
-    Lỗi:
-        - HTTPException(404 Not Found): Đơn mượn không tồn tại.
-        - HTTPException(400 Bad Request): Đơn mượn không ở trạng thái PENDING.
-        - HTTPException(409 Conflict): Thiết bị bị tranh chấp hoặc đã bị người khác đặt mượn.
-    Tác dụng phụ:
-        - Cập nhật `equipment.status = RESERVED`.
-        - Gửi giao dịch `createLoan` & `approveLoan` on-chain.
-        - Ghi `blockchain_transactions` và `audit_logs`.
+    Mục đích: Admin xác thực biên lai MetaMask `approveLoan`, khóa thiết bị sang RESERVED và chốt APPROVED trong MySQL.
     """
     loan = get_loan_by_id(db, loan_id)
     if loan is None:
@@ -459,13 +486,18 @@ def approve_loan_request(
             detail=f"Không tìm thấy đơn mượn với ID #{loan_id}."
         )
 
+    norm_tx = _normalize_hash_or_400(approve_in.tx_hash, "tx_hash")
+    if _check_tx_idempotency_or_replay(db, loan.id, TxActionType.APPROVE_LOAN, norm_tx):
+        if loan.status == LoanStatus.APPROVED:
+            return loan
+
     if loan.status != LoanStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Chỉ có thể duyệt đơn ở trạng thái PENDING (Hiện tại: {loan.status.value})."
         )
 
-    # 1. Khóa kiểm tra thiết bị khả dụng & đảm bảo node Blockchain sẵn sàng (fail-closed nếu offline)
+    # 1. Khóa kiểm tra thiết bị khả dụng
     equipment = get_equipment_for_update(db, loan.equipment_id)
     other_active_loan = db.query(LendingRequest).filter(
         LendingRequest.equipment_id == loan.equipment_id,
@@ -478,104 +510,30 @@ def approve_loan_request(
             detail=f"Thiết bị #{loan.equipment_id} đang được giữ bởi đơn mượn #{other_active_loan.id}."
         )
 
-    _ensure_chain_ready_or_http(require_admin=True)
-
-    # 2. Xác định On-chain Loan ID và checkpoint bền vững trước khi phát sóng tx
-    had_preset_chain_id = bool(loan.on_chain_loan_id)
-    if loan.on_chain_loan_id:
-        loan_id_hex = normalize_hex_bytes32(loan.on_chain_loan_id, 32)
-        loan_id_bytes = bytes.fromhex(loan_id_hex[2:])
-    else:
-        req_timestamp: int = int(loan.request_date.timestamp()) if loan.request_date else int(datetime.now().timestamp())
-        loan_id_bytes, loan_id_hex = blockchain_service.generate_loan_id(
-            user_id=loan.user_id,
-            equipment_id=loan.equipment_id,
-            timestamp=req_timestamp
-        )
-        loan.on_chain_loan_id = loan_id_hex
-        db.commit()
-        db.refresh(loan)
-
-    # 3. Kiểm tra trạng thái thực tế trên Smart Contract trước khi ký giao dịch (hỗ trợ resume khi retry)
-    try:
-        on_chain_record = blockchain_service.get_loan(loan_id_hex)
-    except ConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Mất kết nối node Blockchain khi đọc trạng thái đơn: {exc}"
-        ) from exc
-
-    on_chain_exists = (
-        on_chain_record.get("loan_id") == loan_id_hex
-        and int(on_chain_record.get("request_time", 0)) > 0
+    # 2. Xác thực biên lai MetaMask `approveLoan` của Admin và đối chiếu trạng thái Smart Contract
+    verified = _verify_and_record_lifecycle_tx(
+        db=db,
+        loan=loan,
+        actor=admin_user,
+        raw_tx_hash=norm_tx,
+        action_type=TxActionType.APPROVE_LOAN,
+        expected_event="LoanApproved",
+        expected_args={"equipmentId": loan.equipment_id},
     )
-
-    if had_preset_chain_id and not on_chain_exists:
-        # Chỉ báo lỗi nếu người dùng đã nộp tx MetaMask; còn nếu là checkpoint từ lần relayer fail trước đó thì tạo tiếp
-        client_created_tx = db.query(BlockchainTransaction).filter(
-            BlockchainTransaction.request_id == loan.id,
-            BlockchainTransaction.action_type == TxActionType.CREATE_LOAN,
-            BlockchainTransaction.status == TxStatus.CONFIRMED,
-        ).first()
-        if client_created_tx is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Đơn có giao dịch MetaMask nhưng chưa tồn tại trên Smart Contract (vui lòng kiểm tra đúng mạng)."
-            )
-
-    if not on_chain_exists:
-        borrower: User = loan.user
-        borrower_address: str = (
-            borrower.wallet_address
-            if (borrower.wallet_address and borrower.wallet_verified)
-            else blockchain_service.admin_account.address
-        )
-        deposit_wei: int = int(loan.deposit_amount)
-        _send_durable_tx(
-            db=db,
-            request_id=loan.id,
-            action_type=TxActionType.CREATE_LOAN,
-            sender_fn=blockchain_service.create_loan,
-            loan_id=loan_id_bytes,
-            equipment_id=loan.equipment_id,
-            student_id=borrower.student_staff_id,
-            borrower_address=borrower_address,
-            expected_handover=int(normalize_naive_dt(loan.expected_handover_date).timestamp()),
-            due_date=int(normalize_naive_dt(loan.due_date).timestamp()),
-            deposit_amount=deposit_wei,
-        )
-        on_chain_record = blockchain_service.get_loan(loan_id_hex)
-    else:
-        _sync_confirmed_pending_txs(db, loan.id, TxActionType.CREATE_LOAN)
-
-    chain_state_code = int(on_chain_record.get("state", 0))
-    if chain_state_code == 0:
-        # Đơn đã ở Submitted trên chain (do SV tạo MetaMask hoặc bước createLoan vừa xong) -> chỉ gọi approveLoan
-        _send_durable_tx(
-            db=db,
-            request_id=loan.id,
-            action_type=TxActionType.APPROVE_LOAN,
-            sender_fn=blockchain_service.approve_loan,
-            loan_id=loan_id_bytes,
-        )
-    elif chain_state_code == 1:
-        # Crash recovery: approveLoan đã thành công trên chain ở lần gọi trước
-        _sync_confirmed_pending_txs(db, loan.id, TxActionType.APPROVE_LOAN)
-    else:
+    on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
+    chain_state_code = int(on_chain_record.get("state", -1))
+    if chain_state_code != 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không thể duyệt. Vui lòng chạy đối soát."
+            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không khớp APPROVED (1)."
         )
 
-    # 4. Chỉ sau khi on-chain approve thành công mới khóa thiết bị & chốt APPROVED trong MySQL
-    equipment = get_equipment_for_update(db, loan.equipment_id)
+    # 3. Khóa thiết bị và cập nhật trạng thái APPROVED trong MySQL
     equipment.status = EquipmentStatus.RESERVED
     loan.status = LoanStatus.APPROVED
-    loan.on_chain_loan_id = loan_id_hex
-    if notes:
-        loan.admin_notes = f"{loan.admin_notes or ''}\n[Duyệt bởi Admin #{admin_user.id}]: {notes}".strip()
+    if approve_in.notes:
+        loan.admin_notes = f"{loan.admin_notes or ''}\n[Duyệt bởi Admin #{admin_user.id}]: {approve_in.notes}".strip()
 
-    # 5. Ghi Audit Log
     db.add(AuditLog(
         user_id=admin_user.id,
         action="LOAN_APPROVED",
@@ -583,7 +541,8 @@ def approve_loan_request(
         entity_id=loan.id,
         details_json={
             "equipment_id": loan.equipment_id,
-            "on_chain_loan_id": loan_id_hex
+            "on_chain_loan_id": loan.on_chain_loan_id,
+            "tx_hash": verified["tx_hash"],
         }
     ))
 
@@ -596,22 +555,12 @@ def reject_loan_request(
     db: Session,
     admin_user: User,
     loan_id: int,
-    reason: Optional[str] = None
+    reject_in: Optional[LoanRejectRequest] = None,
 ) -> LendingRequest:
     """
-    Mục đích: Admin từ chối yêu cầu mượn thiết bị.
-    Tham số:
-        - db (Session): Phiên làm việc CSDL.
-        - admin_user (User): Quản trị viên từ chối.
-        - loan_id (int): Khóa chính ID đơn mượn.
-        - reason (Optional[str]): Lý do từ chối.
-    Trả về:
-        - LendingRequest: Bản ghi đơn mượn đã chuyển trạng thái REJECTED.
-    Lỗi:
-        - HTTPException(400 Bad Request): Đơn không ở trạng thái PENDING.
-    Tác dụng phụ:
-        - Cập nhật `loan.status = REJECTED` và ghi Audit Log.
+    Mục đích: Admin từ chối đơn mượn (xác thực biên lai `cancelLoan` nếu đơn đã tồn tại on-chain).
     """
+    payload = reject_in or LoanRejectRequest()
     loan = get_loan_by_id(db, loan_id)
     if loan is None:
         raise HTTPException(
@@ -619,43 +568,46 @@ def reject_loan_request(
             detail=f"Không tìm thấy đơn mượn với ID #{loan_id}."
         )
 
+    if loan.status == LoanStatus.REJECTED and payload.tx_hash:
+        norm_tx = _normalize_hash_or_400(payload.tx_hash, "tx_hash")
+        if _check_tx_idempotency_or_replay(db, loan.id, TxActionType.CANCEL_LOAN, norm_tx):
+            return loan
+
     if loan.status != LoanStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Chỉ có thể từ chối đơn ở trạng thái PENDING (Hiện tại: {loan.status.value})."
         )
 
+    verified_tx_hash: Optional[str] = None
     if loan.on_chain_loan_id:
-        _ensure_chain_ready_or_http(require_admin=True)
-        loan_id_hex = normalize_hex_bytes32(loan.on_chain_loan_id, 32)
-        on_chain_record = blockchain_service.get_loan(loan_id_hex)
-        on_chain_exists = (
-            on_chain_record.get("loan_id") == loan_id_hex
-            and int(on_chain_record.get("request_time", 0)) > 0
+        verified = _verify_and_record_lifecycle_tx(
+            db=db,
+            loan=loan,
+            actor=admin_user,
+            raw_tx_hash=payload.tx_hash,
+            action_type=TxActionType.CANCEL_LOAN,
+            expected_event="LoanCancelled",
         )
+        on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
         chain_state_code = int(on_chain_record.get("state", -1))
-        if on_chain_exists and chain_state_code == 0:
-            _send_durable_tx(
-                db=db,
-                request_id=loan.id,
-                action_type=TxActionType.CANCEL_LOAN,
-                sender_fn=blockchain_service.cancel_loan,
-                loan_id=bytes.fromhex(loan_id_hex[2:]),
-                reason=reason or f"Rejected by Admin #{admin_user.id}",
+        if chain_state_code != 4:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
             )
-        elif not on_chain_exists:
-            loan.on_chain_loan_id = None
+        verified_tx_hash = verified["tx_hash"]
 
     loan.status = LoanStatus.REJECTED
-    if reason:
-        loan.admin_notes = f"{loan.admin_notes or ''}\n[Từ chối bởi Admin #{admin_user.id}]: {reason}".strip()
+    if payload.reason:
+        loan.admin_notes = f"{loan.admin_notes or ''}\n[Từ chối bởi Admin #{admin_user.id}]: {payload.reason}".strip()
 
     db.add(AuditLog(
         user_id=admin_user.id,
         action="LOAN_REJECTED",
         entity_name="lending_requests",
         entity_id=loan.id,
-        details_json={"reason": reason}
+        details_json={"reason": payload.reason, "tx_hash": verified_tx_hash}
     ))
 
     db.commit()
@@ -666,22 +618,11 @@ def reject_loan_request(
 def handover_loan_equipment(
     db: Session,
     admin_user: User,
-    loan_id: int
+    loan_id: int,
+    handover_in: LoanHandoverRequest,
 ) -> LendingRequest:
     """
-    Mục đích: Admin xác nhận bàn giao thiết bị thực tế cho sinh viên (chuyển đơn sang ACTIVE, khóa cọc).
-    Tham số:
-        - db (Session): Phiên làm việc CSDL.
-        - admin_user (User): Quản trị viên thực hiện bàn giao.
-        - loan_id (int): Khóa chính ID đơn mượn.
-    Trả về:
-        - LendingRequest: Bản ghi đơn mượn chuyển trạng thái ACTIVE.
-    Lỗi:
-        - HTTPException(400 Bad Request): Khi đơn không ở trạng thái APPROVED.
-    Tác dụng phụ:
-        - Cập nhật `equipment.status = IN_USE`.
-        - Cập nhật `loan.deposit_status = LOCKED`.
-        - Gọi Smart Contract `confirmHandover` và ghi nhận transaction.
+    Mục đích: Admin xác thực biên lai MetaMask `confirmHandover`, đổi đơn sang ACTIVE và khóa tiền cọc.
     """
     loan = get_loan_by_id(db, loan_id)
     if loan is None:
@@ -690,49 +631,33 @@ def handover_loan_equipment(
             detail=f"Không tìm thấy đơn mượn với ID #{loan_id}."
         )
 
+    norm_tx = _normalize_hash_or_400(handover_in.tx_hash, "tx_hash")
+    if _check_tx_idempotency_or_replay(db, loan.id, TxActionType.HANDOVER, norm_tx):
+        if loan.status == LoanStatus.ACTIVE:
+            return loan
+
     if loan.status != LoanStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Chỉ có thể bàn giao đơn đã được duyệt (APPROVED). Hiện tại: {loan.status.value}."
         )
 
-    if not loan.on_chain_loan_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Đơn mượn chưa có mã định danh on_chain_loan_id. Không thể bàn giao khi chưa ghi nhận trên Smart Contract."
-        )
-
-    _ensure_chain_ready_or_http(require_admin=True)
-    loan_id_hex = normalize_hex_bytes32(loan.on_chain_loan_id, 32)
-    loan_id_bytes = bytes.fromhex(loan_id_hex[2:])
-
-    try:
-        on_chain_record = blockchain_service.get_loan(loan_id_hex)
-    except ConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Mất kết nối node Blockchain khi kiểm tra bàn giao: {exc}"
-        ) from exc
-
+    verified = _verify_and_record_lifecycle_tx(
+        db=db,
+        loan=loan,
+        actor=admin_user,
+        raw_tx_hash=norm_tx,
+        action_type=TxActionType.HANDOVER,
+        expected_event="HandoverConfirmed",
+    )
+    on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
     chain_state_code = int(on_chain_record.get("state", -1))
-    if chain_state_code == 1:
-        _send_durable_tx(
-            db=db,
-            request_id=loan.id,
-            action_type=TxActionType.HANDOVER,
-            sender_fn=blockchain_service.confirm_handover,
-            loan_id=loan_id_bytes,
-        )
-    elif chain_state_code == 2:
-        # Crash recovery: confirmHandover đã thành công on-chain trước đó
-        _sync_confirmed_pending_txs(db, loan.id, TxActionType.HANDOVER)
-    else:
+    if chain_state_code != 2:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không thể bàn giao."
+            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không khớp ACTIVE (2)."
         )
 
-    # Cập nhật thiết bị và bản ghi đơn mượn sau khi on-chain xác nhận
     equipment = get_equipment_by_id(db, loan.equipment_id)
     if equipment:
         equipment.status = EquipmentStatus.IN_USE
@@ -749,7 +674,8 @@ def handover_loan_equipment(
         entity_id=loan.id,
         details_json={
             "equipment_id": loan.equipment_id,
-            "actual_handover_date": str(loan.actual_handover_date)
+            "actual_handover_date": str(loan.actual_handover_date),
+            "tx_hash": verified["tx_hash"],
         }
     ))
 
@@ -762,23 +688,10 @@ def return_loan_equipment(
     db: Session,
     admin_user: User,
     loan_id: int,
-    return_in: LoanReturnRequest
+    return_in: LoanReturnRequest,
 ) -> LendingRequest:
     """
-    Mục đích: Admin xác nhận nhận lại thiết bị, đánh giá hiện trạng và tính toán mức phạt / tiền cọc on-chain.
-    Tham số:
-        - db (Session): Phiên làm việc CSDL.
-        - admin_user (User): Quản trị viên tiếp nhận.
-        - loan_id (int): Khóa chính ID đơn mượn.
-        - return_in (LoanReturnRequest): Hiện trạng hoàn trả (GOOD, DAMAGED, LOST) và mức phạt ghi đè thủ công.
-    Trả về:
-        - LendingRequest: Bản ghi đơn mượn chuyển trạng thái RETURNED hoặc DISPUTED.
-    Lỗi:
-        - HTTPException(400 Bad Request): Khi đơn không ở trạng thái ACTIVE.
-    Tác dụng phụ:
-        - Cập nhật `equipment.status` về AVAILABLE hoặc MAINTENANCE / RETIRED.
-        - Cập nhật `deposit_status` thành REFUNDED hoặc FORFEITED.
-        - Gọi Smart Contract `confirmReturn` giải phóng Mutex on-chain.
+    Mục đích: Admin xác thực biên lai MetaMask `confirmReturn`, đọc mức phạt/trạng thái cọc do Smart Contract tự tính và cập nhật MySQL.
     """
     loan = get_loan_by_id(db, loan_id)
     if loan is None:
@@ -787,106 +700,56 @@ def return_loan_equipment(
             detail=f"Không tìm thấy đơn mượn với ID #{loan_id}."
         )
 
+    norm_tx = _normalize_hash_or_400(return_in.tx_hash, "tx_hash")
+    if _check_tx_idempotency_or_replay(db, loan.id, TxActionType.RETURN_LOAN, norm_tx):
+        if loan.status in (LoanStatus.RETURNED, LoanStatus.DISPUTED):
+            return loan
+
     if loan.status != LoanStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Chỉ có thể hoàn trả đơn đang trong trạng thái mượn (ACTIVE). Hiện tại: {loan.status.value}."
         )
 
-    if not loan.on_chain_loan_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Đơn mượn chưa có mã định danh on_chain_loan_id để hoàn tất trả trên Smart Contract."
-        )
-
-    _ensure_chain_ready_or_http(require_admin=True)
-    loan_id_hex = normalize_hex_bytes32(loan.on_chain_loan_id, 32)
-    loan_id_bytes = bytes.fromhex(loan_id_hex[2:])
-
-    now = datetime.now()
-    equipment = get_equipment_by_id(db, loan.equipment_id)
     condition: ReturnCondition = return_in.return_condition
     condition_code: int = 0 if condition == ReturnCondition.GOOD else (1 if condition == ReturnCondition.DAMAGED else 2)
 
-    try:
-        on_chain_record = blockchain_service.get_loan(loan_id_hex)
-        is_overdue_onchain = blockchain_service.is_overdue(loan_id_hex)
-    except ConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Mất kết nối node Blockchain khi kiểm tra hoàn trả: {exc}"
-        ) from exc
+    verified = _verify_and_record_lifecycle_tx(
+        db=db,
+        loan=loan,
+        actor=admin_user,
+        raw_tx_hash=norm_tx,
+        action_type=TxActionType.RETURN_LOAN,
+        expected_event="LoanReturned",
+        expected_args={"returnCondition": condition_code},
+    )
 
-    is_overdue_effective = bool(now > normalize_naive_dt(loan.due_date) or is_overdue_onchain)
-
-    # 1. Kiểm tra quy tắc phạt 0-100 và tránh sai lệch im lặng 0% khi quá hạn ở contract Phase 7A
-    if condition in [ReturnCondition.DAMAGED, ReturnCondition.LOST]:
-        if return_in.manual_penalty_percent is not None and return_in.manual_penalty_percent != 100:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Thiết bị hư hỏng (DAMAGED) hoặc mất (LOST) bắt buộc phạt 100% tiền cọc."
-            )
-        contract_penalty_arg = 100
-        penalty_percent = 100
-    else:
-        if is_overdue_effective and return_in.manual_penalty_percent == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Hợp đồng hiện hành dùng mức 0 để tự tính phạt quá hạn (10%/50%) nên không hỗ trợ miễn phạt 0% thủ công. Hãy để trống để tự tính hoặc nhập 1–100%."
-            )
-        if return_in.manual_penalty_percent is not None:
-            contract_penalty_arg = int(return_in.manual_penalty_percent)
-            penalty_percent = contract_penalty_arg
-        elif is_overdue_effective:
-            contract_penalty_arg = 0  # Smart contract auto-calculates 10%/50%
-            if now > normalize_naive_dt(loan.due_date):
-                overdue_duration: timedelta = now - normalize_naive_dt(loan.due_date)
-                penalty_percent = 10 if overdue_duration <= timedelta(hours=24) else 50
-            else:
-                calc_info = blockchain_service.calculate_penalty(loan_id_hex, condition_code)
-                penalty_percent = int(calc_info.get("penalty_percent", 10))
-        else:
-            contract_penalty_arg = 0
-            penalty_percent = 0
-
-    # 2. Thực thi confirmReturn on-chain (hoặc khôi phục nếu đã trả on-chain)
+    on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
     chain_state_code = int(on_chain_record.get("state", -1))
-    if chain_state_code == 2:
-        _send_durable_tx(
-            db=db,
-            request_id=loan.id,
-            action_type=TxActionType.RETURN_LOAN,
-            sender_fn=blockchain_service.confirm_return,
-            loan_id=loan_id_bytes,
-            return_condition=condition_code,
-            penalty_percent=contract_penalty_arg,
-        )
-        post_onchain = blockchain_service.get_loan(loan_id_hex)
-        if isinstance(post_onchain, dict) and post_onchain.get("penalty_percent") is not None:
-            penalty_percent = int(post_onchain["penalty_percent"])
-    elif chain_state_code in (3, 5):
-        _sync_confirmed_pending_txs(db, loan.id, TxActionType.RETURN_LOAN)
-        if on_chain_record.get("penalty_percent") is not None:
-            penalty_percent = int(on_chain_record["penalty_percent"])
-    else:
+    if chain_state_code not in (3, 5):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không thể xác nhận trả máy."
+            detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa hoàn tất trả máy."
         )
 
-    # 3. Chỉ sau khi on-chain xác nhận mới cập nhật MySQL (trạng thái, tiền cọc, thiết bị)
-    if condition in [ReturnCondition.DAMAGED, ReturnCondition.LOST]:
-        loan.deposit_status = DepositStatus.FORFEITED
+    event_args = verified.get("event_args", {})
+    penalty_percent = int(event_args.get("penaltyPercent", on_chain_record.get("penalty_percent", 0)))
+    onchain_dep_code = int(
+        event_args.get("depositState", on_chain_record.get("deposit_state", 3 if chain_state_code == 5 else 2))
+    )
+
+    equipment = get_equipment_by_id(db, loan.equipment_id)
+    loan.deposit_status = DepositStatus.FORFEITED if onchain_dep_code == 3 else DepositStatus.REFUNDED
+    if chain_state_code == 5 or condition in [ReturnCondition.DAMAGED, ReturnCondition.LOST]:
         loan.status = LoanStatus.DISPUTED
         if equipment:
             equipment.status = EquipmentStatus.MAINTENANCE if condition == ReturnCondition.DAMAGED else EquipmentStatus.RETIRED
     else:
-        loan.deposit_status = DepositStatus.REFUNDED
         loan.status = LoanStatus.RETURNED
         if equipment:
             equipment.status = EquipmentStatus.AVAILABLE
 
-    loan.actual_return_date = now
+    loan.actual_return_date = datetime.now()
     loan.return_condition = condition
     if return_in.admin_notes:
         loan.admin_notes = f"{loan.admin_notes or ''}\n[Trả máy]: {return_in.admin_notes}".strip()
@@ -899,7 +762,8 @@ def return_loan_equipment(
         details_json={
             "condition": condition.value,
             "penalty_percent": penalty_percent,
-            "deposit_status": loan.deposit_status.value
+            "deposit_status": loan.deposit_status.value,
+            "tx_hash": verified["tx_hash"],
         }
     ))
 
@@ -912,24 +776,12 @@ def cancel_loan_request(
     db: Session,
     current_user: User,
     loan_id: int,
-    cancel_in: LoanCancelRequest
+    cancel_in: Optional[LoanCancelRequest] = None,
 ) -> LendingRequest:
     """
-    Mục đích: Người dùng hoặc Admin hủy đơn mượn trước khi bàn giao thiết bị (chỉ khi PENDING hoặc APPROVED).
-    Tham số:
-        - db (Session): Phiên làm việc CSDL.
-        - current_user (User): Người thực hiện (sinh viên sở hữu đơn hoặc ADMIN).
-        - loan_id (int): Khóa chính ID đơn mượn.
-        - cancel_in (LoanCancelRequest): Lý do hủy đơn.
-    Trả về:
-        - LendingRequest: Bản ghi đơn mượn chuyển sang CANCELLED.
-    Lỗi:
-        - HTTPException(403 Forbidden): Sinh viên cố tình hủy đơn mượn của người khác.
-        - HTTPException(400 Bad Request): Đơn đã bàn giao (ACTIVE) hoặc đã kết thúc, không thể hủy.
-    Tác dụng phụ:
-        - Mở khóa thiết bị về AVAILABLE (nếu đang RESERVED).
-        - Gọi Smart Contract `cancelLoan` giải phóng Mutex on-chain.
+    Mục đích: Sinh viên hoặc Admin hủy đơn mượn trước khi nhận máy (xác thực biên lai `cancelLoan` on-chain).
     """
+    payload = cancel_in or LoanCancelRequest()
     loan = get_loan_by_id(db, loan_id)
     if loan is None:
         raise HTTPException(
@@ -937,12 +789,16 @@ def cancel_loan_request(
             detail=f"Không tìm thấy đơn mượn với ID #{loan_id}."
         )
 
-    # Sinh viên chỉ được hủy đơn của chính mình
     if current_user.role == UserRole.BORROWER and loan.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Bạn không có quyền hủy đơn mượn của người khác."
         )
+
+    if loan.status == LoanStatus.CANCELLED and payload.tx_hash:
+        norm_tx = _normalize_hash_or_400(payload.tx_hash, "tx_hash")
+        if _check_tx_idempotency_or_replay(db, loan.id, TxActionType.CANCEL_LOAN, norm_tx):
+            return loan
 
     if loan.status not in [LoanStatus.PENDING, LoanStatus.APPROVED]:
         raise HTTPException(
@@ -950,61 +806,38 @@ def cancel_loan_request(
             detail=f"Không thể hủy đơn khi thiết bị đã được bàn giao hoặc đơn đã kết thúc (Hiện tại: {loan.status.value})."
         )
 
-    # 1. Nếu đơn đã có mã on_chain_loan_id -> bắt buộc đồng bộ hủy trên Smart Contract (fail-closed nếu RPC offline)
+    verified_tx_hash: Optional[str] = None
     if loan.on_chain_loan_id:
-        _ensure_chain_ready_or_http(require_admin=True)
-        loan_id_hex = normalize_hex_bytes32(loan.on_chain_loan_id, 32)
-        loan_id_bytes = bytes.fromhex(loan_id_hex[2:])
-
-        try:
-            on_chain_record = blockchain_service.get_loan(loan_id_hex)
-        except ConnectionError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Mất kết nối node Blockchain khi hủy đơn on-chain: {exc}"
-            ) from exc
-
-        on_chain_exists = (
-            on_chain_record.get("loan_id") == loan_id_hex
-            and int(on_chain_record.get("request_time", 0)) > 0
+        verified = _verify_and_record_lifecycle_tx(
+            db=db,
+            loan=loan,
+            actor=current_user,
+            raw_tx_hash=payload.tx_hash,
+            action_type=TxActionType.CANCEL_LOAN,
+            expected_event="LoanCancelled",
         )
+        on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
         chain_state_code = int(on_chain_record.get("state", -1))
-
-        if not on_chain_exists:
-            # Nếu mới checkpoint on_chain_loan_id mà chưa tạo thành công trên chain -> xóa checkpoint và hủy DB
-            loan.on_chain_loan_id = None
-        elif chain_state_code in (0, 1):
-            _send_durable_tx(
-                db=db,
-                request_id=loan.id,
-                action_type=TxActionType.CANCEL_LOAN,
-                sender_fn=blockchain_service.cancel_loan,
-                loan_id=loan_id_bytes,
-                reason=cancel_in.reason or "Cancelled by user",
-            )
-        elif chain_state_code == 4:
-            # Crash recovery: đã Cancelled sẵn on-chain
-            _sync_confirmed_pending_txs(db, loan.id, TxActionType.CANCEL_LOAN)
-        else:
+        if chain_state_code != 4:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, không thể hủy."
+                detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
             )
+        verified_tx_hash = verified["tx_hash"]
 
-    # 2. Chỉ sau khi on-chain xác nhận mới giải phóng thiết bị và chuyển trạng thái DB
     equipment = get_equipment_by_id(db, loan.equipment_id)
     if loan.status == LoanStatus.APPROVED and equipment:
         equipment.status = EquipmentStatus.AVAILABLE
 
     loan.status = LoanStatus.CANCELLED
-    loan.admin_notes = f"{loan.admin_notes or ''}\n[Hủy bởi User #{current_user.id}]: {cancel_in.reason}".strip()
+    loan.admin_notes = f"{loan.admin_notes or ''}\n[Hủy bởi User #{current_user.id}]: {payload.reason}".strip()
 
     db.add(AuditLog(
         user_id=current_user.id,
         action="LOAN_CANCELLED",
         entity_name="lending_requests",
         entity_id=loan.id,
-        details_json={"reason": cancel_in.reason}
+        details_json={"reason": payload.reason, "tx_hash": verified_tx_hash}
     ))
 
     db.commit()

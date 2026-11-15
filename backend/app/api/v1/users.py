@@ -10,6 +10,7 @@ from backend.app.api.deps import get_current_user, require_role
 from backend.app.db.session import get_db
 from backend.app.models.user import User, UserRole
 from backend.app.schemas.user import (
+    PendingBorrowerResponse,
     UserCreate,
     UserResponse,
     WalletChallengeRequest,
@@ -19,6 +20,7 @@ from backend.app.schemas.user import (
 from backend.app.services.user_service import (
     create_user,
     create_wallet_challenge,
+    get_pending_borrowers_for_whitelist,
     get_users,
     verify_wallet_signature,
 )
@@ -91,6 +93,26 @@ def verify_user_wallet(
 
 
 @router.post(
+    "/users/wallet",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Liên kết ví MetaMask vào tài khoản (Pure Web3 EIP-191)",
+    description="Alias chuẩn REST để hoàn tất xác minh chữ ký EIP-191 và gắn địa chỉ ví vào tài khoản hiện tại."
+)
+def link_user_wallet(
+    payload: WalletVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> UserResponse:
+    return verify_wallet_signature(
+        db=db,
+        current_user=current_user,
+        wallet_address=payload.wallet_address,
+        signature=payload.signature
+    )
+
+
+@router.post(
     "/admin/users",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
@@ -149,4 +171,18 @@ def admin_list_users(
         - Thực thi truy vấn SELECT.
     """
     return get_users(db=db, skip=skip, limit=limit, role=role)
+
+
+@router.get(
+    "/admin/pending-borrowers",
+    response_model=List[PendingBorrowerResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Admin xem danh sách sinh viên đã xác minh ví chờ cấp BORROWER_ROLE on-chain",
+    description="Liệt kê các tài khoản BORROWER có wallet_verified=True nhưng chưa sở hữu BORROWER_ROLE trên Smart Contract."
+)
+def admin_list_pending_borrowers(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_role([UserRole.ADMIN]))
+) -> List[PendingBorrowerResponse]:
+    return get_pending_borrowers_for_whitelist(db=db)
 

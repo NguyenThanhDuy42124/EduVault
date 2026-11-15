@@ -5,7 +5,7 @@ Mục đích: Xử lý các quy tắc nghiệp vụ liên quan đến tài kho�
 """
 from datetime import datetime, timedelta
 import secrets
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from fastapi import HTTPException, status
@@ -17,6 +17,7 @@ from backend.app.models.audit_log import AuditLog
 from backend.app.models.lending_request import LendingRequest, LoanStatus
 from backend.app.models.user import User, UserRole
 from backend.app.schemas.user import UserCreate
+from backend.app.services.blockchain_service import blockchain_service
 
 WALLET_CHALLENGE_TTL_MINUTES = 5
 
@@ -331,4 +332,58 @@ def verify_wallet_signature(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+def get_pending_borrowers_for_whitelist(db: Session) -> List[Dict[str, Any]]:
+    """
+    Mục đích: Lấy danh sách BORROWER đã xác minh ví EIP-191 nhưng chưa được cấp `BORROWER_ROLE` trên Smart Contract.
+    Trả về:
+        - List[Dict[str, Any]]: Danh sách thông tin sinh viên kèm `on_chain_borrower_role` (False hoặc None nếu RPC offline).
+    """
+    verified_borrowers = (
+        db.query(User)
+        .filter(
+            User.role == UserRole.BORROWER,
+            User.is_active.is_(True),
+            User.wallet_verified.is_(True),
+            User.wallet_address.isnot(None),
+        )
+        .order_by(User.wallet_linked_at.desc(), User.id.asc())
+        .all()
+    )
+
+    chain_online = True
+    try:
+        blockchain_service.ensure_ready()
+    except Exception:
+        chain_online = False
+
+    results: List[Dict[str, Any]] = []
+    for borrower in verified_borrowers:
+        has_onchain_role: Optional[bool] = None
+        if chain_online and borrower.wallet_address:
+            try:
+                has_onchain_role = blockchain_service.has_role("BORROWER_ROLE", borrower.wallet_address)
+                if has_onchain_role:
+                    continue
+            except Exception:
+                has_onchain_role = None
+
+        results.append({
+            "id": borrower.id,
+            "student_staff_id": borrower.student_staff_id,
+            "full_name": borrower.full_name,
+            "email": borrower.email,
+            "role": borrower.role,
+            "wallet_address": borrower.wallet_address,
+            "wallet_verified": borrower.wallet_verified,
+            "wallet_linked_at": borrower.wallet_linked_at,
+            "is_active": borrower.is_active,
+            "failed_login_count": borrower.failed_login_count,
+            "locked_until": borrower.locked_until,
+            "created_at": borrower.created_at,
+            "updated_at": borrower.updated_at,
+            "on_chain_borrower_role": has_onchain_role,
+        })
+    return results
 

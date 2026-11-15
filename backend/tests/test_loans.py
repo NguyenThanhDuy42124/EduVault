@@ -1,39 +1,52 @@
 """
 Module: backend.tests.test_loans
-Mục đích: Bộ kiểm thử tự động toàn diện cho vòng đời mượn trả thiết bị học tập (Task 5.7 & Phase 7A).
+Mục đích: Bộ kiểm thử tự động cho vòng đời mượn trả thiết bị Pure Web3 (MetaMask + Receipt Verifier).
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
 from datetime import datetime, timedelta
-from unittest.mock import patch
 import pytest
 from eth_account import Account
 from backend.app.core.security import create_access_token, hash_password
+from backend.app.models.audit_log import AuditLog
 from backend.app.models.blockchain_tx import BlockchainTransaction, TxActionType, TxStatus
 from backend.app.models.equipment import Equipment, EquipmentStatus
 from backend.app.models.lending_request import DepositStatus, LendingRequest, LoanStatus, ReturnCondition
 from backend.app.models.user import User, UserRole
-from backend.app.services.blockchain_service import ZERO_BYTES32_HEX, normalize_hex_bytes32
+from backend.app.services.blockchain_service import (
+    ZERO_BYTES32_HEX,
+    blockchain_service,
+    normalize_hex_bytes32,
+)
+
+ADMIN_WALLET = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+BORROWER_WALLET = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+OTHER_WALLET = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+CONTRACT_ADDR = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
 
-class _FakeSmartContract:
-    """Mô phỏng Smart Contract stateful cục bộ phục vụ kiểm thử logic FastAPI fail-closed và recovery."""
+class _FakePureWeb3Chain:
+    """Mô phỏng node EVM và Receipt Verifier cho kiến trúc Pure Web3."""
 
-    def __init__(self, admin_address: str):
-        self.admin_address = admin_address
+    def __init__(self):
         self.loans = {}
         self.active_mutex = {}
+        self.receipts = {}
         self.tx_counter = 0
-        self.calls = []
-        self.fail_next_action = None
+        self.loan_counter = 0
 
     def _next_tx_hash(self) -> str:
         self.tx_counter += 1
         return "0x" + f"{self.tx_counter:064x}"
 
+    def next_loan_id(self, user_id: int = 1, eq_id: int = 1) -> str:
+        self.loan_counter += 1
+        _, hex_id = blockchain_service.generate_loan_id(user_id, eq_id, 1700000000 + self.loan_counter)
+        return hex_id
+
     def is_connected(self) -> bool:
         return True
 
-    def ensure_ready(self, require_admin: bool = False) -> None:
+    def ensure_ready(self) -> None:
         return None
 
     def get_loan(self, loan_id):
@@ -58,50 +71,28 @@ class _FakeSmartContract:
 
     def is_overdue(self, loan_id) -> bool:
         rec = self.get_loan(loan_id)
-        if rec["request_time"] == 0 or rec["state"] != 2:
-            return False
-        return int(datetime.now().timestamp()) > int(rec["due_date"])
+        return bool(rec["request_time"] > 0 and rec["state"] == 2 and datetime.now().timestamp() > rec["due_date"])
 
-    def calculate_penalty(self, loan_id, return_condition: int):
-        rec = self.get_loan(loan_id)
-        if return_condition in (1, 2):
-            return {"penalty_percent": 100, "deposit_state": 3, "next_state": 5}
-        if int(datetime.now().timestamp()) > int(rec["due_date"]):
-            diff = int(datetime.now().timestamp()) - int(rec["due_date"])
-            return {"penalty_percent": 10 if diff <= 86400 else 50, "deposit_state": 2, "next_state": 3}
-        return {"penalty_percent": 0, "deposit_state": 2, "next_state": 3}
-
-    def create_loan(
+    def sign_create_loan(
         self,
-        loan_id,
-        equipment_id,
-        student_id,
-        borrower_address,
-        expected_handover,
-        due_date,
-        deposit_amount,
-        on_broadcast=None,
-        on_failed=None,
+        sender: str,
+        equipment_id: int,
+        student_id: str,
+        expected_handover_ts: int,
+        due_ts: int,
+        deposit_amount: int,
+        loan_id: str = None,
     ):
-        self.calls.append("create_loan")
+        loan_hex = normalize_hex_bytes32(loan_id, 32) if loan_id else self.next_loan_id(1, equipment_id)
         tx_hash = self._next_tx_hash()
-        if on_broadcast:
-            on_broadcast(tx_hash, self.admin_address, "0x" + "1" * 40)
-        if self.fail_next_action == "create_loan":
-            self.fail_next_action = None
-            if on_failed:
-                on_failed(tx_hash, 10, 50000, "Mocked revert create_loan")
-            raise RuntimeError("Mocked revert create_loan")
-
-        hex_id = normalize_hex_bytes32(loan_id, 32)
-        self.loans[hex_id] = {
-            "loan_id": hex_id,
+        self.loans[loan_hex] = {
+            "loan_id": loan_hex,
             "equipment_id": int(equipment_id),
-            "borrower": borrower_address,
+            "borrower": sender,
             "student_id": student_id,
             "request_time": int(datetime.now().timestamp()),
-            "expected_handover": int(expected_handover),
-            "due_date": int(due_date),
+            "expected_handover": int(expected_handover_ts),
+            "due_date": int(due_ts),
             "actual_handover": 0,
             "actual_return": 0,
             "deposit_amount": int(deposit_amount),
@@ -109,76 +100,57 @@ class _FakeSmartContract:
             "deposit_state": 0,
             "penalty_percent": 0,
         }
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 10,
-            "gas_used": 120000,
-            "status": "CONFIRMED",
-            "from_address": self.admin_address,
-            "to_address": "0x" + "1" * 40,
+        self.receipts[tx_hash] = {
+            "status": 1,
+            "sender": sender,
+            "event": "LoanCreated",
+            "loan_id": loan_hex,
+            "args": {
+                "loanId": loan_hex,
+                "equipmentId": int(equipment_id),
+                "studentId": student_id,
+                "borrower": sender,
+                "dueDate": int(due_ts),
+                "depositAmount": int(deposit_amount),
+            },
         }
+        return loan_hex, tx_hash
 
-    def approve_loan(self, loan_id, on_broadcast=None, on_failed=None):
-        self.calls.append("approve_loan")
+    def sign_approve_loan(self, sender: str, loan_id: str) -> str:
+        loan_hex = normalize_hex_bytes32(loan_id, 32)
+        rec = self.loans[loan_hex]
+        rec["state"] = 1
+        self.active_mutex[rec["equipment_id"]] = loan_hex
         tx_hash = self._next_tx_hash()
-        if on_broadcast:
-            on_broadcast(tx_hash, self.admin_address, "0x" + "1" * 40)
-        if self.fail_next_action == "approve_loan":
-            self.fail_next_action = None
-            if on_failed:
-                on_failed(tx_hash, 11, 50000, "Mocked revert approve_loan")
-            raise RuntimeError("Mocked revert approve_loan")
-
-        hex_id = normalize_hex_bytes32(loan_id, 32)
-        self.loans[hex_id]["state"] = 1
-        self.active_mutex[self.loans[hex_id]["equipment_id"]] = hex_id
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 11,
-            "gas_used": 90000,
-            "status": "CONFIRMED",
-            "from_address": self.admin_address,
-            "to_address": "0x" + "1" * 40,
+        self.receipts[tx_hash] = {
+            "status": 1,
+            "sender": sender,
+            "event": "LoanApproved",
+            "loan_id": loan_hex,
+            "args": {"loanId": loan_hex, "equipmentId": rec["equipment_id"], "timestamp": int(datetime.now().timestamp())},
         }
+        return tx_hash
 
-    def confirm_handover(self, loan_id, on_broadcast=None, on_failed=None):
-        self.calls.append("confirm_handover")
+    def sign_handover(self, sender: str, loan_id: str) -> str:
+        loan_hex = normalize_hex_bytes32(loan_id, 32)
+        rec = self.loans[loan_hex]
+        rec["state"] = 2
+        rec["actual_handover"] = int(datetime.now().timestamp())
+        if rec["deposit_amount"] > 0:
+            rec["deposit_state"] = 1
         tx_hash = self._next_tx_hash()
-        if on_broadcast:
-            on_broadcast(tx_hash, self.admin_address, "0x" + "1" * 40)
-        if self.fail_next_action == "confirm_handover":
-            self.fail_next_action = None
-            if on_failed:
-                on_failed(tx_hash, 12, 40000, "Mocked revert confirm_handover")
-            raise RuntimeError("Mocked revert confirm_handover")
-
-        hex_id = normalize_hex_bytes32(loan_id, 32)
-        self.loans[hex_id]["state"] = 2
-        self.loans[hex_id]["actual_handover"] = int(datetime.now().timestamp())
-        if self.loans[hex_id]["deposit_amount"] > 0:
-            self.loans[hex_id]["deposit_state"] = 1
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 12,
-            "gas_used": 80000,
-            "status": "CONFIRMED",
-            "from_address": self.admin_address,
-            "to_address": "0x" + "1" * 40,
+        self.receipts[tx_hash] = {
+            "status": 1,
+            "sender": sender,
+            "event": "HandoverConfirmed",
+            "loan_id": loan_hex,
+            "args": {"loanId": loan_hex, "timestamp": rec["actual_handover"]},
         }
+        return tx_hash
 
-    def confirm_return(self, loan_id, return_condition, penalty_percent=0, on_broadcast=None, on_failed=None):
-        self.calls.append("confirm_return")
-        tx_hash = self._next_tx_hash()
-        if on_broadcast:
-            on_broadcast(tx_hash, self.admin_address, "0x" + "1" * 40)
-        if self.fail_next_action == "confirm_return":
-            self.fail_next_action = None
-            if on_failed:
-                on_failed(tx_hash, 13, 45000, "Mocked revert confirm_return")
-            raise RuntimeError("Mocked revert confirm_return")
-
-        hex_id = normalize_hex_bytes32(loan_id, 32)
-        rec = self.loans[hex_id]
+    def sign_return(self, sender: str, loan_id: str, return_condition: int, overdue_penalty_percent: int = 0) -> str:
+        loan_hex = normalize_hex_bytes32(loan_id, 32)
+        rec = self.loans[loan_hex]
         rec["actual_return"] = int(datetime.now().timestamp())
         if return_condition in (1, 2):
             rec["state"] = 5
@@ -187,609 +159,574 @@ class _FakeSmartContract:
         else:
             rec["state"] = 3
             rec["deposit_state"] = 2
-            if int(datetime.now().timestamp()) > int(rec["due_date"]) and penalty_percent == 0:
-                diff = int(datetime.now().timestamp()) - int(rec["due_date"])
-                rec["penalty_percent"] = 10 if diff <= 86400 else 50
-            else:
-                rec["penalty_percent"] = penalty_percent
+            rec["penalty_percent"] = overdue_penalty_percent
         self.active_mutex.pop(rec["equipment_id"], None)
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 13,
-            "gas_used": 95000,
-            "status": "CONFIRMED",
-            "from_address": self.admin_address,
-            "to_address": "0x" + "1" * 40,
-        }
-
-    def cancel_loan(self, loan_id, reason="Cancelled", on_broadcast=None, on_failed=None):
-        self.calls.append("cancel_loan")
         tx_hash = self._next_tx_hash()
-        if on_broadcast:
-            on_broadcast(tx_hash, self.admin_address, "0x" + "1" * 40)
-        hex_id = normalize_hex_bytes32(loan_id, 32)
-        rec = self.loans[hex_id]
+        self.receipts[tx_hash] = {
+            "status": 1,
+            "sender": sender,
+            "event": "LoanReturned",
+            "loan_id": loan_hex,
+            "args": {
+                "loanId": loan_hex,
+                "returnCondition": return_condition,
+                "penaltyPercent": rec["penalty_percent"],
+                "depositState": rec["deposit_state"],
+                "timestamp": rec["actual_return"],
+            },
+        }
+        return tx_hash
+
+    def sign_cancel(self, sender: str, loan_id: str, reason: str = "Cancelled") -> str:
+        loan_hex = normalize_hex_bytes32(loan_id, 32)
+        rec = self.loans[loan_hex]
         rec["state"] = 4
         self.active_mutex.pop(rec["equipment_id"], None)
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 14,
-            "gas_used": 60000,
-            "status": "CONFIRMED",
-            "from_address": self.admin_address,
-            "to_address": "0x" + "1" * 40,
+        tx_hash = self._next_tx_hash()
+        self.receipts[tx_hash] = {
+            "status": 1,
+            "sender": sender,
+            "event": "LoanCancelled",
+            "loan_id": loan_hex,
+            "args": {"loanId": loan_hex, "reason": reason, "timestamp": int(datetime.now().timestamp())},
         }
+        return tx_hash
+
+    def mint_reverted_tx(self, sender: str) -> str:
+        tx_hash = self._next_tx_hash()
+        self.receipts[tx_hash] = {"status": 0, "sender": sender, "event": None, "loan_id": None, "args": {}}
+        return tx_hash
+
+    def verify_transaction_receipt(
+        self,
+        tx_hash: str,
+        expected_event: str,
+        expected_loan_id=None,
+        expected_sender: str = None,
+        expected_args=None,
+        wait_timeout: int = 30,
+    ):
+        tx_hex = normalize_hex_bytes32(tx_hash, 32)
+        if tx_hex not in self.receipts:
+            raise ValueError(f"Không tìm thấy giao dịch {tx_hex} trên blockchain.")
+        entry = self.receipts[tx_hex]
+        if entry["status"] != 1:
+            raise ValueError(f"Giao dịch {tx_hex} đã bị revert on-chain (status != 1).")
+        if expected_sender and entry["sender"].lower() != expected_sender.lower():
+            raise ValueError(f"Địa chỉ gửi giao dịch ({entry['sender']}) không khớp ví đã xác minh ({expected_sender}).")
+        if entry["event"] != expected_event:
+            raise ValueError(f"Biên lai giao dịch {tx_hex} không phát sự kiện {expected_event}.")
+        if expected_loan_id:
+            norm_lid = normalize_hex_bytes32(expected_loan_id, 32)
+            if entry["loan_id"] != norm_lid:
+                raise ValueError(f"Sự kiện {expected_event} không khớp loanId {norm_lid}.")
+        if expected_args:
+            for key, val in expected_args.items():
+                actual = entry["args"].get(key)
+                if str(actual).lower() != str(val).lower():
+                    raise ValueError(f"Tham số {key} không khớp ({actual} != {val}).")
+        return {
+            "tx_hash": tx_hex,
+            "block_number": 100 + self.tx_counter,
+            "gas_used": 85000,
+            "status": "CONFIRMED",
+            "from_address": entry["sender"],
+            "to_address": CONTRACT_ADDR,
+            "event_name": expected_event,
+            "event_args": dict(entry["args"]),
+        }
+
+    def verify_create_loan_tx(
+        self,
+        tx_hash: str,
+        expected_loan_id,
+        expected_equipment_id: int,
+        expected_student_id: str,
+        expected_borrower_address: str,
+        expected_handover_ts: int,
+        expected_due_ts: int,
+        expected_deposit: int,
+        expected_sender_address: str = None,
+    ):
+        norm_lid = normalize_hex_bytes32(expected_loan_id, 32)
+        verified = self.verify_transaction_receipt(
+            tx_hash=tx_hash,
+            expected_event="LoanCreated",
+            expected_loan_id=norm_lid,
+            expected_sender=expected_sender_address or expected_borrower_address,
+            expected_args={
+                "equipmentId": int(expected_equipment_id),
+                "studentId": str(expected_student_id),
+                "borrower": expected_borrower_address,
+                "dueDate": int(expected_due_ts),
+                "depositAmount": int(expected_deposit),
+            },
+        )
+        on_chain = self.get_loan(norm_lid)
+        if int(on_chain["expected_handover"]) != int(expected_handover_ts):
+            raise ValueError("expected_handover trên chain không khớp.")
+        verified["on_chain_record"] = on_chain
+        return verified
 
 
 @pytest.fixture
-def fake_chain(monkeypatch):
-    """Gắn Smart Contract giả lập vào blockchain_service cho các bài kiểm thử luồng chuẩn."""
+def fake_chain(monkeypatch, db_session, test_admin_user, test_borrower_user):
+    """Gắn Pure Web3 Verifier mock và ví đã xác minh EIP-191 cho Admin/Borrower."""
     from backend.app.services import loan_service as ls
 
-    fake = _FakeSmartContract(admin_address="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
-    monkeypatch.setattr(ls.blockchain_service, "is_connected", fake.is_connected)
-    monkeypatch.setattr(ls.blockchain_service, "ensure_ready", fake.ensure_ready)
-    monkeypatch.setattr(ls.blockchain_service, "get_loan", fake.get_loan)
-    monkeypatch.setattr(ls.blockchain_service, "is_overdue", fake.is_overdue)
-    monkeypatch.setattr(ls.blockchain_service, "calculate_penalty", fake.calculate_penalty)
-    monkeypatch.setattr(ls.blockchain_service, "create_loan", fake.create_loan)
-    monkeypatch.setattr(ls.blockchain_service, "approve_loan", fake.approve_loan)
-    monkeypatch.setattr(ls.blockchain_service, "confirm_handover", fake.confirm_handover)
-    monkeypatch.setattr(ls.blockchain_service, "confirm_return", fake.confirm_return)
-    monkeypatch.setattr(ls.blockchain_service, "cancel_loan", fake.cancel_loan)
-    return fake
-
-
-def test_borrower_request_loan_success(client, borrower_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử sinh viên gửi yêu cầu mượn thành công (201 Created).
-    """
-    now = datetime.now()
-    payload = {
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=7)).isoformat(),
-        "admin_notes": "Mượn làm bài tập lớn môn Blockchain"
-    }
-    response = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["status"] == "PENDING"
-    assert data["equipment_id"] == available_equipment.id
-    assert float(data["deposit_amount"]) == 1000000.00
-    assert data["deposit_status"] == "PENDING"
-
-
-def test_request_loan_invalid_dates_returns_400(client, borrower_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử chặn tạo đơn khi ngày trả trước hoặc bằng ngày nhận (400 Bad Request).
-    """
-    now = datetime.now()
-    payload = {
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=5)).isoformat(),
-        "due_date": (now + timedelta(days=2)).isoformat()
-    }
-    response = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
-    assert response.status_code == 400
-    assert "hạn chót trả máy phải sau" in response.json()["detail"]
-
-
-def test_request_loan_unavailable_equipment_returns_409(client, borrower_token_headers, available_equipment, db_session):
-    """
-    Mục đích: Kiểm thử chặn mượn khi thiết bị đang ở trạng thái không khả dụng (409 Conflict).
-    """
-    available_equipment.status = EquipmentStatus.IN_USE
+    test_admin_user.wallet_address = ADMIN_WALLET
+    test_admin_user.wallet_verified = True
+    test_borrower_user.wallet_address = BORROWER_WALLET
+    test_borrower_user.wallet_verified = True
     db_session.commit()
 
-    now = datetime.now()
-    payload = {
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=3)).isoformat()
-    }
-    response = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
-    assert response.status_code == 409
-    assert "không sẵn sàng" in response.json()["detail"]
+    chain = _FakePureWeb3Chain()
+    monkeypatch.setattr(ls.blockchain_service, "is_connected", chain.is_connected)
+    monkeypatch.setattr(ls.blockchain_service, "ensure_ready", chain.ensure_ready)
+    monkeypatch.setattr(ls.blockchain_service, "get_loan", chain.get_loan)
+    monkeypatch.setattr(ls.blockchain_service, "is_overdue", chain.is_overdue)
+    monkeypatch.setattr(ls.blockchain_service, "verify_transaction_receipt", chain.verify_transaction_receipt)
+    monkeypatch.setattr(ls.blockchain_service, "verify_create_loan_tx", chain.verify_create_loan_tx)
+    return chain
 
 
-def test_request_loan_duplicate_pending_returns_409(client, borrower_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử chặn sinh viên gửi nhiều yêu cầu mượn trùng lặp cho cùng một thiết bị (409 Conflict).
-    """
-    now = datetime.now()
+def _create_pure_web3_loan(
+    client,
+    chain: _FakePureWeb3Chain,
+    borrower: User,
+    equipment: Equipment,
+    headers: dict,
+    handover_dt: datetime = None,
+    due_dt: datetime = None,
+    use_client_alias: bool = False,
+):
+    now = datetime.now().replace(microsecond=0)
+    ho = handover_dt or (now + timedelta(days=1))
+    due = due_dt or (now + timedelta(days=5))
+    loan_id_hex, tx_hash = chain.sign_create_loan(
+        sender=borrower.wallet_address,
+        equipment_id=equipment.id,
+        student_id=borrower.student_staff_id,
+        expected_handover_ts=int(ho.timestamp()),
+        due_ts=int(due.timestamp()),
+        deposit_amount=int(equipment.deposit_amount),
+    )
     payload = {
+        "equipment_id": equipment.id,
+        "expected_handover_date": ho.isoformat(),
+        "due_date": due.isoformat(),
+        "on_chain_loan_id": loan_id_hex,
+        "client_tx_hash" if use_client_alias else "tx_hash": tx_hash,
+    }
+    res = client.post("/api/v1/loans/request", json=payload, headers=headers)
+    return res, payload, loan_id_hex, tx_hash
+
+
+def test_request_loan_requires_pure_web3_tx_hash_and_loan_id(client, borrower_token_headers, available_equipment):
+    """
+    Mục đích: Chặn tạo đơn khi thiếu `tx_hash`/`on_chain_loan_id` hoặc khi `tx_hash` và `client_tx_hash` mâu thuẫn (400).
+    """
+    now = datetime.now().replace(microsecond=0)
+    res_missing = client.post("/api/v1/loans/request", json={
         "equipment_id": available_equipment.id,
         "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=3)).isoformat()
-    }
-    res1 = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
+        "due_date": (now + timedelta(days=5)).isoformat(),
+    }, headers=borrower_token_headers)
+    assert res_missing.status_code == 400
+    assert "Pure Web3" in res_missing.json()["detail"]
+
+    res_conflict = client.post("/api/v1/loans/request", json={
+        "equipment_id": available_equipment.id,
+        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
+        "due_date": (now + timedelta(days=5)).isoformat(),
+        "on_chain_loan_id": "0x" + "aa" * 32,
+        "tx_hash": "0x" + "11" * 32,
+        "client_tx_hash": "0x" + "22" * 32,
+    }, headers=borrower_token_headers)
+    assert res_conflict.status_code == 400
+    assert "không khớp" in res_conflict.json()["detail"]
+
+
+def test_request_loan_unverified_wallet_returns_403(
+    client, db_session, available_equipment, fake_chain
+):
+    """
+    Mục đích: Tài khoản chưa xác minh ví MetaMask bị từ chối gửi giao dịch (403 Forbidden).
+    """
+    sv_unv = User(
+        student_staff_id="SV_UNV_LOAN",
+        full_name="Sinh Viên Chưa Verify",
+        email="unv_loan@eduvault.edu.vn",
+        password_hash=hash_password("student123"),
+        role=UserRole.BORROWER,
+        wallet_address=OTHER_WALLET,
+        wallet_verified=False,
+        is_active=True,
+    )
+    db_session.add(sv_unv)
+    db_session.commit()
+    db_session.refresh(sv_unv)
+    unv_headers = {"Authorization": f"Bearer {create_access_token(sv_unv.id, 'BORROWER')}"}
+
+    now = datetime.now().replace(microsecond=0)
+    ho = now + timedelta(days=1)
+    due = now + timedelta(days=3)
+    loan_id_hex, tx_hash = fake_chain.sign_create_loan(
+        sender=OTHER_WALLET,
+        equipment_id=available_equipment.id,
+        student_id=sv_unv.student_staff_id,
+        expected_handover_ts=int(ho.timestamp()),
+        due_ts=int(due.timestamp()),
+        deposit_amount=int(available_equipment.deposit_amount),
+    )
+    res = client.post("/api/v1/loans/request", json={
+        "equipment_id": available_equipment.id,
+        "expected_handover_date": ho.isoformat(),
+        "due_date": due.isoformat(),
+        "on_chain_loan_id": loan_id_hex,
+        "tx_hash": tx_hash,
+    }, headers=unv_headers)
+    assert res.status_code == 403
+
+
+def test_request_loan_invalid_dates_unavailable_and_duplicate_checks(
+    client, borrower_token_headers, test_borrower_user, available_equipment, db_session, fake_chain
+):
+    """
+    Mục đích: Kiểm tra validation ngày (400), thiết bị không khả dụng (409) và đơn trùng thiết bị (409).
+    """
+    now = datetime.now().replace(microsecond=0)
+    bad_dates = client.post("/api/v1/loans/request", json={
+        "equipment_id": available_equipment.id,
+        "expected_handover_date": (now + timedelta(days=5)).isoformat(),
+        "due_date": (now + timedelta(days=2)).isoformat(),
+        "on_chain_loan_id": "0x" + "11" * 32,
+        "tx_hash": "0x" + "22" * 32,
+    }, headers=borrower_token_headers)
+    assert bad_dates.status_code == 400
+
+    res1, _, _, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
     assert res1.status_code == 201
 
-    res2 = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
-    assert res2.status_code == 409
-    assert "đã có một yêu cầu mượn" in res2.json()["detail"]
+    res_dup, _, _, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    assert res_dup.status_code == 409
+
+    available_equipment.status = EquipmentStatus.IN_USE
+    db_session.commit()
+    res_unavail, _, _, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    assert res_unavail.status_code == 409
 
 
-def test_admin_approve_loan_success(client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain):
+def test_pure_web3_full_lifecycle_ontime_good_and_client_tx_alias(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain
+):
     """
-    Mục đích: Kiểm thử Admin duyệt đơn mượn: đổi đơn sang APPROVED, khóa thiết bị sang RESERVED và sinh on_chain_loan_id.
+    Mục đích: Kiểm thử vòng đời đầy đủ Pure Web3 từ `request` (dùng alias `client_tx_hash`) -> `approve` -> `handover` -> `return` (GOOD, đúng hạn).
     """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
+    res_req, _, loan_hex, _ = _create_pure_web3_loan(
+        client,
+        fake_chain,
+        test_borrower_user,
+        available_equipment,
+        borrower_token_headers,
+        use_client_alias=True,
+    )
+    assert res_req.status_code == 201
+    loan_id = res_req.json()["id"]
+    assert res_req.json()["on_chain_loan_id"] == loan_hex
 
-    approve_res = client.post(f"/api/v1/loans/{loan_id}/approve", json={"notes": "Đã kiểm tra thẻ SV hợp lệ"}, headers=admin_token_headers)
-    assert approve_res.status_code == 200
-    data = approve_res.json()
-    assert data["status"] == "APPROVED"
-    assert data["on_chain_loan_id"] is not None
-    assert data["on_chain_loan_id"].startswith("0x")
+    tx_approve = fake_chain.sign_approve_loan(test_admin_user.wallet_address, loan_hex)
+    res_app = client.post(
+        f"/api/v1/loans/{loan_id}/approve",
+        json={"tx_hash": tx_approve, "notes": "Đã kiểm tra thẻ SV"},
+        headers=admin_token_headers,
+    )
+    assert res_app.status_code == 200
+    assert res_app.json()["status"] == "APPROVED"
 
+    tx_handover = fake_chain.sign_handover(test_admin_user.wallet_address, loan_hex)
+    res_ho = client.post(
+        f"/api/v1/loans/{loan_id}/handover",
+        json={"tx_hash": tx_handover},
+        headers=admin_token_headers,
+    )
+    assert res_ho.status_code == 200
+    assert res_ho.json()["status"] == "ACTIVE"
+    assert res_ho.json()["deposit_status"] == "LOCKED"
 
-def test_admin_reject_loan_success(client, admin_token_headers, borrower_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử Admin từ chối đơn mượn (200 OK, chuyển trạng thái REJECTED).
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    reject_res = client.post(f"/api/v1/loans/{loan_id}/reject", json={"reason": "Sinh viên chưa hoàn tất cọc học kỳ trước"}, headers=admin_token_headers)
-    assert reject_res.status_code == 200
-    assert reject_res.json()["status"] == "REJECTED"
-
-
-def test_admin_handover_loan_success(client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain):
-    """
-    Mục đích: Kiểm thử Admin bàn giao máy thực tế (APPROVED -> ACTIVE, thiết bị IN_USE, cọc LOCKED).
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-
-    handover_res = client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-    assert handover_res.status_code == 200
-    data = handover_res.json()
-    assert data["status"] == "ACTIVE"
-    assert data["actual_handover_date"] is not None
-    assert data["deposit_status"] == "LOCKED"
-
-
-def test_admin_return_loan_good_ontime_success(client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain):
-    """
-    Mục đích: Kiểm thử trả máy đúng hạn & nguyên vẹn: phạt 0%, hoàn cọc 100% (deposit_status = REFUNDED, status = RETURNED).
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()  # Còn hạn
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-
-    return_res = client.post(f"/api/v1/loans/{loan_id}/return", json={
-        "return_condition": "GOOD",
-        "admin_notes": "Máy hoạt động tốt, phụ kiện đầy đủ"
-    }, headers=admin_token_headers)
-
-    assert return_res.status_code == 200
-    data = return_res.json()
+    tx_return = fake_chain.sign_return(test_admin_user.wallet_address, loan_hex, return_condition=0)
+    res_ret = client.post(
+        f"/api/v1/loans/{loan_id}/return",
+        json={"tx_hash": tx_return, "return_condition": "GOOD", "admin_notes": "Nguyên vẹn"},
+        headers=admin_token_headers,
+    )
+    assert res_ret.status_code == 200
+    data = res_ret.json()
     assert data["status"] == "RETURNED"
     assert data["deposit_status"] == "REFUNDED"
     assert data["return_condition"] == "GOOD"
 
-
-def test_admin_return_loan_good_overdue_penalty_10_percent(client, admin_token_headers, borrower_token_headers, available_equipment, db_session, fake_chain):
-    """
-    Mục đích: Kiểm thử trả máy quá hạn <= 24h: tự động tính phạt 10%, hoàn trả 90% cọc.
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now - timedelta(days=3)).isoformat(),
-        "due_date": (now - timedelta(hours=5)).isoformat()  # Đã quá hạn 5 tiếng (<= 24h)
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    # Chỉnh due_date về quá khứ trong CSDL
-    loan = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    loan.due_date = now - timedelta(hours=5)
-    db_session.commit()
-
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-
-    return_res = client.post(f"/api/v1/loans/{loan_id}/return", json={
-        "return_condition": "GOOD"
-    }, headers=admin_token_headers)
-
-    assert return_res.status_code == 200
-    data = return_res.json()
-    assert data["status"] == "RETURNED"
-    assert data["deposit_status"] == "REFUNDED"
+    db_session.refresh(available_equipment)
+    assert available_equipment.status == EquipmentStatus.AVAILABLE
+    tx_rows = db_session.query(BlockchainTransaction).filter(BlockchainTransaction.request_id == loan_id).all()
+    assert len(tx_rows) == 4
+    assert all(row.status == TxStatus.CONFIRMED for row in tx_rows)
 
 
-def test_admin_return_loan_damaged_forfeits_deposit_and_disputed(client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain):
-    """
-    Mục đích: Kiểm thử trả máy hỏng: tịch thu 100% cọc (FORFEITED), chuyển DISPUTED, thiết bị chuyển MAINTENANCE.
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-
-    return_res = client.post(f"/api/v1/loans/{loan_id}/return", json={
-        "return_condition": "DAMAGED",
-        "admin_notes": "Vỡ màn hình LCD góc phải"
-    }, headers=admin_token_headers)
-
-    assert return_res.status_code == 200
-    data = return_res.json()
-    assert data["status"] == "DISPUTED"
-    assert data["deposit_status"] == "FORFEITED"
-    assert data["return_condition"] == "DAMAGED"
-
-
-def test_borrower_cancel_pending_loan_success(client, borrower_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử sinh viên hủy đơn mượn khi đang PENDING thành công (200 OK, CANCELLED).
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    cancel_res = client.post(f"/api/v1/loans/{loan_id}/cancel", json={"reason": "Đổi ý mượn thiết bị khác"}, headers=borrower_token_headers)
-    assert cancel_res.status_code == 200
-    assert cancel_res.json()["status"] == "CANCELLED"
-
-
-def test_borrower_cannot_cancel_active_loan_returns_400(client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain):
-    """
-    Mục đích: Kiểm thử không thể hủy đơn khi thiết bị đã được bàn giao ACTIVE (400 Bad Request).
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-
-    cancel_res = client.post(f"/api/v1/loans/{loan_id}/cancel", json={"reason": "Muốn hủy ngang"}, headers=borrower_token_headers)
-    assert cancel_res.status_code == 400
-    assert "Không thể hủy đơn khi thiết bị đã được bàn giao" in cancel_res.json()["detail"]
-
-
-def test_list_loans_borrower_sees_only_own_loans(client, borrower_token_headers, admin_token_headers, available_equipment):
-    """
-    Mục đích: Kiểm thử sinh viên gọi GET /loans chỉ nhìn thấy các đơn mượn của chính mình.
-    """
-    now = datetime.now()
-    client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=3)).isoformat()
-    }, headers=borrower_token_headers)
-
-    response = client.get("/api/v1/loans", headers=borrower_token_headers)
-    assert response.status_code == 200
-    loans = response.json()
-    assert len(loans) >= 1
-
-
-def test_offline_rpc_fails_closed_on_approve_handover_return_cancel(
-    client, admin_token_headers, borrower_token_headers, available_equipment, db_session, monkeypatch
+def test_pure_web3_overdue_return_reads_auto_penalty_from_chain(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain
 ):
     """
-    Mục đích: Khi RPC Blockchain offline, các bước chuyển trạng thái on-chain bắt buộc trả 503 và không được chốt sai trong DB.
+    Mục đích: Đơn trả GOOD nhưng Smart Contract tự phạt 10% quá hạn -> backend đọc penaltyPercent=10 từ event LoanReturned.
     """
-    from backend.app.services import loan_service as ls
-
-    monkeypatch.setattr(
-        ls.blockchain_service,
-        "ensure_ready",
-        lambda require_admin=False: (_ for _ in ()).throw(ConnectionError("RPC offline test"))
+    now = datetime.now().replace(microsecond=0)
+    res_req, _, loan_hex, _ = _create_pure_web3_loan(
+        client,
+        fake_chain,
+        test_borrower_user,
+        available_equipment,
+        borrower_token_headers,
+        handover_dt=now - timedelta(days=3),
+        due_dt=now - timedelta(hours=5),
     )
+    loan_id = res_req.json()["id"]
 
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=5)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
+    tx_app = fake_chain.sign_approve_loan(test_admin_user.wallet_address, loan_hex)
+    client.post(f"/api/v1/loans/{loan_id}/approve", json={"tx_hash": tx_app}, headers=admin_token_headers)
+    tx_ho = fake_chain.sign_handover(test_admin_user.wallet_address, loan_hex)
+    client.post(f"/api/v1/loans/{loan_id}/handover", json={"tx_hash": tx_ho}, headers=admin_token_headers)
 
-    # 1. Approve khi RPC offline -> 503, DB vẫn PENDING & AVAILABLE
-    res_app = client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    assert res_app.status_code == 503
+    tx_ret = fake_chain.sign_return(
+        test_admin_user.wallet_address, loan_hex, return_condition=0, overdue_penalty_percent=10
+    )
+    res_ret = client.post(
+        f"/api/v1/loans/{loan_id}/return",
+        json={"tx_hash": tx_ret, "return_condition": "GOOD"},
+        headers=admin_token_headers,
+    )
+    assert res_ret.status_code == 200
+    assert res_ret.json()["status"] == "RETURNED"
+    assert res_ret.json()["deposit_status"] == "REFUNDED"
+
+    audit = (
+        db_session.query(AuditLog)
+        .filter(AuditLog.entity_id == loan_id, AuditLog.action == "EQUIPMENT_RETURNED")
+        .first()
+    )
+    assert audit is not None
+    assert audit.details_json["penalty_percent"] == 10
+
+
+def test_pure_web3_return_damaged_and_condition_mismatch_rejected(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain
+):
+    """
+    Mục đích: Báo sai return_condition so với event LoanReturned bị chặn (400), còn DAMAGED thực tế chuyển DISPUTED + FORFEITED.
+    """
+    res_req, _, loan_hex, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    loan_id = res_req.json()["id"]
+    tx_app = fake_chain.sign_approve_loan(test_admin_user.wallet_address, loan_hex)
+    client.post(f"/api/v1/loans/{loan_id}/approve", json={"tx_hash": tx_app}, headers=admin_token_headers)
+    tx_ho = fake_chain.sign_handover(test_admin_user.wallet_address, loan_hex)
+    client.post(f"/api/v1/loans/{loan_id}/handover", json={"tx_hash": tx_ho}, headers=admin_token_headers)
+
+    tx_damaged = fake_chain.sign_return(test_admin_user.wallet_address, loan_hex, return_condition=1)
+    bad_claim = client.post(
+        f"/api/v1/loans/{loan_id}/return",
+        json={"tx_hash": tx_damaged, "return_condition": "GOOD"},
+        headers=admin_token_headers,
+    )
+    assert bad_claim.status_code == 400
     loan_db = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    eq_db = db_session.query(Equipment).filter(Equipment.id == available_equipment.id).first()
-    assert loan_db.status == LoanStatus.PENDING
-    assert eq_db.status == EquipmentStatus.AVAILABLE
-
-    # 2. Thiết lập đơn APPROVED giả lập đã lên chain -> handover/cancel cũng phải fail 503
-    loan_db.status = LoanStatus.APPROVED
-    loan_db.on_chain_loan_id = "0x" + "ab" * 32
-    eq_db.status = EquipmentStatus.RESERVED
-    db_session.commit()
-
-    res_ho = client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
-    assert res_ho.status_code == 503
-    db_session.refresh(loan_db)
-    assert loan_db.status == LoanStatus.APPROVED
-
-    res_cancel = client.post(f"/api/v1/loans/{loan_id}/cancel", json={"reason": "Test offline"}, headers=borrower_token_headers)
-    assert res_cancel.status_code == 503
-    db_session.refresh(loan_db)
-    assert loan_db.status == LoanStatus.APPROVED
-
-    # 3. Đơn ACTIVE khi RPC offline -> return phải fail 503 và giữ nguyên ACTIVE
-    loan_db.status = LoanStatus.ACTIVE
-    eq_db.status = EquipmentStatus.IN_USE
-    db_session.commit()
-    res_ret = client.post(f"/api/v1/loans/{loan_id}/return", json={"return_condition": "GOOD"}, headers=admin_token_headers)
-    assert res_ret.status_code == 503
-    db_session.refresh(loan_db)
     assert loan_db.status == LoanStatus.ACTIVE
 
-
-def test_reverted_tx_does_not_advance_loan_state_and_marks_tx_failed(
-    client, admin_token_headers, borrower_token_headers, available_equipment, db_session, fake_chain
-):
-    """
-    Mục đích: Khi giao dịch Smart Contract bị revert (status == 0), trả 502, lưu BlockchainTransaction=FAILED và giữ DB an toàn.
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=4)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    fake_chain.fail_next_action = "approve_loan"
-    res = client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    assert res.status_code == 502
-
-    loan_db = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    eq_db = db_session.query(Equipment).filter(Equipment.id == available_equipment.id).first()
-    assert loan_db.status == LoanStatus.PENDING
-    assert loan_db.on_chain_loan_id is not None  # Durable checkpoint đã lưu
-    assert eq_db.status == EquipmentStatus.AVAILABLE
-
-    failed_tx = db_session.query(BlockchainTransaction).filter(
-        BlockchainTransaction.request_id == loan_id,
-        BlockchainTransaction.action_type == TxActionType.APPROVE_LOAN,
-    ).first()
-    assert failed_tx is not None
-    assert failed_tx.status == TxStatus.FAILED
-
-
-def test_approve_resumes_when_chain_already_approved_without_duplicate_create(
-    client, admin_token_headers, borrower_token_headers, available_equipment, db_session, fake_chain
-):
-    """
-    Mục đích: Phục hồi sau crash (chain đã approveLoan trước khi DB commit): retry chỉ đồng bộ DB, không tạo lại createLoan.
-    """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now + timedelta(days=1)).isoformat(),
-        "due_date": (now + timedelta(days=4)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
-
-    # Giả lập đã checkpoint và đã xong cả createLoan + approveLoan trên chain nhưng DB chưa cập nhật APPROVED
-    pre_id = "0x" + "cd" * 32
-    loan_db = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
-    loan_db.on_chain_loan_id = pre_id
-    db_session.commit()
-
-    fake_chain.loans[pre_id] = {
-        "loan_id": pre_id,
-        "equipment_id": available_equipment.id,
-        "borrower": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        "student_id": "SV2026001",
-        "request_time": int(now.timestamp()),
-        "expected_handover": int((now + timedelta(days=1)).timestamp()),
-        "due_date": int((now + timedelta(days=4)).timestamp()),
-        "actual_handover": 0,
-        "actual_return": 0,
-        "deposit_amount": int(available_equipment.deposit_amount),
-        "state": 1,  # Approved on-chain
-        "deposit_state": 0,
-        "penalty_percent": 0,
-    }
-
-    res = client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    assert res.status_code == 200
-    assert res.json()["status"] == "APPROVED"
-    assert "create_loan" not in fake_chain.calls
-    assert "approve_loan" not in fake_chain.calls
-
-
-def test_metamask_receipt_verification_approve_only_and_idempotent_retry(
-    client, admin_token_headers, available_equipment, db_session, fake_chain, monkeypatch
-):
-    """
-    Mục đích:
-      - Tài khoản chưa xác minh ví bị từ chối gửi client_tx_hash (403).
-      - Tài khoản đã xác minh ví + biên lai hợp lệ được chấp nhận, retry idempotent không tạo trùng đơn.
-      - Admin duyệt đơn đã tạo bằng MetaMask CHỈ gọi approveLoan (không gọi createLoan lần 2).
-      - Từ chối tx replay từ người khác (409).
-    """
-    from backend.app.services import loan_service as ls
-
-    acct = Account.from_key("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")
-    sv_unverified = User(
-        student_staff_id="SV_UNV",
-        full_name="Sinh Viên Chưa Xác Minh",
-        email="unverified@eduvault.edu.vn",
-        password_hash=hash_password("student123"),
-        role=UserRole.BORROWER,
-        wallet_address=acct.address,
-        wallet_verified=False,
-        is_active=True,
+    ok_damaged = client.post(
+        f"/api/v1/loans/{loan_id}/return",
+        json={"tx_hash": tx_damaged, "return_condition": "DAMAGED", "admin_notes": "Vỡ màn hình"},
+        headers=admin_token_headers,
     )
-    db_session.add(sv_unverified)
-    db_session.commit()
-    db_session.refresh(sv_unverified)
-    unv_headers = {"Authorization": f"Bearer {create_access_token(sv_unverified.id, 'BORROWER')}"}
+    assert ok_damaged.status_code == 200
+    assert ok_damaged.json()["status"] == "DISPUTED"
+    assert ok_damaged.json()["deposit_status"] == "FORFEITED"
+    db_session.refresh(available_equipment)
+    assert available_equipment.status == EquipmentStatus.MAINTENANCE
 
-    now = datetime.now().replace(microsecond=0)
-    chain_loan_id = "0x" + "ef" * 32
-    client_tx_hash = "0x" + "12" * 32
-    handover_dt = now + timedelta(days=1)
-    due_dt = now + timedelta(days=3)
 
-    payload = {
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": handover_dt.isoformat(),
-        "due_date": due_dt.isoformat(),
-        "on_chain_loan_id": chain_loan_id,
-        "client_tx_hash": client_tx_hash,
-    }
+def test_reject_and_cancel_pure_web3_flows(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain
+):
+    """
+    Mục đích: Kiểm thử Admin reject (bắt buộc tx_hash `cancelLoan` khi có on_chain_loan_id) và Borrower cancel đơn APPROVED giải phóng thiết bị.
+    """
+    # 1. Admin reject loan on-chain
+    res1, _, loan_hex1, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    loan1_id = res1.json()["id"]
 
-    # 1. Chưa verify ví -> 403
-    res_unv = client.post("/api/v1/loans/request", json=payload, headers=unv_headers)
-    assert res_unv.status_code == 403
+    res_no_tx = client.post(
+        f"/api/v1/loans/{loan1_id}/reject",
+        json={"reason": "Thiếu thông tin"},
+        headers=admin_token_headers,
+    )
+    assert res_no_tx.status_code == 400
 
-    # 2. Đánh dấu ví đã xác minh EIP-191 và mock biên lai hợp lệ
-    sv_unverified.wallet_verified = True
-    db_session.commit()
+    tx_reject = fake_chain.sign_cancel(test_admin_user.wallet_address, loan_hex1, reason="Từ chối")
+    res_reject = client.post(
+        f"/api/v1/loans/{loan1_id}/reject",
+        json={"tx_hash": tx_reject, "reason": "Không đủ điều kiện"},
+        headers=admin_token_headers,
+    )
+    assert res_reject.status_code == 200
+    assert res_reject.json()["status"] == "REJECTED"
 
-    def _mock_verify(
-        tx_hash,
-        expected_loan_id,
-        expected_equipment_id,
-        expected_student_id,
-        expected_borrower_address,
-        expected_handover_ts,
-        expected_due_ts,
-        expected_deposit,
-        expected_sender_address=None,
-    ):
-        fake_chain.loans[expected_loan_id] = {
-            "loan_id": expected_loan_id,
-            "equipment_id": expected_equipment_id,
-            "borrower": expected_borrower_address,
-            "student_id": expected_student_id,
-            "request_time": int(now.timestamp()),
-            "expected_handover": expected_handover_ts,
-            "due_date": expected_due_ts,
-            "actual_handover": 0,
-            "actual_return": 0,
-            "deposit_amount": expected_deposit,
-            "state": 0,
-            "deposit_state": 0,
-            "penalty_percent": 0,
-        }
-        return {
-            "tx_hash": tx_hash,
-            "block_number": 5,
-            "gas_used": 110000,
-            "status": "CONFIRMED",
-            "from_address": expected_borrower_address,
-            "to_address": "0x" + "1" * 40,
-            "on_chain_record": fake_chain.loans[expected_loan_id],
-        }
+    # 2. Borrower approve rồi cancel -> thiết bị trở về AVAILABLE
+    res2, _, loan_hex2, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    loan2_id = res2.json()["id"]
+    tx_app = fake_chain.sign_approve_loan(test_admin_user.wallet_address, loan_hex2)
+    client.post(f"/api/v1/loans/{loan2_id}/approve", json={"tx_hash": tx_app}, headers=admin_token_headers)
 
-    monkeypatch.setattr(ls.blockchain_service, "verify_create_loan_tx", _mock_verify)
+    tx_cancel = fake_chain.sign_cancel(test_borrower_user.wallet_address, loan_hex2, reason="Đổi lịch")
+    res_cancel = client.post(
+        f"/api/v1/loans/{loan2_id}/cancel",
+        json={"tx_hash": tx_cancel, "reason": "Đổi lịch học"},
+        headers=borrower_token_headers,
+    )
+    assert res_cancel.status_code == 200
+    assert res_cancel.json()["status"] == "CANCELLED"
+    db_session.refresh(available_equipment)
+    assert available_equipment.status == EquipmentStatus.AVAILABLE
 
-    res_ok = client.post("/api/v1/loans/request", json=payload, headers=unv_headers)
-    assert res_ok.status_code == 201
-    created_loan_id = res_ok.json()["id"]
 
-    # 3. Retry cùng payload -> trả lại đúng đơn cũ (idempotent, không trùng DB)
-    res_retry = client.post("/api/v1/loans/request", json=payload, headers=unv_headers)
-    assert res_retry.status_code == 201
-    assert res_retry.json()["id"] == created_loan_id
+def test_idempotent_retry_and_anti_replay_across_lifecycle(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain
+):
+    """
+    Mục đích: Retry cùng (loan_id, action_type, tx_hash) trả kết quả idempotent; dùng lại tx_hash cho đơn hoặc bước khác bị chặn 409.
+    """
+    res_req, payload, loan_hex, tx_create = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    assert res_req.status_code == 201
+    loan_id = res_req.json()["id"]
 
-    # 4. Admin duyệt -> CHỈ gọi approve_loan, KHÔNG gọi create_loan
-    res_app = client.post(f"/api/v1/loans/{created_loan_id}/approve", json={}, headers=admin_token_headers)
-    assert res_app.status_code == 200
-    assert fake_chain.calls == ["approve_loan"]
+    # Retry createLoan idempotent
+    res_retry_req = client.post("/api/v1/loans/request", json=payload, headers=borrower_token_headers)
+    assert res_retry_req.status_code == 201
+    assert res_retry_req.json()["id"] == loan_id
 
-    # 5. Tài khoản khác cố tình replay client_tx_hash / on_chain_loan_id -> 409
+    # Retry approveLoan idempotent
+    tx_app = fake_chain.sign_approve_loan(test_admin_user.wallet_address, loan_hex)
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/approve", json={"tx_hash": tx_app}, headers=admin_token_headers
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/approve", json={"tx_hash": tx_app}, headers=admin_token_headers
+    ).status_code == 200
+
+    # Replay tx_create vào handover -> 409 Conflict
+    res_replay_step = client.post(
+        f"/api/v1/loans/{loan_id}/handover",
+        json={"tx_hash": tx_create},
+        headers=admin_token_headers,
+    )
+    assert res_replay_step.status_code == 409
+
+    # Tài khoản khác replay tx_create -> 409 Conflict
     sv2 = User(
-        student_staff_id="SV_OTHER",
-        full_name="Kẻ Giả Mạo",
+        student_staff_id="SV_ATTACKER",
+        full_name="Kẻ Replay",
         email="attacker@eduvault.edu.vn",
         password_hash=hash_password("student123"),
         role=UserRole.BORROWER,
+        wallet_address=OTHER_WALLET,
         wallet_verified=True,
-        wallet_address="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
         is_active=True,
     )
     db_session.add(sv2)
     db_session.commit()
     db_session.refresh(sv2)
     atk_headers = {"Authorization": f"Bearer {create_access_token(sv2.id, 'BORROWER')}"}
-    res_replay = client.post("/api/v1/loans/request", json=payload, headers=atk_headers)
-    assert res_replay.status_code == 409
+    assert client.post("/api/v1/loans/request", json=payload, headers=atk_headers).status_code == 409
 
 
-def test_overdue_return_rejects_zero_manual_penalty_waiver_and_allows_custom_or_auto(
-    client, admin_token_headers, borrower_token_headers, available_equipment, fake_chain
+def test_offline_rpc_and_reverted_tx_fail_closed(
+    client, admin_token_headers, borrower_token_headers, test_admin_user, test_borrower_user, available_equipment, db_session, fake_chain, monkeypatch
 ):
     """
-    Mục đích: Đơn quá hạn ở Phase 7A phải chặn nhập manual_penalty_percent=0 (tránh im lặng tự tính 10%/50%),
-             nhưng cho phép null (auto-calc) hoặc 1-100%.
+    Mục đích:
+      - Reverted tx (status=0) hoặc sai người gửi bị chặn 400, không làm đổi trạng thái DB.
+      - Khi node RPC offline -> tất cả endpoint vòng đời fail-closed 503 và giữ nguyên DB.
     """
-    now = datetime.now()
-    req_res = client.post("/api/v1/loans/request", json={
-        "equipment_id": available_equipment.id,
-        "expected_handover_date": (now - timedelta(days=3)).isoformat(),
-        "due_date": (now - timedelta(hours=3)).isoformat()
-    }, headers=borrower_token_headers)
-    loan_id = req_res.json()["id"]
+    from backend.app.services import loan_service as ls
 
-    client.post(f"/api/v1/loans/{loan_id}/approve", json={}, headers=admin_token_headers)
-    client.post(f"/api/v1/loans/{loan_id}/handover", headers=admin_token_headers)
+    res_req, _, loan_hex, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    loan_id = res_req.json()["id"]
 
-    res_zero = client.post(
-        f"/api/v1/loans/{loan_id}/return",
-        json={"return_condition": "GOOD", "manual_penalty_percent": 0},
+    # 1. Reverted tx -> 400, DB vẫn PENDING
+    bad_tx = fake_chain.mint_reverted_tx(test_admin_user.wallet_address)
+    res_rev = client.post(
+        f"/api/v1/loans/{loan_id}/approve",
+        json={"tx_hash": bad_tx},
         headers=admin_token_headers,
     )
-    assert res_zero.status_code == 400
-    assert "miễn phạt 0%" in res_zero.json()["detail"]
+    assert res_rev.status_code == 400
+    loan_db = db_session.query(LendingRequest).filter(LendingRequest.id == loan_id).first()
+    assert loan_db.status == LoanStatus.PENDING
 
-    res_custom = client.post(
-        f"/api/v1/loans/{loan_id}/return",
-        json={"return_condition": "GOOD", "manual_penalty_percent": 25},
-        headers=admin_token_headers,
+    # 2. RPC offline -> 503 trên approve / handover / cancel / return
+    monkeypatch.setattr(
+        ls.blockchain_service,
+        "ensure_ready",
+        lambda: (_ for _ in ()).throw(ConnectionError("RPC offline test")),
     )
-    assert res_custom.status_code == 200
-    assert res_custom.json()["status"] == "RETURNED"
+
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/approve", json={"tx_hash": "0x" + "11" * 32}, headers=admin_token_headers
+    ).status_code == 503
+
+    loan_db.status = LoanStatus.APPROVED
+    db_session.commit()
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/handover", json={"tx_hash": "0x" + "22" * 32}, headers=admin_token_headers
+    ).status_code == 503
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/cancel", json={"tx_hash": "0x" + "33" * 32}, headers=borrower_token_headers
+    ).status_code == 503
+
+    loan_db.status = LoanStatus.ACTIVE
+    db_session.commit()
+    assert client.post(
+        f"/api/v1/loans/{loan_id}/return",
+        json={"tx_hash": "0x" + "44" * 32, "return_condition": "GOOD"},
+        headers=admin_token_headers,
+    ).status_code == 503
+
+
+def test_list_loans_borrower_sees_only_own_loans(
+    client, borrower_token_headers, test_borrower_user, available_equipment, fake_chain
+):
+    """
+    Mục đích: Sinh viên gọi GET /loans chỉ nhìn thấy đơn mượn của chính mình.
+    """
+    res, _, _, _ = _create_pure_web3_loan(
+        client, fake_chain, test_borrower_user, available_equipment, borrower_token_headers
+    )
+    assert res.status_code == 201
+    list_res = client.get("/api/v1/loans", headers=borrower_token_headers)
+    assert list_res.status_code == 200
+    items = list_res.json()
+    assert len(items) >= 1
+    assert all(item["user_id"] == test_borrower_user.id for item in items)

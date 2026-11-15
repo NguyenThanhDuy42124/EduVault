@@ -35,12 +35,10 @@ class Settings(BaseSettings):
                 return [i.strip() for i in v.split(",") if i.strip()]
         return v
 
-    # Blockchain (Hardhat EVM Local)
+    # Blockchain (Pure Web3 Read-Only RPC Indexer & Receipt Verifier)
     BLOCKCHAIN_RPC_URL: str = "http://127.0.0.1:8545"
     CHAIN_ID: int = 31337
     CONTRACT_ADDRESS: str = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
-    ADMIN_PRIVATE_KEY: str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    ADMIN_WALLET_ADDRESS: str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

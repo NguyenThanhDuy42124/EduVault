@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 13 hoàn tất trên Hardhat Local EVM (`31337`); chuẩn bị triển khai **Phase 14: Chuyển đổi Backend sang Mô hình Indexer & Receipt Verifier**. (Deploy Sepolia `11155111` hoãn sang bước có ví MetaMask + SepETH thực tế trước E2E Phase 16).
+Phase 13 & Phase 14 hoàn tất (Pure Web3 Smart Contract trên Hardhat Local EVM `31337` + Backend Read-Only Indexer & Receipt Verifier, không lưu Private Key ở Backend); chuẩn bị **Phase 15: Tích hợp Multi-Wallet MetaMask Frontend** sau khi người dùng xác nhận. (Deploy Sepolia `11155111` hoãn sang bước có ví MetaMask + SepETH thực tế trước E2E Phase 16).
 
 ### Cập nhật rà soát ngày 2026-11-06
 - Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
@@ -267,40 +267,37 @@ Phase 13 hoàn tất trên Hardhat Local EVM (`31337`); chuẩn bị triển kha
 ### Phase 14: Chuyển đổi Backend sang Mô hình Indexer & Receipt Verifier (Loại bỏ Private Key)
 > Mục tiêu: Xóa bỏ hoàn toàn Private Key khỏi máy chủ backend, nâng tầm bảo mật hệ thống; backend chuyển thành bộ kiểm chứng biên lai giao dịch và bộ nhớ đệm (Cache/Indexer).
 
-- [ ] Task 14.1: **Gỡ bỏ `ADMIN_PRIVATE_KEY` Khỏi Cấu hình Backend**
-  - Xóa biến `ADMIN_PRIVATE_KEY` khỏi `backend/.env`, root `.env` và `backend/app/core/config.py`.
+- [x] Task 14.1: **Gỡ bỏ `ADMIN_PRIVATE_KEY` Khỏi Cấu hình Backend**
+  - Xóa biến `ADMIN_PRIVATE_KEY` và `ADMIN_WALLET_ADDRESS` khỏi `.env`, `.env.example`, `backend/.env`, `backend/.env.example` và `backend/app/core/config.py`.
   - Đảm bảo Backend chỉ khởi tạo kết nối Read-Only Web3 RPC (không có ví ký số nội bộ).
-  - File: `backend/app/core/config.py`, `backend/.env`
+  - File: `backend/app/core/config.py`, `.env.example`, `backend/.env.example`
 
-- [ ] Task 14.2: **Tái cấu trúc `BlockchainService` thành Trình Xác thực Biên lai (Receipt Verifier)**
-  - Bỏ các hàm gửi transaction (`send_transaction`, `create_loan`, `approve_loan`, v.v.).
-  - Viết hàm `verify_transaction_receipt(tx_hash: str, expected_event: str)`:
-    - Lấy biên lai qua `web3.eth.get_transaction_receipt(tx_hash)`.
-    - Kiểm tra `receipt.status == 1`.
-    - Kiểm tra đúng `receipt.to == CONTRACT_ADDRESS`.
-    - Giải mã Event log (ví dụ: `LoanCreated`, `LoanApproved`, `HandoverConfirmed`, `LoanReturned`) để kiểm chứng ID đơn mượn và địa chỉ người ký.
-  - File: `backend/app/services/blockchain_service.py`
+- [x] Task 14.2: **Tái cấu trúc `BlockchainService` thành Trình Xác thực Biên lai (Receipt Verifier)**
+  - Bỏ các hàm ký/gửi transaction (`send_transaction`, `create_loan`, `approve_loan`, `confirm_handover`, `confirm_return`, `cancel_loan`, `get_admin_balance`, `admin_account`).
+  - Bổ sung `verify_transaction_receipt(tx_hash, expected_event, expected_loan_id, expected_sender, expected_args)` (kiểm tra `status == 1`, `to == CONTRACT_ADDRESS`, `chainId`, `from == expected_sender`, event log & tham số) và `has_role(role_name, account_address)`.
+  - Cập nhật `backend/app/api/v1/blockchain.py` (`mode="pure-web3-verifier"`, `has_signer=False`) và `backend/app/services/reconciliation_service.py` (không dùng `admin_account`).
+  - File: `backend/app/services/blockchain_service.py`, `backend/app/api/v1/blockchain.py`, `backend/app/services/reconciliation_service.py`
 
-- [ ] Task 14.3: **Chuyển đổi các API Vòng đời Mượn Trả sang Dạng Nhận & Xác thực Tx Hash**
-  - Cập nhật các endpoint trong `backend/app/api/v1/loans.py`:
-    - `POST /api/v1/loans/request`: Nhận `tx_hash` tạo đơn từ sinh viên, xác minh event `LoanCreated` $\to$ lưu bản ghi MySQL.
-    - `POST /api/v1/loans/{id}/approve`: Nhận `tx_hash` duyệt đơn từ ví Admin, xác minh event `LoanApproved` $\to$ đổi trạng thái `APPROVED`.
-    - `POST /api/v1/loans/{id}/handover`: Nhận `tx_hash` bàn giao từ ví Admin, xác minh event `HandoverConfirmed` $\to$ đổi trạng thái `ACTIVE`.
-    - `POST /api/v1/loans/{id}/return`: Nhận `tx_hash` trả máy từ ví Admin, xác minh event `LoanReturned` $\to$ cập nhật phạt và trạng thái `RETURNED`.
-    - `POST /api/v1/loans/{id}/cancel`: Nhận `tx_hash` hủy đơn $\to$ cập nhật trạng thái `CANCELLED`.
-  - File: `backend/app/api/v1/loans.py`, `backend/app/services/loan_service.py`
+- [x] Task 14.3: **Chuyển đổi các API Vòng đời Mượn Trả sang Dạng Nhận & Xác thực Tx Hash**
+  - Cập nhật `backend/app/schemas/loan.py`, `backend/app/api/v1/loans.py`, `backend/app/services/loan_service.py`:
+    - `POST /api/v1/loans/request`: Bắt buộc `on_chain_loan_id` + `tx_hash` (giữ alias `client_tx_hash`), xác minh receipt `LoanCreated` & `getLoan` khớp ví/thiết bị/mốc thời gian.
+    - `POST /api/v1/loans/{id}/approve`: Nhận `LoanApproveRequest(tx_hash, notes)`, xác minh receipt `LoanApproved` của Admin.
+    - `POST /api/v1/loans/{id}/reject`: Nhận `LoanRejectRequest(tx_hash, reason)`, xác minh receipt `LoanCancelled` nếu đơn đã lên chuỗi.
+    - `POST /api/v1/loans/{id}/handover`: Nhận `LoanHandoverRequest(tx_hash)`, xác minh receipt `HandoverConfirmed` của Admin.
+    - `POST /api/v1/loans/{id}/return`: Nhận `LoanReturnRequest(tx_hash, return_condition, admin_notes)` (bỏ `manual_penalty_percent`), đọc `penaltyPercent` & `depositState` từ event `LoanReturned` on-chain.
+    - `POST /api/v1/loans/{id}/cancel`: Nhận `LoanCancelRequest(tx_hash, reason)`, xác minh receipt `LoanCancelled`.
+  - Hỗ trợ idempotent retry và chống replay `tx_hash` (HTTP 409) qua helper dùng chung `_verify_and_record_lifecycle_tx`.
 
-- [ ] Task 14.4: **Thêm API Quản lý Ví Sinh viên & Admin trong CSDL MySQL**
-  - Cập nhật bảng `User` hoặc bảng phụ để lưu trữ danh sách `wallet_address` đã xác minh của từng tài khoản.
-  - Endpoint `POST /api/v1/users/wallet`: Liên kết ví MetaMask với tài khoản sinh viên/admin đang đăng nhập.
-  - Endpoint `GET /api/v1/admin/pending-borrowers`: Danh sách sinh viên chưa được cấp `BORROWER_ROLE` on-chain để Admin dễ duyệt.
-  - File: `backend/app/api/v1/users.py`, `backend/app/models/user.py`
+- [x] Task 14.4: **Thêm API Quản lý Ví Sinh viên & Admin trong CSDL MySQL**
+  - Kiểm chứng migration `c2d9e4f7a102 (head)` trên MySQL đã có `wallet_address`, `wallet_verified`, `wallet_nonce*`.
+  - Bổ sung `POST /api/v1/users/wallet` (xác minh chữ ký EIP-191 gắn ví) và `GET /api/v1/admin/pending-borrowers` (liệt kê `BORROWER` đã xác minh ví nhưng chưa có `BORROWER_ROLE` trên Smart Contract).
+  - File: `backend/app/api/v1/users.py`, `backend/app/services/user_service.py`, `backend/app/schemas/user.py`
 
-- [ ] Task 14.5: **Cập nhật & Chạy Lại Bộ Kiểm thử Pytest Backend**
-  - Mock Web3 receipt verifier trong các test cases backend.
-  - Chạy `pytest backend/tests` đảm bảo tất cả test cases đều pass với mô hình xác thực receipt mới.
+- [x] Task 14.5: **Cập nhật & Chạy Lại Bộ Kiểm thử Pytest Backend**
+  - Cập nhật mock/unit tests sang Pure Web3 Receipt Verifier (`test_blockchain.py`, `test_loans.py`, `test_users.py`, `test_audit.py`).
+  - Chạy `pytest backend/tests/ -v` đạt 62/62 PASS.
 
-- **Status:** pending
+- **Status:** complete
 
 ---
 

@@ -609,3 +609,27 @@
   - `npx tsc --noEmit --incremental false` & `npx vite build`: Exit 0 (`built in 44.99s`).
 - **Ghi chú:** Deploy Sepolia testnet (`11155111`) được hoãn sang khi người dùng có ví Deployer + SepETH thực tế (trước E2E Phase 16).
 
+---
+
+## Session: 2026-11-15 (Phase 14: Backend Pure Web3 Indexer & Receipt Verifier — Zero Private Key)
+
+### Phase 14 Execution Log
+- **Status:** `complete` (Dừng sau commit Phase 14 & push, chờ xác nhận trước khi sang Phase 15)
+- **Thay đổi mã nguồn & kiểm thử:**
+  1. **Gỡ hoàn toàn Private Key & Relayer config:**
+     - Xóa `ADMIN_PRIVATE_KEY` và `ADMIN_WALLET_ADDRESS` khỏi `.env`, `.env.example`, `backend/.env`, `backend/.env.example`, `backend/app/core/config.py`.
+  2. **Tái cấu trúc [`blockchain_service.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/services/blockchain_service.py), [`blockchain.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/api/v1/blockchain.py), [`reconciliation_service.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/services/reconciliation_service.py):**
+     - Xóa toàn bộ signer/tx-sending (`admin_account`, `_load_admin_wallet`, `get_admin_balance`, `send_transaction`, `create_loan`, `approve_loan`, `confirm_handover`, `confirm_return`, `cancel_loan`).
+     - Thêm `verify_transaction_receipt(...)` (xác thực `status==1`, `receipt.to`, `chainId`, `tx.from`, decode event + tham số) và `has_role(...)`; refactor `verify_create_loan_tx(...)` dùng chung `verify_transaction_receipt(...)`.
+     - Cập nhật `/blockchain/status` & `/blockchain/contract-info` trả `mode="pure-web3-verifier"`, `has_signer=False`; cập nhật đối soát `verify_loan_integrity` đối chiếu ví `loan.user.wallet_address` đã xác minh.
+  3. **Chuyển đổi vòng đời mượn trả sang Pure Web3 [`schemas/loan.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/schemas/loan.py), [`api/v1/loans.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/api/v1/loans.py), [`services/loan_service.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/services/loan_service.py):**
+     - Mọi endpoint vòng đời (`request`, `approve`, `reject`, `handover`, `return`, `cancel`) xác thực `tx_hash` trên RPC (giữ alias `client_tx_hash` ở `/request`), đọc `penaltyPercent` & `depositState` từ event `LoanReturned` on-chain (loại bỏ `manual_penalty_percent`), chống replay (HTTP 409) và hỗ trợ retry idempotent.
+  4. **Quản lý ví & hàng đợi duyệt quyền [`schemas/user.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/schemas/user.py), [`services/user_service.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/services/user_service.py), [`api/v1/users.py`](file:///d:/BaiThucHanh/PythonFile/BLockChain/backend/app/api/v1/users.py):**
+     - Thêm `POST /api/v1/users/wallet` (EIP-191 signature alias) và `GET /api/v1/admin/pending-borrowers` (lọc `BORROWER` đã xác minh ví nhưng chưa có `BORROWER_ROLE` trên contract).
+     - Xác minh Alembic MySQL head: `c2d9e4f7a102 (head)`.
+- **Kiểm chứng thực tế:**
+  - `.\backend\.venv\Scripts\python.exe -m pytest backend/tests/ -v`: **62 passed** (`0` failing, `0` skipped).
+  - `npx hardhat test`: **31 passing**.
+  - `npx tsc --noEmit --incremental false` (frontend): Exit 0.
+  - Quét `ADMIN_PRIVATE_KEY` / `admin_account` / `send_transaction` trong `backend/app` & `.env*`: **0 kết quả**.
+

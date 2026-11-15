@@ -94,3 +94,11 @@ class UserResponse(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class PendingBorrowerResponse(UserResponse):
+    """Schema thông tin sinh viên đã xác minh ví để Admin đối chiếu/cấp BORROWER_ROLE on-chain."""
+    on_chain_borrower_role: Optional[bool] = Field(
+        None,
+        description="Trạng thái sở hữu BORROWER_ROLE trên Smart Contract (None nếu RPC offline)"
+    )
+

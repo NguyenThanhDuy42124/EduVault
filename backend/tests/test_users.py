@@ -221,3 +221,92 @@ def test_wallet_challenge_and_eip191_verify_flow_with_one_time_nonce(
     )
     assert conflict_chal.status_code == 409
 
+
+def test_post_users_wallet_alias_and_admin_pending_borrowers(
+    client, db_session, admin_token_headers, test_borrower_user, monkeypatch
+):
+    """
+    Mục đích: Kiểm thử `POST /api/v1/users/wallet` (EIP-191 alias) và `GET /api/v1/admin/pending-borrowers`.
+    """
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+    from backend.app.core.security import create_access_token, hash_password
+    from backend.app.models.user import User, UserRole
+    from backend.app.services import user_service as us
+
+    acct1 = Account.from_key("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")
+    acct2 = Account.from_key("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a")
+    borrower_headers = {
+        "Authorization": f"Bearer {create_access_token(test_borrower_user.id, 'BORROWER')}"
+    }
+
+    # 1. Challenge + POST /api/v1/users/wallet (alias mới)
+    chal = client.post(
+        "/api/v1/users/wallet/challenge",
+        json={"wallet_address": acct1.address},
+        headers=borrower_headers,
+    ).json()
+    sig = acct1.sign_message(encode_defunct(text=chal["message"])).signature.hex()
+    link_res = client.post(
+        "/api/v1/users/wallet",
+        json={"wallet_address": acct1.address, "signature": sig},
+        headers=borrower_headers,
+    )
+    assert link_res.status_code == 200
+    assert link_res.json()["wallet_verified"] is True
+    assert link_res.json()["wallet_address"] == acct1.address
+
+    # 2. Tạo thêm 1 borrower đã xác minh ví và 1 borrower chưa xác minh ví
+    verified_2 = User(
+        student_staff_id="SV_VER2",
+        full_name="Đã Xác Minh 2",
+        email="ver2@eduvault.edu.vn",
+        password_hash=hash_password("student123"),
+        role=UserRole.BORROWER,
+        wallet_address=acct2.address,
+        wallet_verified=True,
+        is_active=True,
+    )
+    unverified = User(
+        student_staff_id="SV_UNV_LIST",
+        full_name="Chưa Xác Minh",
+        email="unv_list@eduvault.edu.vn",
+        password_hash=hash_password("student123"),
+        role=UserRole.BORROWER,
+        wallet_address="0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+        wallet_verified=False,
+        is_active=True,
+    )
+    db_session.add_all([verified_2, unverified])
+    db_session.commit()
+
+    # 3. Sinh viên không có quyền gọi pending-borrowers -> 403
+    forbidden_res = client.get("/api/v1/admin/pending-borrowers", headers=borrower_headers)
+    assert forbidden_res.status_code == 403
+
+    # 4. RPC online: giả lập acct1 chưa có BORROWER_ROLE, acct2 đã có BORROWER_ROLE
+    monkeypatch.setattr(us.blockchain_service, "ensure_ready", lambda: None)
+    monkeypatch.setattr(
+        us.blockchain_service,
+        "has_role",
+        lambda role_name, wallet: wallet.lower() == acct2.address.lower(),
+    )
+    pending_res = client.get("/api/v1/admin/pending-borrowers", headers=admin_token_headers)
+    assert pending_res.status_code == 200
+    pending_items = pending_res.json()
+    assert len(pending_items) == 1
+    assert pending_items[0]["wallet_address"] == acct1.address
+    assert pending_items[0]["on_chain_borrower_role"] is False
+
+    # 5. RPC offline: vẫn trả danh sách verified với on_chain_borrower_role=None
+    monkeypatch.setattr(
+        us.blockchain_service,
+        "ensure_ready",
+        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+    offline_res = client.get("/api/v1/admin/pending-borrowers", headers=admin_token_headers)
+    assert offline_res.status_code == 200
+    offline_items = offline_res.json()
+    assert {u["wallet_address"] for u in offline_items} == {acct1.address, acct2.address}
+    assert all(u["on_chain_borrower_role"] is None for u in offline_items)
+

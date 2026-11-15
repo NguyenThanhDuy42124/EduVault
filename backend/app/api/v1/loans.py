@@ -11,8 +11,11 @@ from backend.app.db.session import get_db
 from backend.app.models.lending_request import LoanStatus
 from backend.app.models.user import User, UserRole
 from backend.app.schemas.loan import (
+    LoanApproveRequest,
     LoanCancelRequest,
     LoanCreateRequest,
+    LoanHandoverRequest,
+    LoanRejectRequest,
     LoanResponse,
     LoanReturnRequest,
 )
@@ -148,19 +151,19 @@ def get_loan_detail_endpoint(
     "/{loan_id}/approve",
     response_model=LoanResponse,
     status_code=status.HTTP_200_OK,
-    summary="Admin duyệt đơn mượn",
-    description="Khóa dòng MySQL (Pessimistic Lock) đổi thiết bị sang RESERVED và gửi tx createLoan + approveLoan on-chain."
+    summary="Admin xác nhận duyệt đơn mượn (Pure Web3)",
+    description="Xác thực biên lai MetaMask `approveLoan` trên Blockchain, khóa dòng MySQL và đổi thiết bị sang RESERVED."
 )
 def approve_loan_endpoint(
     loan_id: int,
-    notes: Optional[str] = Body(None, embed=True, description="Ghi chú duyệt đơn"),
+    approve_in: LoanApproveRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_role([UserRole.ADMIN]))
 ) -> LoanResponse:
     """
-    Mục đích: Admin duyệt yêu cầu mượn và đặt giữ chỗ thiết bị.
+    Mục đích: Admin xác thực biên lai `approveLoan` đã ký MetaMask và giữ chỗ thiết bị.
     """
-    loan = approve_loan_request(db=db, admin_user=admin_user, loan_id=loan_id, notes=notes)
+    loan = approve_loan_request(db=db, admin_user=admin_user, loan_id=loan_id, approve_in=approve_in)
     return _to_loan_response(loan)
 
 
@@ -168,19 +171,19 @@ def approve_loan_endpoint(
     "/{loan_id}/reject",
     response_model=LoanResponse,
     status_code=status.HTTP_200_OK,
-    summary="Admin từ chối đơn mượn",
-    description="Từ chối yêu cầu mượn chưa được duyệt (trạng thái chuyển sang REJECTED)."
+    summary="Admin từ chối đơn mượn (Pure Web3)",
+    description="Xác thực biên lai MetaMask `cancelLoan` (nếu đơn đã lên chuỗi) và chuyển đơn sang REJECTED."
 )
 def reject_loan_endpoint(
     loan_id: int,
-    reason: Optional[str] = Body(None, embed=True, description="Lý do từ chối"),
+    reject_in: LoanRejectRequest = Body(default_factory=LoanRejectRequest),
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_role([UserRole.ADMIN]))
 ) -> LoanResponse:
     """
     Mục đích: Admin từ chối đơn mượn.
     """
-    loan = reject_loan_request(db=db, admin_user=admin_user, loan_id=loan_id, reason=reason)
+    loan = reject_loan_request(db=db, admin_user=admin_user, loan_id=loan_id, reject_in=reject_in)
     return _to_loan_response(loan)
 
 
@@ -188,18 +191,19 @@ def reject_loan_endpoint(
     "/{loan_id}/handover",
     response_model=LoanResponse,
     status_code=status.HTTP_200_OK,
-    summary="Admin xác nhận bàn giao máy thực tế",
-    description="Đổi thiết bị sang IN_USE, đơn chuyển ACTIVE và gọi Smart Contract confirmHandover để khóa cọc."
+    summary="Admin xác nhận bàn giao máy thực tế (Pure Web3)",
+    description="Xác thực biên lai MetaMask `confirmHandover`, đổi thiết bị sang IN_USE và đơn sang ACTIVE."
 )
 def handover_loan_endpoint(
     loan_id: int,
+    handover_in: LoanHandoverRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_role([UserRole.ADMIN]))
 ) -> LoanResponse:
     """
-    Mục đích: Admin bàn giao thiết bị thực tế cho sinh viên.
+    Mục đích: Admin xác thực biên lai `confirmHandover` và bàn giao thiết bị thực tế.
     """
-    loan = handover_loan_equipment(db=db, admin_user=admin_user, loan_id=loan_id)
+    loan = handover_loan_equipment(db=db, admin_user=admin_user, loan_id=loan_id, handover_in=handover_in)
     return _to_loan_response(loan)
 
 
@@ -207,8 +211,8 @@ def handover_loan_endpoint(
     "/{loan_id}/return",
     response_model=LoanResponse,
     status_code=status.HTTP_200_OK,
-    summary="Admin nhận lại thiết bị và xử lý cọc/phạt",
-    description="Kiểm tra tình trạng (TỐT/HỎNG/MẤT), áp dụng mức phạt on-chain, giải phóng Mutex và mở lại thiết bị."
+    summary="Admin xác nhận nhận lại thiết bị và đồng bộ phạt on-chain",
+    description="Xác thực biên lai MetaMask `confirmReturn`, đọc mức phạt và trạng thái cọc tự động từ Smart Contract."
 )
 def return_loan_endpoint(
     loan_id: int,
@@ -217,7 +221,7 @@ def return_loan_endpoint(
     admin_user: User = Depends(require_role([UserRole.ADMIN]))
 ) -> LoanResponse:
     """
-    Mục đích: Admin nhận lại máy và kết thúc đơn mượn.
+    Mục đích: Admin xác thực biên lai `confirmReturn` và đồng bộ trạng thái kết thúc đơn.
     """
     loan = return_loan_equipment(db=db, admin_user=admin_user, loan_id=loan_id, return_in=return_in)
     return _to_loan_response(loan)
@@ -227,12 +231,12 @@ def return_loan_endpoint(
     "/{loan_id}/cancel",
     response_model=LoanResponse,
     status_code=status.HTTP_200_OK,
-    summary="Hủy đơn mượn trước khi nhận máy",
-    description="Chỉ áp dụng khi đơn đang PENDING hoặc APPROVED; tự động giải phóng thiết bị và Mutex on-chain."
+    summary="Hủy đơn mượn trước khi nhận máy (Pure Web3)",
+    description="Xác thực biên lai MetaMask `cancelLoan` trên Blockchain và giải phóng thiết bị trong MySQL."
 )
 def cancel_loan_endpoint(
     loan_id: int,
-    cancel_in: LoanCancelRequest,
+    cancel_in: LoanCancelRequest = Body(default_factory=LoanCancelRequest),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> LoanResponse:

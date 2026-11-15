@@ -13,29 +13,43 @@ from backend.app.schemas.user import UserResponse
 
 
 class LoanCreateRequest(BaseModel):
-    """Schema dữ liệu khi sinh viên gửi yêu cầu mượn thiết bị."""
+    """Schema dữ liệu khi sinh viên gửi yêu cầu mượn thiết bị (đã ký MetaMask `createLoan`)."""
     equipment_id: int = Field(..., description="ID thiết bị muốn mượn")
     expected_handover_date: datetime = Field(..., description="Thời gian dự kiến nhận thiết bị")
     due_date: datetime = Field(..., description="Thời gian hạn chót trả lại thiết bị")
     admin_notes: Optional[str] = Field(None, max_length=500, description="Ghi chú mục đích mượn học tập")
-    on_chain_loan_id: Optional[str] = Field(None, max_length=66, description="Mã hash định danh trên Blockchain EVM nếu đã ký trước qua MetaMask")
-    client_tx_hash: Optional[str] = Field(None, max_length=66, description="Transaction hash nếu tạo đơn qua MetaMask")
+    on_chain_loan_id: Optional[str] = Field(None, max_length=66, description="Mã bytes32 định danh trên Blockchain EVM")
+    tx_hash: Optional[str] = Field(None, max_length=66, description="Transaction hash MetaMask `createLoan`")
+    client_tx_hash: Optional[str] = Field(None, max_length=66, description="Alias tương thích ngược cho `tx_hash`")
+
+
+class LoanApproveRequest(BaseModel):
+    """Schema dữ liệu khi Admin gửi tx_hash MetaMask `approveLoan` để xác nhận duyệt đơn."""
+    tx_hash: str = Field(..., max_length=66, description="Transaction hash MetaMask đã gọi `approveLoan`")
+    notes: Optional[str] = Field(None, max_length=500, description="Ghi chú duyệt đơn")
+
+
+class LoanRejectRequest(BaseModel):
+    """Schema dữ liệu khi Admin từ chối đơn mượn (đính kèm tx_hash `cancelLoan` nếu đơn đã lên chuỗi)."""
+    tx_hash: Optional[str] = Field(None, max_length=66, description="Transaction hash MetaMask đã gọi `cancelLoan`")
+    reason: Optional[str] = Field(None, max_length=255, description="Lý do từ chối")
+
+
+class LoanHandoverRequest(BaseModel):
+    """Schema dữ liệu khi Admin gửi tx_hash MetaMask `confirmHandover` để xác nhận bàn giao."""
+    tx_hash: str = Field(..., max_length=66, description="Transaction hash MetaMask đã gọi `confirmHandover`")
 
 
 class LoanReturnRequest(BaseModel):
-    """Schema dữ liệu khi Admin xác nhận nhận lại thiết bị và đánh giá tình trạng."""
+    """Schema dữ liệu khi Admin gửi tx_hash MetaMask `confirmReturn` (Smart Contract tự tính phạt)."""
+    tx_hash: str = Field(..., max_length=66, description="Transaction hash MetaMask đã gọi `confirmReturn`")
     return_condition: ReturnCondition = Field(default=ReturnCondition.GOOD, description="Hiện trạng thiết bị: GOOD, DAMAGED, LOST")
-    manual_penalty_percent: Optional[int] = Field(
-        None,
-        ge=0,
-        le=100,
-        description="Mức phạt thủ công 0-100%. Khi quá hạn và tình trạng GOOD, để trống (null) để tự tính 10%/50% hoặc nhập 1-100."
-    )
     admin_notes: Optional[str] = Field(None, max_length=500, description="Ghi chú thẩm định hiện trạng bàn giao")
 
 
 class LoanCancelRequest(BaseModel):
-    """Schema dữ liệu khi người dùng hoặc Admin hủy đơn mượn."""
+    """Schema dữ liệu khi người dùng hoặc Admin hủy đơn mượn kèm tx_hash `cancelLoan`."""
+    tx_hash: Optional[str] = Field(None, max_length=66, description="Transaction hash MetaMask đã gọi `cancelLoan`")
     reason: Optional[str] = Field("Người dùng hủy đơn", max_length=255, description="Lý do hủy đơn")
 
 
