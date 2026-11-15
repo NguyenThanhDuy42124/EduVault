@@ -139,11 +139,13 @@ export const AdminLoansPage: React.FC = () => {
         const contract = await getContract(true);
         if (contract) {
           try {
-            const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id);
+            const reasonStr = rejectReason || 'Quản trị viên từ chối';
+            const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id, reasonStr);
             const receipt = await tx.wait();
             txHash = receipt.hash;
-          } catch {
-            // If cancel on-chain reverts (e.g. not created yet), proceed to DB reject
+          } catch (contractErr: unknown) {
+            console.warn('Lỗi gọi cancelLoan on-chain:', contractErr);
+            // Nếu đơn đã hủy từ trước trên blockchain, tiếp tục gửi để đồng bộ cơ sở dữ liệu
           }
         }
       }

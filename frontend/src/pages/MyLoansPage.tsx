@@ -59,9 +59,14 @@ export const MyLoansPage: React.FC = () => {
       if (selectedLoan.on_chain_loan_id && isConnected) {
         const contract = await getContract(true);
         if (contract) {
-          const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id);
-          const receipt = await tx.wait();
-          txHash = receipt.hash;
+          try {
+            const reasonStr = cancelReason || 'Sinh viên hủy đơn mượn';
+            const tx = await contract.cancelLoan(selectedLoan.on_chain_loan_id, reasonStr);
+            const receipt = await tx.wait();
+            txHash = receipt.hash;
+          } catch (contractErr: unknown) {
+            console.warn('Lỗi gọi cancelLoan on-chain:', contractErr);
+          }
         }
       }
 
@@ -279,7 +284,7 @@ export const MyLoansPage: React.FC = () => {
 
           {selectedLoan?.on_chain_loan_id && (
             <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
-              Đơn đã có bản ghi Smart Contract (<code>{selectedLoan.on_chain_loan_id.slice(0, 12)}...</code>). Khi hủy, Backend Admin Relayer sẽ gửi giao dịch <code>cancelLoan</code> đồng bộ lên Blockchain.
+              Đơn đã có bản ghi Smart Contract (<code>{selectedLoan.on_chain_loan_id.slice(0, 12)}...</code>). Khi hủy, MetaMask sẽ yêu cầu ký giao dịch <code>cancelLoan</code> đồng bộ trực tiếp lên Blockchain.
             </div>
           )}
 

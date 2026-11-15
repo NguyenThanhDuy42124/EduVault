@@ -596,22 +596,39 @@ def reject_loan_request(
 
     verified_tx_hash: Optional[str] = None
     if loan.on_chain_loan_id:
-        verified = _verify_and_record_lifecycle_tx(
-            db=db,
-            loan=loan,
-            actor=admin_user,
-            raw_tx_hash=payload.tx_hash,
-            action_type=TxActionType.CANCEL_LOAN,
-            expected_event="LoanCancelled",
-        )
         on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
         chain_state_code = int(on_chain_record.get("state", -1))
-        if chain_state_code != 4:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
+        if chain_state_code == 4:
+            if payload.tx_hash:
+                try:
+                    verified = _verify_and_record_lifecycle_tx(
+                        db=db,
+                        loan=loan,
+                        actor=admin_user,
+                        raw_tx_hash=payload.tx_hash,
+                        action_type=TxActionType.CANCEL_LOAN,
+                        expected_event="LoanCancelled",
+                    )
+                    verified_tx_hash = verified["tx_hash"]
+                except Exception:
+                    pass
+        else:
+            verified = _verify_and_record_lifecycle_tx(
+                db=db,
+                loan=loan,
+                actor=admin_user,
+                raw_tx_hash=payload.tx_hash,
+                action_type=TxActionType.CANCEL_LOAN,
+                expected_event="LoanCancelled",
             )
-        verified_tx_hash = verified["tx_hash"]
+            on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
+            chain_state_code = int(on_chain_record.get("state", -1))
+            if chain_state_code != 4:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
+                )
+            verified_tx_hash = verified["tx_hash"]
 
     loan.status = LoanStatus.REJECTED
     if payload.reason:
@@ -823,22 +840,39 @@ def cancel_loan_request(
 
     verified_tx_hash: Optional[str] = None
     if loan.on_chain_loan_id:
-        verified = _verify_and_record_lifecycle_tx(
-            db=db,
-            loan=loan,
-            actor=current_user,
-            raw_tx_hash=payload.tx_hash,
-            action_type=TxActionType.CANCEL_LOAN,
-            expected_event="LoanCancelled",
-        )
         on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
         chain_state_code = int(on_chain_record.get("state", -1))
-        if chain_state_code != 4:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
+        if chain_state_code == 4:
+            if payload.tx_hash:
+                try:
+                    verified = _verify_and_record_lifecycle_tx(
+                        db=db,
+                        loan=loan,
+                        actor=current_user,
+                        raw_tx_hash=payload.tx_hash,
+                        action_type=TxActionType.CANCEL_LOAN,
+                        expected_event="LoanCancelled",
+                    )
+                    verified_tx_hash = verified["tx_hash"]
+                except Exception:
+                    pass
+        else:
+            verified = _verify_and_record_lifecycle_tx(
+                db=db,
+                loan=loan,
+                actor=current_user,
+                raw_tx_hash=payload.tx_hash,
+                action_type=TxActionType.CANCEL_LOAN,
+                expected_event="LoanCancelled",
             )
-        verified_tx_hash = verified["tx_hash"]
+            on_chain_record = _get_onchain_loan_or_503(loan.on_chain_loan_id)
+            chain_state_code = int(on_chain_record.get("state", -1))
+            if chain_state_code != 4:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Đơn trên Smart Contract đang ở trạng thái state={chain_state_code}, chưa Cancelled (4)."
+                )
+            verified_tx_hash = verified["tx_hash"]
 
     equipment = get_equipment_by_id(db, loan.equipment_id)
     if loan.status == LoanStatus.APPROVED and equipment:
