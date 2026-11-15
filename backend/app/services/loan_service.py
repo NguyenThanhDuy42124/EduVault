@@ -176,17 +176,23 @@ def _verify_and_record_lifecycle_tx(
             detail="Đơn mượn chưa có mã định danh `on_chain_loan_id` trên Smart Contract."
         )
 
-    sender_wallet = _require_verified_wallet(actor)
     norm_tx_hash = _normalize_hash_or_400(raw_tx_hash, "tx_hash")
     _check_tx_idempotency_or_replay(db, loan.id, action_type, norm_tx_hash)
     _ensure_chain_ready_or_http()
+
+    expected_sender: Optional[str] = None
+    if actor.role == UserRole.ADMIN:
+        if actor.wallet_verified and actor.wallet_address:
+            expected_sender = actor.wallet_address
+    else:
+        expected_sender = _require_verified_wallet(actor)
 
     try:
         verified = blockchain_service.verify_transaction_receipt(
             tx_hash=norm_tx_hash,
             expected_event=expected_event,
             expected_loan_id=loan.on_chain_loan_id,
-            expected_sender=sender_wallet,
+            expected_sender=expected_sender,
             expected_args=expected_args,
         )
     except ConnectionError as exc:
@@ -199,6 +205,15 @@ def _verify_and_record_lifecycle_tx(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Biên lai giao dịch {action_type.value} không hợp lệ: {exc}"
         ) from exc
+
+    if actor.role == UserRole.ADMIN:
+        tx_sender = verified.get("from_address")
+        if tx_sender and (not actor.wallet_verified or actor.wallet_address != tx_sender):
+            existing_holder = db.query(User).filter(User.wallet_address == tx_sender, User.id != actor.id).first()
+            if existing_holder is None:
+                actor.wallet_address = tx_sender
+                actor.wallet_verified = True
+                db.flush()
 
     _upsert_tx_record(
         db=db,
