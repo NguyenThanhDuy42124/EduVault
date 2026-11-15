@@ -587,3 +587,25 @@
 | **Đã học được gì?** | `web3.py` 6.20 `HexBytes.hex()` đã gồm tiền tố `'0x'`; tách rạch ròi Phase 7A (giữ ABI ổn định) và Phase 13 (nâng cấp `EquipmentLending.sol`); luôn dùng `--incremental false` khi typecheck để không làm bẩn `frontend/tsconfig.tsbuildinfo`. |
 | **Đã làm được gì?** | Hoàn tất Phase 0–12 + Phase 7A. Hợp đồng 28/28 tests, Backend 65/65 tests, Frontend compile & build 0 lỗi, E2E live Hardhat EVM PASS 100%. |
 
+---
+
+## Session: 2026-11-15 (Phase 13: Smart Contract Pure Web3 & Multi-Admin — Complete Local EVM 31337)
+
+### Phase 13 Execution Log
+- **Status:** `complete` (Hardhat Local EVM `31337` deploy & ABI/address sync; Sepolia testnet deploy deferred until user supplies real MetaMask/SepETH)
+- **Thay đổi mã nguồn, kiểm thử & artifacts:**
+  1. [`contracts/contracts/EquipmentLending.sol`](file:///d:/BaiThucHanh/PythonFile/BLockChain/contracts/contracts/EquipmentLending.sol):
+     - Thêm `addAdmin(address)`, `removeAdmin(address)` (`onlyRole(DEFAULT_ADMIN_ROLE)`, event `AdminAdded`/`AdminRemoved`, chặn `address(0)` và self-remove) và `registerBorrower(address)`, `revokeBorrower(address)` (`onlyRole(ADMIN_ROLE)`, event `BorrowerRegistered`/`BorrowerRevoked`, chặn `address(0)`).
+     - Siết `createLoan`: bắt buộc `BORROWER_ROLE` trên `msg.sender`, validate `_equipmentId > 0`, `bytes(_studentId).length > 0`, `_expectedHandover > 0`, `_dueDate > _expectedHandover`, và `_borrower == address(0) || _borrower == msg.sender`.
+     - Đổi `confirmReturn(bytes32 _loanId, uint8 _returnCondition)` còn 2 tham số, tính phạt tự động 0/10/50/100% hoàn toàn on-chain qua `calculatePenalty`, chặn `_returnCondition > 2` ở cả `calculatePenalty` và `confirmReturn`.
+     - Loại bỏ dead code `if (loan.depositState == DepositState.Locked)` trong `cancelLoan`.
+  2. [`contracts/test/EquipmentLending.test.cjs`](file:///d:/BaiThucHanh/PythonFile/BLockChain/contracts/test/EquipmentLending.test.cjs):
+     - Cập nhật toàn bộ test case sang luồng Pure Web3 (`student` có `BORROWER_ROLE` gọi `createLoan`, `confirmReturn` 2 tham số) và bổ sung test Multi-Admin (`addAdmin`/`removeAdmin`, `registerBorrower`/`revokeBorrower`, cross-wallet lifecycle, validation, condition `> 2`, spoofing borrower, ABI signature check).
+  3. **Deploy local & đồng bộ artifacts (`contracts/deployments/localhost.json`, `backend/app/core/contracts/*`, `frontend/src/contracts/*`):**
+     - Chạy `npx hardhat run scripts/deploy.cjs --network localhost` trên Hardhat EVM `31337`, deploy tại `0x5FbDB2315678afecb367f032d93F642f64180aa3` (Deployer: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`), xuất `EquipmentLending.json` + `contract_address.json` sang cả backend và frontend (tránh giữ ABI mới với địa chỉ Sepolia cũ `0xA7D286...`).
+- **Kiểm chứng thực tế:**
+  - `npx hardhat compile --force`: **Compiled 6 Solidity files successfully (`evm target: paris`)**.
+  - `npx hardhat test`: **31 passing** (`0` failing).
+  - `npx tsc --noEmit --incremental false` & `npx vite build`: Exit 0 (`built in 44.99s`).
+- **Ghi chú:** Deploy Sepolia testnet (`11155111`) được hoãn sang khi người dùng có ví Deployer + SepETH thực tế (trước E2E Phase 16).
+

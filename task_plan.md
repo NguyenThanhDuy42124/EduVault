@@ -6,7 +6,7 @@ Xây dựng, kiểm thử và tài liệu hóa **EduVault** - hệ thống quả
 ---
 
 ## Current Phase
-Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu — **ĐÃ HOÀN TẤT (complete)**. Chờ xác nhận của người dùng trước khi chuyển sang **Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin**.
+Phase 13 hoàn tất trên Hardhat Local EVM (`31337`); chuẩn bị triển khai **Phase 14: Chuyển đổi Backend sang Mô hình Indexer & Receipt Verifier**. (Deploy Sepolia `11155111` hoãn sang bước có ví MetaMask + SepETH thực tế trước E2E Phase 16).
 
 ### Cập nhật rà soát ngày 2026-11-06
 - Đã hoàn tất đánh giá lại mã nguồn tại `6076211`, bao gồm tích hợp MetaMask trong `2b2803a`.
@@ -221,53 +221,46 @@ Phase 7A: Hoàn thiện tích hợp MetaMask và tính nhất quán dữ liệu 
 ### Phase 13: Nâng cấp Smart Contract Pure Web3 & Cơ chế Multi-Admin (Solidity & Hardhat Tests)
 > Mục tiêu: Tái cấu trúc contract đạt chuẩn Pure Web3 100%, bổ sung phân quyền Multi-Admin cho nhóm 3 người và tự động hóa quy tắc tính phạt.
 
-- [ ] Task 13.1: **Bổ sung các hàm Multi-Admin và Cấp quyền Sinh viên**
-  - Viết hàm `addAdmin(address _newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Cho phép ví Deployer cấp `ADMIN_ROLE` cho các ví của thành viên nhóm.
-  - Viết hàm `removeAdmin(address _admin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Thu hồi quyền Admin nếu cần.
-  - Viết hàm `registerBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Cho phép bất kỳ ví nào trong 3 Admin cấp quyền `BORROWER_ROLE` cho sinh viên.
-  - Viết hàm `revokeBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Thu hồi quyền mượn thiết bị của sinh viên vi phạm.
+- [x] Task 13.1: **Bổ sung các hàm Multi-Admin và Cấp quyền Sinh viên**
+  - Viết hàm `addAdmin(address _newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Cho phép ví Deployer cấp `ADMIN_ROLE` cho các ví của thành viên nhóm (kèm event `AdminAdded`, chặn `address(0)`).
+  - Viết hàm `removeAdmin(address _admin) external onlyRole(DEFAULT_ADMIN_ROLE)`: Thu hồi quyền Admin (kèm event `AdminRemoved`, chặn `address(0)` và tự thu hồi chính mình).
+  - Viết hàm `registerBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Cho phép bất kỳ ví nào trong Admin cấp quyền `BORROWER_ROLE` cho sinh viên (`BorrowerRegistered`).
+  - Viết hàm `revokeBorrower(address _student) external onlyRole(ADMIN_ROLE)`: Thu hồi quyền mượn thiết bị của sinh viên (`BorrowerRevoked`).
   - File: `contracts/contracts/EquipmentLending.sol`
 
-- [ ] Task 13.2: **Thắt chặt Kiểm soát Quyền (Access Control) & Validate Đầu vào trong `createLoan`**
-  - Thêm điều kiện bắt buộc ví gọi hàm phải có `BORROWER_ROLE`:
-    `require(hasRole(BORROWER_ROLE, msg.sender), "Must have BORROWER_ROLE to create loan");`
-  - Thêm validation:
-    `require(_equipmentId > 0, "Invalid equipment ID");`
-    `require(bytes(_studentId).length > 0, "Student ID cannot be empty");`
+- [x] Task 13.2: **Thắt chặt Kiểm soát Quyền (Access Control) & Validate Đầu vào trong `createLoan`**
+  - Bắt buộc ví gọi hàm phải có `BORROWER_ROLE`: `require(hasRole(BORROWER_ROLE, msg.sender), "Must have BORROWER_ROLE to create loan");`
+  - Thêm validation: `_equipmentId > 0`, `bytes(_studentId).length > 0`, `_expectedHandover > 0`, `_dueDate > _expectedHandover`, và `_borrower == address(0) || _borrower == msg.sender` (chống spoof `borrower`).
   - File: `contracts/contracts/EquipmentLending.sol`
 
-- [ ] Task 13.3: **Chuẩn hóa Tự động Tính Phạt trong `confirmReturn` & Dọn dẹp Code**
+- [x] Task 13.3: **Chuẩn hóa Tự động Tính Phạt trong `confirmReturn` & Dọn dẹp Code**
   - Loại bỏ tham số `_penaltyPercent` khỏi hàm `confirmReturn`:
     Signature mới: `function confirmReturn(bytes32 _loanId, uint8 _returnCondition) external onlyRole(ADMIN_ROLE)`
-  - Tính phạt tự động 100% on-chain:
-    - Nếu hỏng/mất (`_returnCondition == 1 || 2`): 100% phạt, cọc `Forfeited`, trạng thái `Disputed`.
-    - Nếu tốt (`_returnCondition == 0`):
-      - Trả đúng hạn: 0% phạt, cọc `Refunded`, trạng thái `Returned`.
-      - Quá hạn $\le$ 24h: 10% phạt, cọc `Refunded`, trạng thái `Returned`.
-      - Quá hạn $>$ 24h: 50% phạt, cọc `Refunded`, trạng thái `Returned`.
-  - Dọn dẹp dead code trong `cancelLoan` (bỏ check `depositState == Locked` vì đơn chưa Active cọc luôn là None).
+  - Tính phạt tự động 100% on-chain tái sử dụng `calculatePenalty(_loanId, _returnCondition)` kèm kiểm tra `_returnCondition <= 2`:
+    - Nếu hỏng/mất (`1` hoặc `2`): 100% phạt, cọc `Forfeited`, trạng thái `Disputed`.
+    - Nếu tốt (`0`): đúng hạn 0%, trễ $\le$ 24h 10%, trễ $>$ 24h 50%, cọc `Refunded`, trạng thái `Returned`.
+  - Dọn dẹp dead code trong `cancelLoan` (bỏ check `depositState == Locked`), bổ sung kiểm tra tồn tại trong `calculatePenalty` và `isOverdue`.
   - File: `contracts/contracts/EquipmentLending.sol`
 
-- [ ] Task 13.4: **Cập nhật Toàn diện Bộ Kiểm thử Hardhat (`contracts/test/`)**
-  - Điều chỉnh các test case gọi `createLoan` phải cấp `BORROWER_ROLE` trước.
-  - Cập nhật test case kiểm tra `addAdmin`, `removeAdmin`, `registerBorrower`.
-  - Cập nhật các test case `confirmReturn` theo signature 2 tham số mới.
-  - Chạy `npx hardhat test` đảm bảo 100% test cases passed (dự kiến 30+ tests).
+- [x] Task 13.4: **Cập nhật Toàn diện Bộ Kiểm thử Hardhat (`contracts/test/`)**
+  - Điều chỉnh tất cả test case `createLoan` sang ví `student` có `BORROWER_ROLE`.
+  - Bổ sung positive & negative tests cho `addAdmin`, `removeAdmin`, `registerBorrower`, `revokeBorrower`, cross-wallet Multi-Admin lifecycle, input validation, condition `> 2`, invalid transitions, Mutex & ABI 2 tham số của `confirmReturn`.
+  - Chạy `npx hardhat compile` và `npx hardhat test`: **31/31 passing**.
 
-- [ ] Task 13.5: **Biên dịch & Deploy Smart Contract Mới Lên Ethereum Sepolia Testnet**
-  - Biên dịch contract sạch sẽ: `npx hardhat compile`.
-  - Kết nối ví Deployer (Admin 1) trên Remix hoặc Hardhat deploy script, deploy contract mới lên Sepolia.
-  - Lưu lại địa chỉ Smart Contract mới và Transaction Hash deploy trên Sepolia Etherscan.
+- [x] Task 13.5: **Biên dịch & Deploy Smart Contract Mới (Hardhat Local EVM 31337; hoãn Sepolia testnet tới khi có ví/SepETH)**
+  - Biên dịch contract sạch sẽ: `npx hardhat compile --force` (`Compiled 6 Solidity files successfully (evm target: paris)`).
+  - Deploy thành công lên Hardhat Local EVM (`localhost`, `chainId: 31337`) tại địa chỉ `0x5FbDB2315678afecb367f032d93F642f64180aa3` (Deployer: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`), lưu metadata tại `contracts/deployments/localhost.json`.
+  - Deploy lên Sepolia testnet (`11155111`) được ghi nhận tạm hoãn cho đến khi có ví Deployer MetaMask + SepoliaETH thực tế (tránh đồng bộ ABI mới với địa chỉ Sepolia cũ `0xA7D286...`).
 
-- [ ] Task 13.6: **Đồng bộ Artifacts (ABI & Contract Address) Toàn Hệ thống**
-  - Cập nhật file ABI và địa chỉ contract mới vào:
+- [x] Task 13.6: **Đồng bộ Artifacts (ABI & Contract Address Local `31337`) Toàn Hệ thống**
+  - Xuất ABI Phase 13 và địa chỉ local `0x5FbDB2315678afecb367f032d93F642f64180aa3` (`chainId: "31337"`) qua `contracts/scripts/deploy.cjs --network localhost` vào:
     - `backend/app/core/contracts/EquipmentLending.json`
     - `backend/app/core/contracts/contract_address.json`
     - `frontend/src/contracts/EquipmentLending.json`
     - `frontend/src/contracts/contract_address.json`
-  - Cập nhật biến `CONTRACT_ADDRESS` trong `backend/.env` và root `.env`.
+  - Giữ cấu hình local Hardhat `31337` trong `backend/.env` và root `.env`.
 
-- **Status:** pending
+- **Status:** complete (local Hardhat 31337 verified; Sepolia deploy deferred until real wallet/SepETH available)
 
 ---
 

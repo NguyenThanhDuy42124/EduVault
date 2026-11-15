@@ -5,18 +5,17 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
  * @title EquipmentLending
- * @author EduVault Team (Web3 Native Upgrade)
- * @notice Quản lý vòng đời mượn trả thiết bị học tập trên blockchain theo chuẩn Web3.
+ * @author EduVault Team (Pure Web3 & Multi-Admin Upgrade - Phase 13)
+ * @notice Quản lý vòng đời mượn trả thiết bị học tập trên blockchain theo chuẩn Pure Web3.
  *
  * Đặc điểm chính:
  *   - AccessControl đa vai trò:
- *       + DEFAULT_ADMIN_ROLE: Cấp/thu hồi quyền cho các tài khoản.
- *       + ADMIN_ROLE: Cán bộ phòng lab (duyệt đơn, bàn giao, nhận lại máy).
- *       + BORROWER_ROLE: Sinh viên kết nối ví MetaMask tự ký tạo đơn hoặc hủy đơn.
- *   - Simulated Deposit Accounting: ghi nhận tiền cọc dạng số, minh bạch trên on-chain.
- *   - Mutex thiết bị: mỗi thiết bị chỉ cho phép 1 đơn mượn Active/Approved tại một thời điểm.
- *   - Phạt tự động: trễ ≤24h → 10%, trễ >24h → 50%, hỏng/mất → tịch thu 100%.
- *   - Hỗ trợ cả sinh viên tự gọi (Web3 MetaMask) và Admin Relayer (nếu sinh viên chưa nạp gas).
+ *       + DEFAULT_ADMIN_ROLE: Deployer quản lý danh sách Admin (addAdmin / removeAdmin).
+ *       + ADMIN_ROLE: Nhóm cán bộ phòng lab (registerBorrower / revokeBorrower, duyệt, bàn giao, nhận lại máy).
+ *       + BORROWER_ROLE: Sinh viên đã được cấp quyền qua ví MetaMask (bắt buộc khi createLoan).
+ *   - Simulated Deposit Accounting: ghi nhận tiền cọc mô phỏng bằng số nguyên VND on-chain.
+ *   - Mutex thiết bị: mỗi thiết bị chỉ cho phép 1 đơn mượn Approved/Active tại một thời điểm.
+ *   - Phạt tự động 100% on-chain: đúng hạn → 0%, trễ ≤24h → 10%, trễ >24h → 50%, hỏng/mất → tịch thu 100%.
  */
 contract EquipmentLending is AccessControl {
 
@@ -118,17 +117,86 @@ contract EquipmentLending is AccessControl {
         uint256 timestamp
     );
 
+    event AdminAdded(
+        address indexed account,
+        address indexed grantedBy,
+        uint256 timestamp
+    );
+
+    event AdminRemoved(
+        address indexed account,
+        address indexed revokedBy,
+        uint256 timestamp
+    );
+
+    event BorrowerRegistered(
+        address indexed account,
+        address indexed registeredBy,
+        uint256 timestamp
+    );
+
+    event BorrowerRevoked(
+        address indexed account,
+        address indexed revokedBy,
+        uint256 timestamp
+    );
+
     // =========================================================================
     //                             CONSTRUCTOR
     // =========================================================================
 
     /**
-     * @param initialAdmin Địa chỉ Quản trị viên khởi tạo hệ thống (Hardhat Account #0)
+     * @param initialAdmin Địa chỉ Quản trị viên khởi tạo hệ thống (Deployer / Admin 1)
      */
     constructor(address initialAdmin) {
         require(initialAdmin != address(0), "Invalid admin address");
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         _grantRole(ADMIN_ROLE, initialAdmin);
+    }
+
+    // =========================================================================
+    //                     MULTI-ADMIN & BORROWER ROLE MANAGEMENT
+    // =========================================================================
+
+    /**
+     * @notice Cấp quyền ADMIN_ROLE cho thành viên ban quản trị (chỉ Deployer DEFAULT_ADMIN_ROLE).
+     */
+    function addAdmin(address _newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_newAdmin != address(0), "Invalid admin address");
+        if (_grantRole(ADMIN_ROLE, _newAdmin)) {
+            emit AdminAdded(_newAdmin, msg.sender, block.timestamp);
+        }
+    }
+
+    /**
+     * @notice Thu hồi quyền ADMIN_ROLE của quản trị viên (chỉ Deployer DEFAULT_ADMIN_ROLE).
+     */
+    function removeAdmin(address _admin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_admin != address(0), "Invalid admin address");
+        require(_admin != msg.sender, "Cannot remove self");
+        if (_revokeRole(ADMIN_ROLE, _admin)) {
+            emit AdminRemoved(_admin, msg.sender, block.timestamp);
+        }
+    }
+
+    /**
+     * @notice Cấp quyền BORROWER_ROLE cho ví sinh viên để được phép tự tạo đơn on-chain.
+     */
+    function registerBorrower(address _student) external onlyRole(ADMIN_ROLE) {
+        require(_student != address(0), "Invalid borrower address");
+        if (_grantRole(BORROWER_ROLE, _student)) {
+            emit BorrowerRegistered(_student, msg.sender, block.timestamp);
+        }
+    }
+
+    /**
+     * @notice Thu hồi quyền BORROWER_ROLE của sinh viên vi phạm.
+     */
+    function revokeBorrower(address _student) external onlyRole(ADMIN_ROLE) {
+        require(_student != address(0), "Invalid borrower address");
+        if (_revokeRole(BORROWER_ROLE, _student)) {
+            emit BorrowerRevoked(_student, msg.sender, block.timestamp);
+        }
     }
 
     // =========================================================================
@@ -141,7 +209,7 @@ contract EquipmentLending is AccessControl {
 
     function isOverdue(bytes32 _loanId) external view returns (bool) {
         LoanRecord memory loan = loans[_loanId];
-        return loan.state == LoanState.Active && block.timestamp > loan.dueDate;
+        return loan.loanId != bytes32(0) && loan.state == LoanState.Active && block.timestamp > loan.dueDate;
     }
 
     function calculatePenalty(
@@ -153,6 +221,8 @@ contract EquipmentLending is AccessControl {
         returns (uint8 penalty, DepositState depState, LoanState nextState)
     {
         LoanRecord memory loan = loans[_loanId];
+        require(loan.loanId != bytes32(0), "Loan does not exist");
+        require(_returnCondition <= 2, "Invalid return condition");
 
         // Hỏng hoặc Mất → tịch thu 100% cọc
         if (_returnCondition == 1 || _returnCondition == 2) {
@@ -175,14 +245,12 @@ contract EquipmentLending is AccessControl {
     }
 
     // =========================================================================
-    //                        LIFECYCLE FUNCTIONS (WEB3 NATIVE)
+    //                        LIFECYCLE FUNCTIONS (PURE WEB3)
     // =========================================================================
 
     /**
-     * @notice Tạo đơn mượn mới.
-     * @dev Cho phép:
-     *   1. Sinh viên kết nối ví MetaMask trực tiếp gọi (borrower = msg.sender).
-     *   2. Hoặc Admin Relayer gọi hộ (nếu truyền _borrower chỉ định).
+     * @notice Sinh viên có BORROWER_ROLE tự ký tạo đơn mượn mới qua MetaMask.
+     * @dev Bắt buộc msg.sender sở hữu BORROWER_ROLE; _borrower (nếu truyền) phải khớp msg.sender.
      */
     function createLoan(
         bytes32 _loanId,
@@ -193,18 +261,16 @@ contract EquipmentLending is AccessControl {
         uint256 _dueDate,
         uint256 _depositAmount
     ) external {
+        require(hasRole(BORROWER_ROLE, msg.sender), "Must have BORROWER_ROLE to create loan");
         require(_loanId != bytes32(0), "Invalid loan ID");
         require(loans[_loanId].loanId == bytes32(0), "Loan ID already exists");
+        require(_equipmentId > 0, "Invalid equipment ID");
+        require(bytes(_studentId).length > 0, "Student ID cannot be empty");
+        require(_expectedHandover > 0, "Invalid handover timestamp");
         require(_dueDate > _expectedHandover, "Due date must be after handover");
+        require(_borrower == address(0) || _borrower == msg.sender, "Borrower address must match caller");
 
-        // Nếu người gọi là Admin và có truyền _borrower cụ thể thì dùng _borrower
-        // Nếu người gọi là sinh viên MetaMask (hoặc _borrower rỗng), gán borrower = msg.sender
-        address actualBorrower;
-        if (hasRole(ADMIN_ROLE, msg.sender) && _borrower != address(0)) {
-            actualBorrower = _borrower;
-        } else {
-            actualBorrower = msg.sender;
-        }
+        address actualBorrower = msg.sender;
 
         loans[_loanId] = LoanRecord({
             loanId:           _loanId,
@@ -267,40 +333,21 @@ contract EquipmentLending is AccessControl {
     }
 
     /**
-     * @notice Xác nhận trả thiết bị, đánh giá tình trạng và áp dụng quy tắc phạt.
-     * @dev Chỉ Admin (ví có ADMIN_ROLE) được gọi qua MetaMask.
+     * @notice Xác nhận trả thiết bị, đánh giá tình trạng và tự động tính phạt 100% on-chain.
+     * @dev Chỉ Admin (ví có ADMIN_ROLE) được gọi qua MetaMask; loại bỏ hoàn toàn ghi đè thủ công.
      */
     function confirmReturn(
         bytes32 _loanId,
-        uint8   _returnCondition,
-        uint8   _penaltyPercent
+        uint8   _returnCondition
     ) external onlyRole(ADMIN_ROLE) {
         LoanRecord storage loan = loans[_loanId];
         require(loan.loanId != bytes32(0), "Loan does not exist");
         require(loan.state == LoanState.Active, "Loan is not active");
 
-        uint8 penalty;
-        DepositState depState;
-        LoanState nextState;
-
-        if (_returnCondition == 1 || _returnCondition == 2) {
-            // HỎNG hoặc MẤT → tịch thu toàn bộ cọc
-            penalty   = 100;
-            depState  = DepositState.Forfeited;
-            nextState = LoanState.Disputed;
-        } else {
-            // Tình trạng TỐT → tính phạt tự động nếu _penaltyPercent == 0
-            penalty = _penaltyPercent;
-            if (penalty == 0 && block.timestamp > loan.dueDate) {
-                if (block.timestamp <= loan.dueDate + 1 days) {
-                    penalty = 10;   // Trễ ≤ 24h
-                } else {
-                    penalty = 50;   // Trễ > 24h
-                }
-            }
-            depState  = DepositState.Refunded;
-            nextState = LoanState.Returned;
-        }
+        (uint8 penalty, DepositState depState, LoanState nextState) = calculatePenalty(
+            _loanId,
+            _returnCondition
+        );
 
         loan.actualReturn   = block.timestamp;
         loan.penaltyPercent = penalty;
@@ -319,7 +366,7 @@ contract EquipmentLending is AccessControl {
      * @notice Hủy đơn mượn (chỉ khi chưa bàn giao: Submitted hoặc Approved).
      * @dev Cho phép:
      *   1. Chính Sinh viên mượn (msg.sender == loan.borrower) tự hủy qua MetaMask.
-     *   2. Hoặc Admin (ADMIN_ROLE) hủy hộ.
+     *   2. Hoặc bất kỳ Admin (ADMIN_ROLE) nào hủy hộ.
      */
     function cancelLoan(
         bytes32 _loanId,
@@ -342,10 +389,6 @@ contract EquipmentLending is AccessControl {
         }
 
         loan.state = LoanState.Cancelled;
-
-        if (loan.depositState == DepositState.Locked) {
-            loan.depositState = DepositState.Refunded;
-        }
 
         emit LoanCancelled(_loanId, _reason, block.timestamp);
     }
