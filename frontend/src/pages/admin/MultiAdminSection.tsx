@@ -101,7 +101,7 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
             value={adminAddress}
             onChange={(e) => setAdminAddress(e.target.value.trim())}
             placeholder="0x..."
-            disabled={!isDeployer || loading}
+            disabled={loading}
             className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
           />
         </div>
@@ -109,7 +109,7 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
         <div className="flex items-center space-x-3 pt-1">
           <button
             type="submit"
-            disabled={!isDeployer || loading}
+            disabled={!isDeployer || loading || !adminAddress}
             className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Dang xu ly...' : 'Cap quyen Admin (addAdmin)'}
@@ -118,7 +118,7 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
           <button
             type="button"
             onClick={handleRemoveAdmin}
-            disabled={!isDeployer || loading}
+            disabled={!isDeployer || loading || !adminAddress}
             className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg hover:bg-rose-100 disabled:opacity-50 transition-colors"
           >
             Thu hoi quyen Admin (removeAdmin)

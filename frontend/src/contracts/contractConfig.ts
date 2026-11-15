@@ -13,8 +13,9 @@ export const HARDHAT_DEFAULT_CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F6
 
 // === Ethereum Sepolia Testnet (Triển khai công khai) ===
 export const SEPOLIA_CHAIN_ID = 11155111;
-export const SEPOLIA_RPC_URL = "https://rpc.sepolia.org";
+export const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 export const SEPOLIA_ETHERSCAN_URL = "https://sepolia.etherscan.io";
+export const SEPOLIA_DEFAULT_CONTRACT_ADDRESS = "0xA7D286FBE73c3E3589836A0428e2e93c0d177c63";
 
 const viteEnv = (import.meta as any).env || {};
 const TARGET_NETWORK = viteEnv.VITE_TARGET_NETWORK || "sepolia";
@@ -42,9 +43,9 @@ export const CONTRACT_ADDRESS: string = envContractAddress
   ? envContractAddress.trim()
   : artifactChainId === TARGET_CHAIN_ID && artifactAddress
   ? artifactAddress
-  : !IS_SEPOLIA
-  ? HARDHAT_DEFAULT_CONTRACT_ADDRESS
-  : "";
+  : IS_SEPOLIA
+  ? SEPOLIA_DEFAULT_CONTRACT_ADDRESS
+  : HARDHAT_DEFAULT_CONTRACT_ADDRESS;
 
 export const CONTRACT_ARTIFACT_CHAIN_ID = artifactChainId;
 export const IS_CONTRACT_CONFIG_MATCHED = Boolean(CONTRACT_ADDRESS);
