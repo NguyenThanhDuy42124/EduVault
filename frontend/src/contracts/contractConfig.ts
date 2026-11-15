@@ -15,7 +15,7 @@ export const HARDHAT_DEFAULT_CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F6
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 export const SEPOLIA_ETHERSCAN_URL = "https://sepolia.etherscan.io";
-export const SEPOLIA_DEFAULT_CONTRACT_ADDRESS = "0xA7D286FBE73c3E3589836A0428e2e93c0d177c63";
+export const SEPOLIA_DEFAULT_CONTRACT_ADDRESS = "0xA88De9B00C0F78FF9a162C4f17524ef885169ffd";
 
 const viteEnv = (import.meta as any).env || {};
 const TARGET_NETWORK = viteEnv.VITE_TARGET_NETWORK || "sepolia";

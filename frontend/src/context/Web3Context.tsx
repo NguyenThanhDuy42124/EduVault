@@ -58,13 +58,13 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
   const rawMsg = `${e?.shortMessage || ''} ${e?.reason || ''} ${e?.message || ''} ${e?.data?.message || ''}`.toLowerCase();
 
   if (rawCode === 4001 || rawCode === 'ACTION_REJECTED' || rawMsg.includes('user rejected')) {
-    return 'Ban da tu choi thao tac ky hoac ket noi tren vi MetaMask.';
+    return 'Bạn đã từ chối thao tác ký hoặc kết nối trên ví MetaMask.';
   }
   if (rawCode === -32002 || rawMsg.includes('already processing')) {
-    return 'MetaMask dang co mot yeu cau cho xac nhan. Vui long mo popup MetaMask.';
+    return 'MetaMask đang có một yêu cầu chờ xác nhận. Vui lòng mở tiện ích MetaMask.';
   }
   if (rawCode === 'INSUFFICIENT_FUNDS' || rawMsg.includes('insufficient funds')) {
-    return 'So du ETH trong vi khong du de thanh toan phi gas giao dich.';
+    return 'Số dư ETH trong ví không đủ để thanh toán phí gas giao dịch.';
   }
   if (
     rawCode === 'NETWORK_ERROR' ||
@@ -72,10 +72,10 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
     rawMsg.includes('econnrefused') ||
     rawMsg.includes('could not coalesce error')
   ) {
-    return `Khong the ket noi toi RPC mang ${TARGET_CHAIN_NAME}. Vui long kiem tra node hoac thu lai.`;
+    return `Không thể kết nối tới RPC mạng ${TARGET_CHAIN_NAME}. Vui lòng kiểm tra kết nối mạng hoặc thử lại.`;
   }
   if (e?.reason) {
-    return `Hop dong thong minh tu choi: ${e.reason}`;
+    return `Hợp đồng thông minh từ chối: ${e.reason}`;
   }
   if (e?.shortMessage) {
     return e.shortMessage;
@@ -83,7 +83,7 @@ export const parseWeb3ErrorMessage = (err: unknown): string => {
   if (e?.message && e.message.length < 180) {
     return e.message;
   }
-  return 'Thao tac Web3 tren MetaMask khong thanh cong. Vui long thu lai.';
+  return 'Thao tác Web3 trên MetaMask không thành công. Vui lòng thử lại.';
 };
 
 export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

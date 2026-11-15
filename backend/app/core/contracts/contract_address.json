@@ -1,6 +1,6 @@
 {
-  "EquipmentLending": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "network": "localhost",
-  "chainId": "31337",
-  "deployedAt": "2026-11-15T09:07:51.112Z"
+  "EquipmentLending": "0xA88De9B00C0F78FF9a162C4f17524ef885169ffd",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployedAt": "2026-11-15T11:44:45.811Z"
 }
