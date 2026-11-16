@@ -1,4 +1,4 @@
-﻿# EduVault - He Thong Quan Ly va Dieu Phoi Muon Tra Thiet Bi Hoc Tap
+# EduVault - He Thong Quan Ly va Dieu Phoi Muon Tra Thiet Bi Hoc Tap
 
 ## Smart Contract-Audited Academic Equipment Lending Platform (Pure Web3 Architecture)
 
