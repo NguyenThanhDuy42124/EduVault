@@ -6,7 +6,7 @@ EduVault là nền tảng quản lý, điều phối và kiểm toán quy trình
 
 ---
 
-## 1. 📖 Tổng Quan & Bài Toán Giải Quyết
+## 1. Tổng Quan & Bài Toán Giải Quyết
 
 Trong các cơ sở giáo dục đại học và viện nghiên cứu, việc quản lý mượn trả trang thiết bị thực hành giá trị cao (máy đo xung số, kính hiển vi điện tử, kit vi điều khiển IoT/STM32, máy chiếu, thiết bị mạng chuyên dụng) thường gặp phải các thách thức lớn:
 
@@ -27,7 +27,7 @@ EduVault giải quyết triệt để các hạn chế trên bằng kiến trúc
 
 ---
 
-## 2. 🏛️ Kiến Trúc Hệ Thống Pure Web3
+## 2. Kiến Trúc Hệ Thống Pure Web3
 
 Hệ thống hoạt động theo mô hình Non-Custodial, tách biệt rõ ràng giữa tầng giao diện người dùng, máy chủ dịch vụ và sổ cái bất biến blockchain:
 
@@ -67,7 +67,7 @@ flowchart TD
 
 ---
 
-## 3. ⚖️ Phân Định Nguồn Dữ Liệu Chuẩn (Source of Truth)
+## 3. Phân Định Nguồn Dữ Liệu Chuẩn (Source of Truth)
 
 EduVault phân chia ranh giới lưu trữ dữ liệu rõ ràng nhằm bảo đảm tốc độ phản hồi tính bằng mili-giây, bảo mật quyền riêng tư cá nhân và giữ vững tính bất biến của blockchain:
 
@@ -83,7 +83,7 @@ EduVault phân chia ranh giới lưu trữ dữ liệu rõ ràng nhằm bảo đ
 
 ---
 
-## 4. 🔄 Vòng Đời Đơn Mượn & Quy Tắc Phạt Tự Động
+## 4. Vòng Đời Đơn Mượn & Quy Tắc Phạt Tự Động
 
 ### Vòng đời 6 bước chuẩn Pure Web3
 
@@ -108,7 +108,7 @@ Khi thực hiện trả máy (`confirmReturn`), hợp đồng thông minh tự �
 
 ---
 
-## 5. 💻 Ngăn Xếp Công Nghệ (Tech Stack)
+## 5. Ngăn Xếp Công Nghệ (Tech Stack)
 
 | Phân tầng | Công nghệ / Thư viện | Phiên bản | Vai trò kỹ thuật |
 |---|---|---|---|
@@ -134,7 +134,7 @@ Khi thực hiện trả máy (`confirmReturn`), hợp đồng thông minh tự �
 
 ---
 
-## 6. 📁 Cấu Trúc Thư Mục Dự Án
+## 6. Cấu Trúc Thư Mục Dự Án
 
 ```
 EduVault/
@@ -217,7 +217,7 @@ EduVault/
 
 ---
 
-## 7. 🔗 Thông Tin Smart Contract Trên Mạng Sepolia
+## 7. Thông Tin Smart Contract Trên Mạng Sepolia
 
 - **Tên hợp đồng:** `EquipmentLending`
 - **Mạng thử nghiệm:** Ethereum Sepolia Testnet
@@ -232,7 +232,7 @@ EduVault/
 
 ---
 
-## 8. 🛠️ Hướng Dẫn Cài Đặt & Khởi Chạy
+## 8. Hướng Dẫn Cài Đặt & Khởi Chạy
 
 ### Yêu cầu môi trường tiên quyết
 
@@ -339,7 +339,7 @@ npm run dev
 
 ---
 
-## 9. 👥 Danh Sách Tài Khoản Thử Nghiệm Mẫu
+## 9. Danh Sách Tài Khoản Thử Nghiệm Mẫu
 
 Sau khi chạy lệnh `python ..\scripts\seed.py`, hệ thống đã sẵn sàng các tài khoản thử nghiệm sau:
 
@@ -352,7 +352,7 @@ Sau khi chạy lệnh `python ..\scripts\seed.py`, hệ thống đã sẵn sàng
 
 ---
 
-## 10. 🧪 Kết Quả Kiểm Thử Toàn Diện (Automated Test Suite)
+## 10. Kết Quả Kiểm Thử Toàn Diện (Automated Test Suite)
 
 Dự án đạt tỷ lệ vượt qua kiểm thử tự động **100% trên toàn bộ các phân tầng (109 bài test thành công)**:
 
@@ -397,7 +397,7 @@ Kết quả: Lệnh `tsc -b && vite build` biên dịch thành công với 0 l�
 
 ---
 
-## 11. 🚀 Quy Trình Triển Khai Lại Smart Contract (Deploy)
+## 11. Quy Trình Triển Khai Lại Smart Contract (Deploy)
 
 Khi có nhu cầu nâng cấp mã nguồn Solidity và triển khai phiên bản hợp đồng mới lên mạng Sepolia:
 
@@ -420,7 +420,7 @@ Khi có nhu cầu nâng cấp mã nguồn Solidity và triển khai phiên bản
 
 ---
 
-## 12. 📋 Quy Chuẩn Lập Trình & Bảo Mật
+## 12. Quy Chuẩn Lập Trình & Bảo Mật
 
 - **Tiêu chuẩn Docstring 5 thành phần:** 100% các hàm nghiệp vụ Backend tuân thủ cấu trúc docstring đầy đủ: Mục đích, Tham số, Trả về, Lỗi (Raises) và Tác dụng phụ (Side effects).
 - **Phân tầng kiến trúc rõ ràng:** Tách biệt độc lập giữa tầng Controller (Router API), tầng Service (Nghiệp vụ & Blockchain) và tầng Model (Cơ sở dữ liệu).
