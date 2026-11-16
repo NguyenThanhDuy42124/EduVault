@@ -1,438 +1,434 @@
-﻿<div align="center">
+﻿# EduVault - He Thong Quan Ly va Dieu Phoi Muon Tra Thiet Bi Hoc Tap
 
-# 🛡️ EduVault
-### Smart Contract-Audited Academic Equipment Lending Platform
-**Nền tảng Quản lý và Kiểm toán Mượn trả Thiết bị Đào tạo dựa trên Smart Contract**
+## Smart Contract-Audited Academic Equipment Lending Platform (Pure Web3 Architecture)
 
-[![Solidity](https://img.shields.io/badge/Solidity-^0.8.24-363636?logo=solidity&logoColor=white)](https://soliditylang.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0_/_XAMPP-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
-[![Hardhat](https://img.shields.io/badge/Hardhat-2.22-FFF100?logo=ethereum&logoColor=black)](https://hardhat.org/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests Passing](https://img.shields.io/badge/Pytest-56%2F56_Passing-brightgreen?logo=pytest&logoColor=white)](https://pytest.org/)
-[![Smart Contract Tests](https://img.shields.io/badge/Hardhat_Tests-28%2F28_Passing-brightgreen)](https://hardhat.org/)
-
-<p align="center">
-  <b>EduVault</b> kết hợp sức mạnh lưu trữ quan hệ hiệu năng cao của <b>MySQL 8.x</b> và tính toàn vẹn bất biến không thể làm giả của <b>Smart Contract EVM</b> theo mô hình kiến trúc <b>Hybrid Web2.5</b>.
-</p>
-
-[Tính Năng Chính](#-tính-năng-nổi-bật) •
-[Kiến Trúc Hệ Thống](#-kiến-trúc-hệ-thống--mô-hình-web25) •
-[Mô Hình Dữ Liệu](#-mô-hình-dữ-liệu-chuẩn-source-of-truth) •
-[Cài Đặt & Khởi Động](#-hướng-dẫn-cài-đặt--vận-hành-từ-a-z) •
-[Tài Khoản Mẫu](#-tài-khoản-trải-nghiệm-demo) •
-[Kiểm Thử Toàn Diện](#-kiểm-thử-toàn-diện)
+Nen tang quan ly, dieu phoi va kiem toan muon tra trang thiet bi thuc hanh phong thi nghiem dua tren Hop dong thong minh Ethereum (EVM) ket hop he quan tri co so du lieu quan he hieu nang cao MySQL.
 
 ---
 
-</div>
+## 1. Tong Quan va Bai Toan Giai Quyet
 
-## 📌 Giới Thiệu & Bài Toán Giải Quyết
+Trong cac truong dai hoc va vien nghien cuu, cong tac quan ly muon tra thiet bi thuc hanh gia tri cao (may do xung so, kinh hien vi ky thuat so, kit vi dieu khien IoT/STM32, may chieu, thiet bi mang chuyen dung) thuong gap phai cac van de:
 
-Trong các cơ sở đào tạo đại học, việc quản lý và mượn trả trang thiết bị thực hành giá trị cao (MacBook, Laptop cấu hình cao, máy đo xung số, kính hiển vi điện tử, máy chiếu, các bộ kit vi điều khiển IoT/STM32) thường đối mặt với các thách thức:
-1. **Xung đột đặt trùng thiết bị (Race-condition / Double-booking):** Nhiều sinh viên cùng đăng ký mượn một thiết bị duy nhất tại cùng một thời điểm.
-2. **Thiếu minh bạch & Dễ can thiệp dữ liệu:** Lịch sử mượn trả, nhật ký giao nhận và biên bản xử lý vi phạm trong cơ sở dữ liệu truyền thống có thể bị quản trị viên chỉnh sửa hoặc vô tình làm mất tính toàn vẹn.
-3. **Tranh chấp tiền đặt cọc và phạt quá hạn:** Thiếu cơ chế tự động hóa công bằng, bất biến trong việc tính toán thời gian trễ hạn và quyết toán khấu trừ tiền cọc.
-4. **Rào cản tiếp cận Web3:** Sinh viên và giảng viên thông thường không sở hữu ví tiền điện tử (MetaMask), không có tiền testnet để trả phí gas cho mỗi thao tác.
+1. **Xung dot dat trung thiet bi (Double-booking):** Nhieu nguoi dung cung dang ky muon mot thiet bi tai cung mot thoi diem dan den tinh trang tranh chap thiet bi.
+2. **Du lieu de bi sua doi hoac xoa bo:** Lịch su giao nhan, phat qua han va tinh trang thiet bi luu o co so du lieu truyen thong co the bi can thiep boi nguoi quan tri hoac gap loi dong bo.
+3. **Thieu minh bach trong tinh phat va xu ly tien coc:** Khong co co che tu dong tinh thoi gian tre han, ty le phat va quyet toan tien coc mot cach doc lap, khach quan.
+4. **Rui ro bao mat cua kien truc Custodial (Luu khoa bi mat tai may chu):** Cac he thong Web2.5 cu thuong luu Private Key cua Admin tren may chu de ky ho giao dich (Relayer). Neu may chu bi tan cong, toan bo quyen quan tri va hop dong thong minh se bi chiem doat.
 
-### 💡 Giải Pháp Đột Phá Của EduVault:
-- **Kiến trúc Kép Hybrid Web2.5 (Dual-State Architecture):**
-  - **Tầng Off-Chain (MySQL 8.x):** Lưu trữ thông tin cá nhân (PII), mật khẩu băm bảo mật, hồ sơ thiết bị, ảnh phòng lab, đảm bảo tốc độ phản hồi tính bằng mili-giây và tuân thủ các quy định bảo mật riêng tư.
-  - **Tầng On-Chain (Hardhat Local EVM & Solidity Smart Contract):** Lưu trữ máy trạng thái bất biến (State Machine), mốc thời gian Unix timestamp, cơ chế khóa Mutex chống đặt trùng, quản lý ký quỹ mô phỏng (Simulated Deposit Accounting) và tự động tính toán phạt trễ hạn.
-- **Backend Custodial Relayer / Admin Signer:** Backend FastAPI đóng vai trò ký thay các giao dịch on-chain bằng ví Admin. Người dùng chỉ cần đăng nhập bằng Email / Mã sinh viên và mật khẩu (JWT Token) mà không cần cài MetaMask.
-- **Tích Hợp MetaMask Linh Hoạt (Web3 Optional):** Cung cấp sẵn `Web3Context` để người dùng hoặc kiểm toán viên có thể kết nối ví MetaMask trực tiếp để kiểm tra trạng thái Smart Contract trên giao diện.
-- **Tự Phục Hồi Lệch Dữ Liệu (Background Reconciliation Worker):** Giải quyết triệt để vấn đề sai lệch dữ liệu do sự cố mạng hoặc sập nguồn máy chủ (Dual-Write Failure) bằng thuật toán so khớp độc lập lấy dữ liệu on-chain làm chân lý (Source of Truth).
+### Giai phap cua EduVault
 
----
-
-## ✨ Tính Năng Nổi Bật
-
-### 1. Dành cho Sinh viên / Giảng viên mượn thiết bị (Borrower)
-- 🖥️ **Danh mục thiết bị Bento Grid:** Tra cứu danh mục thiết bị phòng lab trực quan kèm hình ảnh studio thực tế, lọc theo phân loại (Laptop, Thiết bị đo, Kit nhúng...), tìm kiếm mờ tức thì theo tên và số Serial.
-- 📝 **Đăng ký mượn máy 1-Click:** Modal đặt lịch mượn với lịch nhận/trả tự động kiểm tra tính hợp lệ và hiển thị tóm tắt chính sách cọc/phạt minh bạch.
-- 📊 **Theo dõi đơn mượn cá nhân (`/my-loans`):** Tiến trình mượn 4 bước (Stepper) trực quan, hiển thị cờ cảnh báo quá hạn (`OVERDUE`), tình trạng ký quỹ (`LOCKED`, `REFUNDED`, `FORFEITED`) và cho phép hủy đơn an toàn trước khi bàn giao.
-
-### 2. Dành cho Quản trị viên phòng Lab (Admin)
-- 📋 **Trung tâm điều phối mượn trả (`/admin/loans`):** Bảng quản trị phân tab (Chờ duyệt, Đã duyệt, Đang mượn, Đã hoàn tất).
-- 🔒 **Duyệt đơn an toàn với MySQL Pessimistic Lock:** Khóa dòng dữ liệu mức CSDL (`SELECT ... FOR UPDATE`), đồng thời ký giao dịch on-chain kích hoạt Mutex `activeEquipmentLoan`.
-- 🤝 **Bàn giao máy thực tế:** Xác nhận sinh viên đã nhận máy, chuyển đơn sang `ACTIVE` và khóa tiền cọc mô phỏng trên Smart Contract.
-- ⚖️ **Nghiệm thu hoàn trả & Tính phạt tự động:**
-  - **Trả đúng hạn, nguyên vẹn:** Hoàn 100% tiền cọc.
-  - **Trễ hạn $\le 24$ giờ:** Tự động khấu trừ 10% phí trễ hạn.
-  - **Trễ hạn $> 24$ giờ:** Tự động khấu trừ 50% phí trễ hạn.
-  - **Hư hỏng / Mất mát:** Tịch thu 100% cọc vào quỹ trường, đánh dấu đơn tranh chấp (`DISPUTED`) và khóa tài khoản vi phạm.
-- 📦 **Quản lý kho thiết bị (`/admin/inventory`):** Thêm mới thiết bị, cập nhật mức cọc, chuyển trạng thái bảo trì (`MAINTENANCE`) hoặc thu hồi an toàn (`RETIRED`).
-
-### 3. Công Cụ Kiểm Toán & Trình Diễn Công Nghệ Cao
-- 🔍 **Trang kiểm toán Blockchain (`/audit`):**
-  - **Dual-State Verification:** Công cụ đối soát tính toàn vẹn độc lập so khớp 100% các trường dữ liệu giữa MySQL và Smart Contract.
-  - **Reconciliation Worker:** Nút kích hoạt tiến trình tự động quét và sửa lỗi dữ liệu lệch do server bị crash.
-  - **Blockchain Explorer Cục bộ:** Xem danh sách Transaction Hash, số hiệu block, lượng gas tiêu thụ thực tế trên mạng EVM.
-- 🌟 **Trang Trình diễn Tổng quan (`/overview`):**
-  - **Hero 3D Digital Vault (GSAP Web 3D):** Khối vault tương tác xoay đa chiều theo tọa độ chuột và bộ counter nhảy số động.
-  - **Visual Pipeline 4 Trạm:** Mô phỏng dòng chảy nghiệp vụ Web2.5 từ MySQL Lock đến Smart Contract.
-  - **Live Transaction Terminal:** Stream lịch sử giao dịch trực tiếp từ blockchain node với giao diện console chuyên nghiệp.
-  - **Simulator Playground:** Bảng giả lập thử nghiệm tương tác 5 kịch bản mượn trả khác nhau.
+EduVault giai quyet triet de cac van de tren bang kien truc **Pure Web3 (Non-Custodial Architecture)**:
+- **Client-side Signing (Ky truc tiep tai trinh duyet):** Nguoi dung va Quan tri vien tu ky giao dich bang vi MetaMask ca nhan. May chu backend tuyet doi khong luu tru Private Key.
+- **Xac thuc quyen so huu vi chuan EIP-191:** Sinh vien ky thong diep ngau nhien (Personal Sign) de chung minh quyen so huu vi MetaMask truoc khi tao don.
+- **Phan quyen AccessControl chuan OpenZeppelin tren chuoi:** Hop dong thong minh su dung `DEFAULT_ADMIN_ROLE`, `ADMIN_ROLE` va `BORROWER_ROLE` de dam bao chi nguoi dung duoc phep moi tuong tac duoc voi hop dong.
+- **Khoa giu cho tu dong (On-chain Mutex):** Hop dong thong minh khoa doc quyen thiet bi bang bien `activeEquipmentLoan` ngay khi don duoc duyet, loai bo 100% kha nang dat trung thiet bi.
+- **Tu dong tinh toan phat va xu ly coc tren chuoi:** Hop dong tu dong tinh ty le phat dua tren block timestamp va tinh trang thiet bi khi tra, quyet toan coc minh bach.
+- **May chu dong vai tro Tham tra bien lai (On-chain Receipt Verifier):** Backend FastAPI doc bien lai tu mang blockchain, kiem tra tinh toan ven va chong tan cong phat lai (Anti-Replay Attack) truoc khi cap nhat vao MySQL.
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống & Mô Hình Web2.5
+## 2. Kien Truc He Thong
+
+He thong hoat dong theo mo hinh Pure Web3 tach biet ro rang giua tang client, tang may chu backend va tang so cai bat bien on-chain:
 
 ```mermaid
-flowchart TB
-    subgraph Client ["Client Layer (Frontend)"]
-        UI["React 18 + TypeScript + Vite\n(Tailwind CSS + Lucide Icons)"]
-        AuthContext["Auth Context (JWT Token)"]
-        Web3Context["Web3 Context (MetaMask Optional)"]
-        GSAP["GSAP 3D Interactive Showcase"]
+flowchart TD
+    subgraph ClientLayer ["Tang Giao Dien Nguoi Dung (Frontend React + Vite)"]
+        UI["React 18 + TypeScript + Tailwind CSS"]
+        MetaMask["Vi MetaMask (Ethers.js v6)\n- Ky tao don: createLoan\n- Ky duyet don: approveLoan\n- Ky ban giao: confirmHandover\n- Ky tra may: confirmReturn\n- Ky huy don: cancelLoan"]
+        AuthContext["Auth Context (JWT Web2)"]
+        Web3Context["Web3 Context (State on-chain)"]
         UI --> AuthContext
         UI --> Web3Context
-        UI --> GSAP
+        Web3Context --> MetaMask
     end
 
-    subgraph BackendGateway ["Application Layer (FastAPI Backend)"]
-        Router["REST API Routers (/api/v1)\n- Auth, Users, Equipment\n- Loans Lifecycle, Blockchain, Audit"]
-        Security["Security Layer\n- Bcrypt Hash (72b Safe)\n- JWT HS256 Token\n- Anti-BruteForce Lockout (15m)"]
-        Service["Core Business Services\n- LoanService (Lifecycle & Penalties)\n- EquipmentService (Pessimistic Lock)\n- ReconciliationService (Dual-Write Fix)"]
-        Web3Service["Web3.py Custodial Relayer\n(Admin Signer - Gas Buffer 20%)"]
-
-        Router --> Security --> Service
-        Service --> Web3Service
+    subgraph BlockchainLayer ["Tang So Cai Bat Bien (Ethereum Sepolia Testnet)"]
+        SmartContract["EquipmentLending.sol\n- OpenZeppelin AccessControl\n- State Machine 6 trang thai\n- Mutex: activeEquipmentLoan\n- Tu dong tinh phat qua han\n- Quan ly tien coc mo phong"]
     end
 
-    subgraph StorageLayer ["Data & Ledger Layer"]
-        subgraph OffChain ["Off-Chain Storage"]
-            MySQL[("MySQL 8.x Database\n(InnoDB Engine - UTF8MB4)\n- users (PII, Passwords)\n- equipment (Specs, Images)\n- lending_requests\n- blockchain_transactions\n- audit_logs")]
-        end
-
-        subgraph OnChain ["On-Chain Immutable Ledger"]
-            HardhatNode["Hardhat Local Node (:8545)\nChain ID: 31337"]
-            SmartContract["EquipmentLending.sol\n- State Machine (6 Loan States)\n- Simulated Deposit Escrow\n- Mutex: activeEquipmentLoan\n- Automated Penalty Calculation\n- Event Emission"]
-            HardhatNode --- SmartContract
-        end
+    subgraph BackendLayer ["Tang May Chu Dich Vu (FastAPI Backend)"]
+        API["FastAPI REST APIs (/api/v1)"]
+        BlockchainService["Blockchain Service (Web3.py)\n- Tham tra Transaction Receipt\n- Kiem tra status == 1\n- Kiem tra event va tham so"]
+        LoanService["Loan Service\n- Dieu phoi vong doi muon tra\n- Chong tan cong Replay Attack\n- Dong bo trang thai CSDL"]
+        API --> BlockchainService
+        API --> LoanService
     end
 
-    Client -->|REST API + Bearer Token| Router
-    Web3Context -.->|Ethers.js Direct Call| SmartContract
-    Service -->|SQLAlchemy 2.0 / SELECT FOR UPDATE| MySQL
-    Web3Service -->|JSON-RPC / Signed Raw Tx| HardhatNode
-    Service -.->|Idempotent Audit Check| SmartContract
+    subgraph DatabaseLayer ["Tang Co So Du Lieu Quan He (MySQL 8.x)"]
+        MySQL[("MySQL Database\n- users (Thong tin, MSSV, Vi)\n- equipments (Kho thiet bi)\n- lending_requests (Chi tiet don)\n- blockchain_transactions (Lich su)\n- audit_logs (Nhat ky kiem toan)")]
+    end
+
+    MetaMask -->|Giao dich on-chain| SmartContract
+    MetaMask -.->|Gui tx_hash| API
+    BlockchainService -->|Doc bien lai va goi ham view| SmartContract
+    LoanService -->|Ghi nhan du lieu da tham tra| MySQL
 ```
 
 ---
 
-## 📊 Mô Hình Dữ Liệu Chuẩn (Source of Truth)
+## 3. Phan Dinh Nguon Du Lieu Chuan (Source of Truth)
 
-Để bảo đảm cả hai tiêu chí: **Tốc độ & Bảo mật thông tin riêng tư (GDPR)** và **Tính bất biến chống gian lận**, EduVault phân chia ranh giới dữ liệu rành mạch:
+He thong phan chia ranh gioi du lieu ro rang nham toi uu hoa hieu nang va dam bao tinh bao mat:
 
-| Thực thể dữ liệu | Nguồn chuẩn (Authoritative) | Lưu trữ phụ | Cơ chế đồng bộ & Ràng buộc |
-| :--- | :---: | :---: | :--- |
-| **Thông tin cá nhân (PII)**<br>Họ tên, MSSV, Email, Mật khẩu hash, Role | **MySQL** | *Không lưu on-chain* | Bảo mật thông tin riêng tư, tuân thủ pháp lý. |
-| **Thông số chi tiết thiết bị**<br>Tên, Cấu hình, Danh mục, Hình ảnh | **MySQL** | *Không lưu on-chain* | Smart Contract chỉ lưu `equipmentId` (uint256). |
-| **Trạng thái đơn mượn (Loan State)** | **Smart Contract** | MySQL (`lending_requests.status`) | Smart Contract là chuẩn. MySQL chỉ cập nhật khi nhận Transaction Receipt thành công (`status == 1`). |
-| **Trạng thái tiền cọc (Deposit State)** | **Smart Contract** | MySQL (`deposit_status`) | Quản lý ký quỹ mô phỏng trên contract (`LOCKED`, `REFUNDED`, `FORFEITED`). |
-| **Khóa chống mượn trùng (Mutex)** | **Smart Contract & MySQL** | Đồng bộ cả hai | MySQL: Khóa dòng `SELECT ... FOR UPDATE`.<br>Contract: `activeEquipmentLoan[equipmentId]`. |
-| **Mốc thời gian giao nhận / Hạn trả** | **Smart Contract** | MySQL (`due_date`,...) | Contract lưu Unix timestamp; MySQL lưu `DATETIME`. |
-| **Nhật ký kiểm toán giao dịch** | **EVM Ledger** | MySQL (`blockchain_transactions`) | Ghi nhận Transaction Hash, Block Number, Gas Used. |
-
----
-
-## 🛠️ Ngăn Xếp Công Nghệ (Tech Stack)
-
-| Phân tầng | Công nghệ / Thư viện | Phiên bản | Mục đích sử dụng |
-| :--- | :--- | :--- | :--- |
-| **Frontend** | React | `^18.3.1` | Xây dựng Single Page Application hiện đại |
-| | TypeScript | `^5.5.3` | Định kiểu an toàn, bắt lỗi compile-time |
-| | Vite | `^5.4.2` | Công cụ đóng gói bundle siêu tốc, HMR mượt mà |
-| | Tailwind CSS | `^3.4.1` | Thiết kế giao diện Clean Corporate Dashboard |
-| | Lucide React | `^0.344.0` | Bộ biểu tượng icon chuẩn hóa nhất quán |
-| | GSAP & @gsap/react | `^3.14.0` | Diễn hoạt Web 3D khối Vault, counter, terminal |
-| | Axios | `^1.7.9` | HTTP Client có interceptor tự động gán Bearer token |
-| | Ethers | `^6.13.5` | Thư viện kết nối ví MetaMask và đọc contract |
-| **Backend** | Python | `3.11.x / 3.13.x` | Ngôn ngữ phát triển backend chính |
-| | FastAPI | `^0.115.0` | Framework API tốc độ cao, hỗ trợ Swagger OpenAPI 3.1 |
-| | SQLAlchemy | `^2.0.36` | ORM ánh xạ thực thể CSDL quan hệ |
-| | Alembic | `^1.13.3` | Quản lý phiên bản migration cơ sở dữ liệu |
-| | PyMySQL | `^1.1.1` | Driver kết nối MySQL thuần Python |
-| | Web3.py | `6.20.4` | Tương tác node Blockchain, ký giao dịch Relayer |
-| | Bcrypt | `^4.0.0` | Thuật toán băm mật khẩu một chiều có salt |
-| | Python-Jose | `^3.3.0` | Ký và giải mã JSON Web Token (HS256) |
-| | Pytest | `^8.3.3` | Khung kiểm thử tự động toàn diện |
-| **Blockchain**| Solidity | `^0.8.24` | Ngôn ngữ lập trình Smart Contract |
-| | Hardhat | `^2.22.18` | Môi trường phát triển và node EVM cục bộ |
-| | OpenZeppelin | `^5.0.0` | Thư viện hợp đồng chuẩn bảo mật (Ownable) |
-| **Database** | MySQL / MariaDB | `8.0 / XAMPP` | Cơ sở dữ liệu quan hệ lưu trữ chính |
+| Nhom du lieu | Nguon chuan (Authoritative) | Luu tru phu | Co che dong bo va rang buoc |
+|---|---|---|---|
+| Thong tin ca nhan (PII)<br>Ho ten, Email, MSSV, Mat khau hash | MySQL (`users`) | Khong luu on-chain | Bao mat thong tin rieng tu, tranh ro ri du lieu nhay cam tren blockchain. |
+| Thong tin chi tiet thiet bi<br>Ten thiet bi, mo ta, cau hinh, anh | MySQL (`equipments`) | Khong luu on-chain | Smart Contract chi luu khoa ngoai `equipmentId` (uint256) de tiet kiem gas. |
+| Trang thai don muon (Loan State) | Smart Contract (`loans[loanId].state`) | MySQL (`lending_requests.status`) | Smart Contract la chan ly. MySQL chi doi trang thai khi `verify_transaction_receipt` tra ve hop le (`status == 1`). |
+| Trang thai tien coc (Deposit State) | Smart Contract (`depositState`) | MySQL (`deposit_status`) | Quan ly tien coc tren chuoi: `None` (0), `Locked` (1), `Refunded` (2), `Forfeited` (3). |
+| Khoa chong muon trung (Mutex) | Smart Contract | MySQL | Smart Contract dung `activeEquipmentLoan[equipmentId]`. MySQL dung khoa dong `SELECT ... FOR UPDATE`. |
+| Tinh phat va thoi gian muon | Smart Contract | MySQL | Smart Contract tinh toan tu dong dua tren Unix timestamp cua khoi block. |
+| Nhat ky kiem toan giao dich | Blockchain Sepolia | MySQL (`blockchain_transactions`) | Luu tru day du `tx_hash`, `from_address`, `block_number`, `gas_used` de phuc vu doi soat. |
 
 ---
 
-## 📁 Cấu Trúc Thư Mục Dự Án
+## 4. Vong Doi Don Muon Va Quy Tac Phat Tu Dong
+
+### Vong doi 6 buoc chuan Pure Web3
+
+1. **Xac minh vi (EIP-191):** Sinh vien dang nhap web, vao ho so ca nhan va ky thong diep `personal_sign` bang vi MetaMask. Backend xac thuc chu ky va cap nhat `wallet_verified = True`.
+2. **Tao yeu cau muon (Submitted):** Sinh vien chon thiet bi va thoi gian muon, MetaMask mo len de sinh vien ky giao dich `createLoan(...)`. Giao dich thanh cong sinh ra ma `loanId` (keccak256). Frontend gui `tx_hash` va `loanId` ve backend de tao don o trang thai `PENDING`.
+3. **Duyet don (Approved):** Quan tri vien phong lab dung vi co `ADMIN_ROLE` ky giao dich `approveLoan(loanId)` qua MetaMask. Hợp dong thong minh kiem tra dieu kien, dat khoa Mutex giu cho thiet bi. Backend xac thuc bien lai va cap nhat don sang `APPROVED`.
+4. **Ban giao thiet bi (Active):** Khi sinh vien den nhan may, Admin ky giao dich `confirmHandover(loanId)`. Hop dong chuyen trang thai sang `Active` va khoa tien coc mo phong (`DepositState.Locked`). Backend cap nhat trang thai don sang `ACTIVE` va thiet bi sang `IN_USE`.
+5. **Nghiem thu va tra may (Returned / Disputed):** Admin kiem tra thiet bi thuc te va ky giao dich `confirmReturn(loanId, returnCondition)`.
+   - `returnCondition = 0 (GOOD)`: Thiet bi nguyen ven, hoan tra coc.
+   - `returnCondition = 1 (DAMAGED)`: Thiet bi hu hong, tich thu 100% tien coc, don chuyen sang `Disputed`.
+   - `returnCondition = 2 (LOST)`: Thiet bi lam mat, tich thu 100% tien coc, don chuyen sang `Disputed`.
+   - Hop dong tu dong giai phong khoa Mutex thiet bi tro ve trang thai san sang.
+6. **Huy don (Cancelled):** Sinh vien hoac Admin co the ky giao dich `cancelLoan(loanId, reason)` de huy don khi don o trang thai `Submitted` hoac `Approved` (truoc khi ban giao). Khoa Mutex duoc tu dong giai phong neu don da tung duoc duyet.
+
+### Quy tac phat tre han tu dong on-chain
+
+Khi thuc hien tra may (`confirmReturn`), hop dong thong minh tu dong so sanh block timestamp hien tai voi `dueDate`:
+- **Dung han:** Ty le phat 0%, hoan tra 100% tien coc.
+- **Tre han khong qua 24 gio:** Tu dong phat 10% gia tri tien coc quy dinh.
+- **Tre han tren 24 gio:** Tu dong phat 50% gia tri tien coc quy dinh.
+- **Hu hong hoac lam mat:** Tich thu 100% tien coc bat ke co tra dung han hay khong.
+
+---
+
+## 5. Cong Nghe Su Dung (Tech Stack)
+
+### Tieu diem cong nghe
+
+| Phan tang | Cong nghe / Thu vien | Phien ban | Vai tro |
+|---|---|---|---|
+| **Smart Contract** | Solidity | `^0.8.20` | Ngon ngu lap trinh hop dong thong minh tren EVM |
+| | OpenZeppelin Contracts | `^5.0.0` | Thu vien AccessControl chuan bao mat phan quyen |
+| | Hardhat | `^2.22.x` | Moi truong bien dich, deploy va kiem thu hop dong |
+| | Ethereum Sepolia | Chain ID `11155111` | Mang thu nghiem cong khai (Public Testnet) |
+| **Backend** | Python | `3.11.x` | Ngon ngu lap trinh may chu |
+| | FastAPI | `^0.115.x` | Web framework bat dong bo hieu nang cao, OpenAPI 3.1 |
+| | SQLAlchemy | `^2.0.x` | ORM anh xa quan he co so du lieu |
+| | Alembic | `^1.13.x` | Cong cu quan ly va thuc thi migration CSDL |
+| | Web3.py | `6.20.4` | Thu vien tuong tac node blockchain va tham tra bien lai |
+| | PyMySQL | `^1.1.x` | Driver ket noi CSDL MySQL |
+| | Bcrypt & Python-Jose | `^4.0.0` / `^3.3.0` | Ma hoa mat khau va xu ly xac thuc JWT |
+| | Pytest | `^8.4.x` | Khung kiem thu tu dong (78 test cases) |
+| **Frontend** | React | `^18.3.x` | Thu vien xay dung giao dien nguoi dung |
+| | TypeScript | `^5.5.x` | Ngon ngu lap trinh an toan kieu du lieu |
+| | Vite | `^6.x` | Cong cu dong goi ung dung sieu toc |
+| | Tailwind CSS | `^3.4.x` | Framework CSS thiet ke giao dien truc quan |
+| | Ethers.js | `^6.13.x` | Thu vien ket noi vi MetaMask va goi Smart Contract |
+| | Axios | `^1.7.x` | HTTP Client tuong tac REST API Backend |
+| **Database** | MySQL / MariaDB | `8.0 / XAMPP` | He quan tri co so du lieu quan he luu tru chinh |
+
+---
+
+## 6. Cau Truc Thu Muc Du An
 
 ```
 EduVault/
-├── backend/                              # Mã nguồn Backend FastAPI
-│   ├── alembic/                          # Quản lý phiên bản Migration CSDL
-│   │   ├── versions/                     # Các file script migration
-│   │   └── env.py                        # Cấu hình nạp metadata từ SQLAlchemy
-│   ├── app/
-│   │   ├── api/                          # Tầng điều phối và định tuyến API
-│   │   │   ├── deps.py                   # Dependency Injection: Auth & phân quyền RBAC
-│   │   │   └── v1/
-│   │   │       ├── health.py             # Health check API & DB connectivity
-│   │   │       ├── auth.py               # API Đăng nhập JSON & OAuth2 form
-│   │   │       ├── users.py              # API Quản trị người dùng & /users/me
-│   │   │       ├── equipment.py          # API Quản lý danh mục thiết bị CRUD
-│   │   │       ├── loans.py              # 6 APIs vòng đời mượn trả
-│   │   │       ├── blockchain.py         # API Chẩn đoán node Blockchain & số dư ví
-│   │   │       └── audit.py              # API Đối soát dữ liệu & Lịch sử kiểm toán
-│   │   ├── core/                         # Cấu hình lõi & Bảo mật
-│   │   │   ├── config.py                 # Pydantic BaseSettings đọc file .env
-│   │   │   ├── security.py               # Băm Bcrypt, cấp phát JWT, khóa brute-force
-│   │   │   └── contracts/                # ABI và địa chỉ Smart Contract đã deploy
-│   │   ├── db/                           # Tầng kết nối cơ sở dữ liệu
-│   │   │   ├── base.py                   # SQLAlchemy Declarative Base
-│   │   │   └── session.py                # Engine và SessionLocal kết nối PyMySQL
-│   │   ├── models/                       # 5 Thực thể ORM SQLAlchemy (users, equipment,...)
-│   │   ├── schemas/                      # DTOs Schema Pydantic v2 (Request/Response)
-│   │   ├── services/                     # Tầng xử lý logic nghiệp vụ chính
-│   │   │   ├── auth_service.py           # Xác thực & đếm số lần sai khóa 15 phút
-│   │   │   ├── user_service.py           # CRUD người dùng, kiểm tra trùng lặp
-│   │   │   ├── equipment_service.py      # CRUD thiết bị & MySQL Pessimistic Lock
-│   │   │   ├── blockchain_service.py     # Web3.py Custodial Relayer, Keccak256
-│   │   │   ├── loan_service.py           # Vòng đời 6 bước mượn trả & tính phạt
-│   │   │   └── reconciliation_service.py # Worker đối soát tự phục hồi Dual-write
-│   │   └── main.py                       # Khởi tạo FastAPI app, CORS, đăng ký Routers
-│   ├── tests/                            # Bộ 56 bài kiểm thử tự động Pytest
-│   └── requirements.txt                  # Danh mục dependencies Python
-├── contracts/                            # Mã nguồn Smart Contract Hardhat
-│   ├── contracts/                        # Mã nguồn hợp đồng Solidity
-│   │   └── EquipmentLending.sol          # Smart contract chính quản lý mượn trả & cọc
-│   ├── scripts/
-│   │   └── deploy.cjs                    # Script deploy lên EVM & tự động xuất ABI
-│   ├── test/
-│   │   └── EquipmentLending.test.cjs     # 28 bài test bao phủ 100% kịch bản hợp đồng
-│   ├── hardhat.config.cjs                # Cấu hình mạng Hardhat local
-│   └── package.json                      # Dependencies Smart Contract
-├── frontend/                             # Giao diện người dùng React 18 + Vite
-│   ├── public/images/equipment/          # Ảnh sản phẩm phòng lab độ nét cao
-│   ├── src/
-│   │   ├── components/                   # Các component tái sử dụng (Navbar, Modal,...)
-│   │   ├── context/                      # AuthContext (JWT) và Web3Context (MetaMask)
-│   │   ├── contracts/                    # ABI và Config contract cho Frontend
-│   │   ├── pages/                        # 7 màn hình ứng dụng chính
-│   │   │   ├── ShowcasePage.tsx          # Trang giới thiệu tổng quan GSAP 3D
-│   │   │   ├── LoginPage.tsx             # Trang đăng nhập
-│   │   │   ├── EquipmentPage.tsx         # Trang danh mục thiết bị & đăng ký mượn
-│   │   │   ├── MyLoansPage.tsx           # Trang quản lý đơn mượn của sinh viên
-│   │   │   ├── AdminLoansPage.tsx        # Trang điều phối duyệt/trả máy cho Admin
-│   │   │   ├── AdminInventoryPage.tsx    # Trang quản lý kho thiết bị
-│   │   │   └── AuditPage.tsx             # Trang kiểm toán đối soát Blockchain
-│   │   ├── services/                     # Tầng gọi API Backend (Axios Client)
-│   │   └── types/                        # Khai báo TypeScript Interfaces
-│   └── package.json                      # Dependencies Frontend
-├── docs/                                 # Tài liệu kỹ thuật chi tiết
-│   ├── PHASE_5_REPORT.md                 # Báo cáo nghiệm thu chi tiết Phase 5
-│   ├── SYSTEM_ANALYSIS_REPORT.md         # Phân tích toàn diện hệ thống (Contract/BE/FE)
-│   └── QA_SECURITY_REPORT.md             # Báo cáo kiểm thử & bảo mật
-├── scripts/
-│   ├── seed.py                           # Script nạp dữ liệu mẫu thực tế vào MySQL
-│   └── start_all.ps1                     # 🚀 Script PowerShell khởi động 1 chạm (3 tiến trình song song)
-├── backend/
-│   └── .env.example                      # File mẫu cấu hình môi trường có chú thích đầy đủ
-├── start_all.bat                         # Launcher 1-Click khởi động toàn bộ hệ thống (Windows)
-├── start_backend.bat                     # Launcher khởi động riêng Backend
-├── start_frontend.bat                    # Launcher khởi động riêng Frontend
-├── start_hardhat.bat                     # Launcher khởi động riêng Hardhat Node
-├── deploy_contract.bat                   # Launcher deploy Smart Contract
-└── seed_data.bat                         # Launcher nạp dữ liệu mẫu
+|-- backend/                                # Ma nguon may chu FastAPI
+|   |-- alembic/                            # Cau hinh va tap lenh Migration CSDL
+|   |   |-- versions/                       # Cac ban ghi migration
+|   |   `-- env.py                          # Cau hinh migration SQLAlchemy
+|   |-- app/
+|   |   |-- api/                            # Cac tuyen duong API (Endpoints)
+|   |   |   |-- deps.py                     # Dependency Injection: Auth, DB, Roles
+|   |   |   `-- v1/                         # API Router phien ban 1
+|   |   |       |-- auth.py                 # API Dang nhap va xac minh vi EIP-191
+|   |   |       |-- users.py                # API Quan ly tai khoan nguoi dung
+|   |   |       |-- equipment.py            # API Quan ly kho thiet bi phong lab
+|   |   |       |-- loans.py                # API Vong doi muon tra Pure Web3
+|   |   |       |-- blockchain.py           # API Kiem tra node va tra cuu on-chain
+|   |   |       |-- audit.py                # API Kiem toan va doi soat du lieu
+|   |   |       `-- health.py               # API Kiem tra trang thai he thong
+|   |   |-- core/                           # Cau hinh loi va bao mat
+|   |   |   |-- config.py                   # Doc bien moi truong tu file .env
+|   |   |   |-- security.py                 # Bam Bcrypt va xu ly JWT Token
+|   |   |   `-- contracts/                  # ABI va dia chi hop dong da deploy
+|   |   |-- db/                             # Khoi tao ket noi CSDL MySQL
+|   |   |   `-- session.py                  # SQLAlchemy SessionLocal va Base
+|   |   |-- models/                         # 5 thuc the bang CSDL MySQL
+|   |   |-- schemas/                        # DTO Pydantic schemas (Request/Response)
+|   |   |-- services/                       # Xu ly nghiep vu cot loi
+|   |   |   |-- blockchain_service.py       # Tham tra bien lai giao dich Web3.py
+|   |   |   |-- loan_service.py             # Dieu phoi vong doi muon tra va chong replay
+|   |   |   |-- audit_service.py            # Ghi nhat ky kiem toan he thong
+|   |   |   `-- equipment_service.py        # Quan ly thiet bi va khoa dong
+|   |   `-- main.py                         # File khoi chay ung dung FastAPI
+|   |-- tests/                              # Bo 78 bai kiem thu tu dong Pytest
+|   |   |-- conftest.py                     # Fixture dung chung cho kiem thu
+|   |   |-- test_loans.py                   # Kiem thu vong doi Pure Web3
+|   |   |-- test_multi_user_e2e.py          # Kiem thu chu trinh Multi-Admin va Sinh vien
+|   |   |-- test_auth.py                    # Kiem thu dang nhap va chu ky vi EIP-191
+|   |   |-- test_blockchain.py              # Kiem thu ket noi va xu ly receipt
+|   |   |-- test_equipment.py               # Kiem thu kho thiet bi
+|   |   |-- test_users.py                   # Kiem thu quan ly nguoi dung
+|   |   |-- test_audit.py                   # Kiem thu nhat ky kiem toan
+|   |   `-- test_health.py                  # Kiem thu health check
+|   `-- requirements.txt                    # Danh sach dependencies Python
+|-- contracts/                              # Ma nguon Smart Contract Hardhat
+|   |-- contracts/
+|   |   `-- EquipmentLending.sol            # Smart contract chinh (OpenZeppelin AccessControl)
+|   |-- scripts/
+|   |   `-- deploy.cjs                      # Script deploy tu dong xuat ABI sang BE va FE
+|   |-- test/
+|   |   `-- EquipmentLending.test.cjs       # 31 bai kiem thu Smart Contract (100% pass)
+|   |-- hardhat.config.cjs                  # Cau hinh mang Hardhat va Sepolia Testnet
+|   `-- package.json                        # Dependencies Node.js Smart Contract
+|-- frontend/                               # Giao dien nguoi dung React + TypeScript
+|   |-- src/
+|   |   |-- components/                     # Components dung chung (Navbar, Modal,...)
+|   |   |-- context/                        # AuthContext (JWT) va Web3Context (MetaMask)
+|   |   |-- contracts/                      # ABI va dia chi hop dong dong bo tu deploy
+|   |   |-- pages/                          # Cac man hinh chuc nang ung dung
+|   |   |   |-- EquipmentPage.tsx           # Danh muc thiet bi va dang ky muon
+|   |   |   |-- MyLoansPage.tsx             # Quan ly don muon cua sinh vien (huy don)
+|   |   |   |-- AdminLoansPage.tsx          # Dieu phoi duyet, ban giao va tra may
+|   |   |   |-- AdminInventoryPage.tsx      # Quan ly kho thiet bi danh cho Admin
+|   |   |   |-- AdminRolesPage.tsx          # Quan ly phan quyen Multi-Admin tren chuoi
+|   |   |   |-- AuditPage.tsx               # Trang kiem toan doi soat Blockchain
+|   |   |   `-- LoginPage.tsx               # Trang dang nhap he thong
+|   |   |-- services/                       # API client Axios ket noi Backend
+|   |   `-- types/                          # Dinh nghia cac interface TypeScript
+|   `-- package.json                        # Dependencies Frontend
+|-- scripts/                                # Cac tap lenh ho tro kiem thu va khoi dong
+|   |-- seed.py                             # Nap du lieu mau vao CSDL MySQL
+|   |-- test_phase16_multi_user_e2e.py      # Kiem thu chu trinh 4 vi lien hoan
+|   |-- check_wallet_balances.py            # Kiem tra so du va quyen vi tren Sepolia
+|   `-- start_all.ps1                       # Khoi dong toan bo he thong bang PowerShell
+|-- docs/                                   # Tai lieu ky thuat va huong dan kiem thu
+|   |-- HUONG_DAN_KIEM_THU_MULTI_USER.md    # Huong dan kiem thu da vi
+|   `-- E2E_MULTI_WALLET_EVIDENCE.md        # Bang chung kiem thu ky thuat
+|-- .env                                    # File cau hinh bien moi truong he thong
+`-- README.md                               # Tai lieu huong dan du an nay
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Vận Hành Từ A-Z
+## 7. Thong Tin Smart Contract Tren Mang Sepolia
 
-### 0. Clone Dự Án (Clean Checkout)
-
-```powershell
-git clone https://github.com/NguyenThanhDuy42124/EduVault.git
-cd EduVault
-```
-
----
-
-### 1. Yêu Cầu Tiên Quyết
-
-| Phần mềm | Phiên bản | Kiểm tra |
-| :--- | :--- | :--- |
-| **Node.js** | `v18.x`+ (Khuyến nghị `v20.x`) | `node --version` |
-| **Python** | `3.11.x` hoặc `3.13.x` | `python --version` |
-| **XAMPP** (MySQL `8.x`) | Bất kỳ | Mở XAMPP Control Panel |
-| **Git** | Bất kỳ | `git --version` |
+- **Ten hop dong:** EquipmentLending
+- **Mang:** Ethereum Sepolia Testnet
+- **Chain ID:** `11155111`
+- **Dia chi hop dong:** `0xA88De9B00C0F78FF9a162C4f17524ef885169ffd`
+- **Trinh tra cuu Etherscan:** https://sepolia.etherscan.io/address/0xA88De9B00C0F78FF9a162C4f17524ef885169ffd
+- **Dia chi vi Deployer (Khoi tao ban dau):** `0x6396121f971a55bc844301E039F6C6F472C5CbBB`
+- **Tieu chuan phan quyen:** OpenZeppelin AccessControl
+  - `DEFAULT_ADMIN_ROLE` (0x00...00): Quyen quan tri cap cao nhat, co quyen them/xoa Admin khac (`addAdmin`, `removeAdmin`).
+  - `ADMIN_ROLE`: Quyen quan tri phong lab, co quyen duyet don (`approveLoan`), ban giao (`confirmHandover`), nghiem thu tra may (`confirmReturn`) va cap quyen sinh vien (`registerBorrower`).
+  - `BORROWER_ROLE`: Quyen tao don muon tren hop dong thong minh (`createLoan`).
 
 ---
 
-### 2. Chuẩn Bị Cơ Sở Dữ Liệu MySQL
-1. Mở **XAMPP Control Panel**, bấm **Start** cho module **MySQL**.
-2. Mở trình duyệt truy cập: `http://localhost/phpmyadmin`.
-3. Bấm **New** ➡️ Điền tên: `equipment_lending_db` ➡️ Bảng mã: `utf8mb4_unicode_ci` ➡️ **Create**.
+## 8. Huong Dan Cai Dat Va Khoi Chay
+
+### Yeu cau moi truong
+
+- **Node.js:** Phien ban 18.x tro len (Khuyen nghi 20.x).
+- **Python:** Phien ban 3.11.x (hoac 3.12.x/3.13.x).
+- **MySQL:** Phien ban 8.0 hoac MariaDB thong qua XAMPP.
+- **Trinh duyet:** Google Chrome hoac Brave co cai san tien ich mo rong **MetaMask**.
 
 ---
 
-### 3. Cài Đặt Dependencies (Lần đầu tiên)
+### Buoc 1: Chuan bi Co so du lieu MySQL
 
-#### A. Cài đặt Smart Contract (Hardhat)
-```powershell
-cd EduVault\contracts
-npm install
-```
+1. Mo **XAMPP Control Panel**, bam **Start** cho phan **MySQL** (cong mac dinh `3306`).
+2. Truy cap trinh quan ly phpMyAdmin tai: `http://localhost/phpmyadmin`.
+3. Tao co so du lieu moi co ten: `equipment_lending_db` voi bang ma `utf8mb4_unicode_ci`.
 
-#### B. Cài đặt Backend Python
+---
+
+### Buoc 2: Cai dat Backend FastAPI
+
+Mo cua so Terminal hoac PowerShell tai thu muc goc du an:
+
 ```powershell
 cd EduVault\backend
-# Tạo và kích hoạt môi trường ảo
+
+# Tao moi truong ao Python
 python -m venv .venv
+
+# Kich hoat moi truong ao (Windows PowerShell)
 .\.venv\Scripts\Activate.ps1
-# Cài đặt thư viện
+
+# Cai dat thu vien can thiet
 pip install -r requirements.txt
 ```
 
-#### C. Cấu hình môi trường Backend
-```powershell
-# Copy file mẫu (đã có sẵn chú thích đầy đủ)
-copy .env.example .env
-# Mặc định đã đúng cho XAMPP local, không cần sửa
+---
+
+### Buoc 3: Cau hinh bien moi truong (.env)
+
+Kiem tra file `.env` tai thu muc goc `EduVault/.env` va `EduVault/backend/.env`:
+
+```env
+# Co so du lieu MySQL
+DATABASE_URL=mysql+pymysql://root:@localhost:3306/equipment_lending_db
+
+# Bao mat JWT
+SECRET_KEY=eduvault_super_secret_jwt_key_2026_sepolia_secure_key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# Mang Blockchain Sepolia
+BLOCKCHAIN_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+CHAIN_ID=11155111
+CONTRACT_ADDRESS=0xA88De9B00C0F78FF9a162C4f17524ef885169ffd
+
+# Cau hinh ung dung
+ENVIRONMENT=development
+CORS_ORIGINS=["http://localhost:5173", "http://127.0.0.1:5173"]
 ```
 
-#### D. Cài đặt Frontend React
-```powershell
-cd EduVault\frontend
-npm install
-```
+---
 
-#### E. Migration & Nạp dữ liệu ban đầu
-Từ thư mục `EduVault\backend` (với `.venv` đang active):
+### Buoc 4: Thuc thi Migration va Nap du lieu mau
+
+Tu thu muc `EduVault\backend` (khi moi truong ao `.venv` dang duoc kich hoat):
+
 ```powershell
-# Tạo 5 bảng trên MySQL
+# Chay migration tao cac bang CSDL trong MySQL
 alembic upgrade head
 
-# Nạp dữ liệu mẫu (1 Admin, 3 Sinh viên, 8 Thiết bị học tập)
+# Nap du lieu tai khoan va danh muc thiet bi mau
 python ..\scripts\seed.py
 ```
 
 ---
 
-### 4. Khởi Động Hệ Thống
+### Buoc 5: Cai dat Frontend React Vite
 
-#### ⚡ Cách 1: Khởi động 1-Click bằng PowerShell (Khuyến nghị)
+Mo mot cua so Terminal moi:
 
 ```powershell
-# Từ thư mục gốc EduVault
-.\scripts\start_all.ps1
+cd EduVault\frontend
+npm install
 ```
-
-Script tự động mở **3 cửa sổ PowerShell song song**:
-1. 🟢 **Hardhat Node** (cổng `8545`)
-2. 🔵 **FastAPI Backend** (cổng `8000`)
-3. 🟣 **Vite Frontend** (cổng `5173`)
-
-> ⚠️ Nếu báo lỗi policy, chạy trước: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
-
-Hoặc dùng file BAT truyền thống: click đúp **`start_all.bat`** tại thư mục gốc.
 
 ---
 
-#### 🛠️ Cách 2: Khởi động thủ công từng phần
+### Buoc 6: Khoi dong cac dich vu he thong
 
-**Cửa sổ 1 - Hardhat Blockchain Node:**
-```powershell
-cd EduVault\contracts
-npx hardhat node
-```
-
-**Cửa sổ 1b - Deploy Contract** (tab mới, sau khi node đã sẵn sàng):
-```powershell
-cd EduVault\contracts
-npx hardhat run scripts/deploy.cjs --network localhost
-```
-
-**Cửa sổ 2 - Backend FastAPI:**
+#### 1. Khoi dong Backend FastAPI
 ```powershell
 cd EduVault
-python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+.\backend\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-→ Swagger UI: `http://127.0.0.1:8000/docs`
+- Tai lieu OpenAPI Swagger UI: `http://127.0.0.1:8000/docs`
+- Kiem tra ket noi: `http://127.0.0.1:8000/api/v1/health`
 
-**Cửa sổ 3 - Frontend React Vite:**
+#### 2. Khoi dong Frontend React Vite
 ```powershell
 cd EduVault\frontend
 npm run dev
 ```
-→ Web Application: `http://localhost:5173`
+- Giao dien ung dung web: `http://localhost:5173`
 
 ---
 
-## 👤 Tài Khoản Trải Nghiệm (Demo)
+## 9. Danh Sach Tai Khoan Thu Nghiem Mau
 
-Hệ thống đã nạp sẵn dữ liệu ban đầu qua `scripts/seed.py`:
+Sau khi chay tap lenh `seed.py`, he thong san sang voi cac tai khoan sau:
 
-| Vai trò (Role) | Email đăng nhập | Mật khẩu | Mã SV / Cán bộ | Quyền hạn trong hệ thống |
-| :--- | :--- | :--- | :--- | :--- |
-| **Quản trị viên (ADMIN)** | `admin@eduvault.edu.vn` | `admin123456` | `ADMIN001` | Duyệt đơn mượn, bàn giao máy, nghiệm thu trả máy, quản trị kho thiết bị, chạy đối soát dữ liệu |
-| **Sinh viên 1 (BORROWER)**| `sv01@eduvault.edu.vn` | `student123` | `SV2026001` | Tra cứu thiết bị, đăng ký mượn, theo dõi đơn cá nhân, hủy đơn chờ duyệt |
-| **Sinh viên 2 (BORROWER)**| `sv02@eduvault.edu.vn` | `student123` | `SV2026002` | Tương tự SV1 |
-| **Sinh viên 3 (BORROWER)**| `sv03@eduvault.edu.vn` | `student123` | `SV2026003` | Tương tự SV1 |
+| Vai tro | Email dang nhap | Mat khau mac dinh | Ma so (MSSV/Can bo) | Quyen han he thong |
+|---|---|---|---|---|
+| **Quan tri vien (ADMIN)** | `admin@eduvault.edu.vn` | `admin123456` | `ADMIN001` | Duyet don, ban giao may, nghiem thu tra may, phan quyen Multi-Admin, quan ly kho thiet bi |
+| **Sinh vien 1 (BORROWER)** | `sv01@eduvault.edu.vn` | `student123` | `SV2026001` | Tra cuu thiet bi, ky tao don muon bang MetaMask, theo doi don, huy don cho duyet |
+| **Sinh vien 2 (BORROWER)** | `sv02@eduvault.edu.vn` | `student123` | `SV2026002` | Tuong tu Sinh vien 1 |
+| **Sinh vien 3 (BORROWER)** | `sv03@eduvault.edu.vn` | `student123` | `SV2026003` | Tuong tu Sinh vien 1 |
 
 ---
 
-## 🧪 Kiểm Thử Toàn Diện
+## 10. Ket Qua Kiem Thu Toan Dien (Automated Test Suite)
 
-Dự án được xây dựng với phương châm kiểm thử nghiêm ngặt ở mọi phân tầng:
+He thong dat ty le vuot qua kiem thu 100% tren toan bo cac phan tang:
 
-### 1. Kiểm thử Smart Contract (28/28 Tests Passed)
-Kiểm thử toàn diện các case: Chuẩn trả đúng hạn 0% phạt, Quá hạn 10% và 50%, Hỏng/Mất tịch thu 100% cọc, Hủy đơn các trạng thái, Mutex chống đặt trùng thiết bị, Revert khi truyền sai quyền hạn:
+### 1. Kiem thu tu dong Backend Pytest (78/78 Passed)
+Bao phu toan bo cac tinh nang:
+- Vong doi muon tra Pure Web3 voi ma bam `tx_hash` that.
+- Co che chong tan cong Replay Attack va tinh Idempotent cua cac thao tac.
+- Kiem tra an toan khi mang RPC offline hoac giao dich bi revert tren blockchain.
+- Chu trinh tuong tac giua nhieu Admin va Sinh vien tren cung hop dong (Phase 16).
+- Phan quyen RBAC, chong brute-force khoa tai khoan, ma hoa Bcrypt va kiem toan audit log.
+
+Lenh thuc thi:
+```powershell
+cd EduVault
+.\backend\.venv\Scripts\python.exe -m pytest backend/tests/ -v
+```
+Ket qua: `78 passed in ~29.7s (100% pass rate)`.
+
+### 2. Kiem thu Smart Contract Hardhat (31/31 Passed)
+Kiem thu day du cac tinh huong on-chain:
+- Phan quyen Multi-Admin (addAdmin, removeAdmin, registerBorrower, revokeBorrower).
+- Luong chuan tra dung han voi 0% phat.
+- Tu dong tinh phat khi tre han duoi 24 gio (10%) va tren 24 gio (50%).
+- Xu ly hu hong hoac lam mat thiet bi tich thu 100% tien coc.
+- Khoa Mutex thiet bi chong muon trung.
+- Tu choi chuyen trang thai khong hop le va tu choi nguoi goi khong co quyen.
+
+Lenh thuc thi:
 ```powershell
 cd EduVault\contracts
 npx hardhat test
 ```
-*Kết quả:* `28 passing (~893ms)` ✅
+Ket qua: `31 passing (~2s) (100% pass rate)`.
 
-### 2. Kiểm thử Tự động Backend Pytest (56/56 Tests Passed)
-Bao phủ toàn bộ các tầng: Health check, Xác thực Bcrypt, Chống brute-force khóa 15 phút, RBAC phân quyền, CRUD Thiết bị, MySQL Pessimistic Lock, Ký Relayer Web3, Vòng đời 6 bước mượn trả, Worker đối soát Dual-write:
-```powershell
-cd EduVault
-.\backend\.venv\Scripts\python.exe -m pytest -v
-```
-*Kết quả:* `56 passed in ~67s (100% pass rate)` ✅
-
-### 3. Kiểm thử Type & Build Frontend
+### 3. Kiem tra Dong goi Frontend (Build & Type Check)
+Lenh thuc thi:
 ```powershell
 cd EduVault\frontend
 npm run build
 ```
-*Kết quả:* TypeScript compile 0 lỗi, Vite bundle production thành công trong ~2.9s ✅
+Ket qua: `tsc -b && vite build` bien dich 0 loi, dong goi thanh cong cac goi bundle production.
 
 ---
 
-## 🛡️ Quy Chuẩn Lập Trình Áp Dụng
+## 11. Quy Trinh Deploy Lai Smart Contract (Khi Can Thiet)
 
-Mã nguồn tuân thủ nghiêm ngặt theo quy chuẩn lập trình dự án:
-- **Docstring 5 Thành Phần Chuẩn Hóa:** 100% các hàm nghiệp vụ Backend đều có docstring chi tiết gồm: *Mục đích*, *Tham số*, *Trả về*, *Lỗi (Raises)*, *Tác dụng phụ (Side effects)*.
-- **Hàm Đơn Nhiệm & Phân Tầng:** Tách biệt tuyệt đối giữa Controller (Router), Service (Nghiệp vụ) và Model (Thực thể CSDL).
-- **Xử lý Ngoại lệ Minh bạch:** Tuyệt đối không dùng `except: pass` nuốt lỗi. Mọi lỗi nghiệp vụ đều ném `HTTPException` với mã HTTP chuẩn và thông báo tiếng Việt có nghĩa.
-- **Bảo mật:** Không hard-code private key hay thông tin nhạy cảm. Quản lý tập trung qua biến môi trường `.env`.
+Trong truong hop can sua doi ma nguon Solidity va deploy hop dong moi len mang Sepolia:
+
+1. Mo file `EduVault/contracts/hardhat.config.cjs` va dam bao da co khoa rieng tu deployer trong `.env`:
+   ```env
+   SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+   SEPOLIA_PRIVATE_KEY=<khoa_rieng_tu_cua_vi_deployer_co_eth_sepolia>
+   ```
+2. Thuc hien deploy:
+   ```powershell
+   cd EduVault\contracts
+   npx hardhat run scripts/deploy.cjs --network sepolia
+   ```
+3. Kich ban `deploy.cjs` se tu dong:
+   - Trien khai bytecode len Sepolia.
+   - Xuat ABI va dia chi hop dong sang `backend/app/core/contracts/`.
+   - Xuat ABI va dia chi hop dong sang `frontend/src/contracts/`.
+   - Luu thong tin lich su deploy vao `contracts/deployments/sepolia.json`.
+4. Cap nhat dia chi contract moi vao bien `CONTRACT_ADDRESS` trong file `.env`.
 
 ---
 
-## 👥 Nhóm Tác Giả & Bản Quyền
+## 12. Tuan Thu Quy Chuan Ky Thuat
 
-Dự án được nghiên cứu và phát triển phục vụ đồ án chuyên ngành Công nghệ Thông tin / Kỹ thuật Phần mềm / Ứng dụng Blockchain trong Giáo dục.
-
-- **Đơn vị:** Khoa Công nghệ Thông tin
-- **Phiên bản:** `1.0.0` (Tháng 11/2026)
-- **Giấy phép:** [MIT License](LICENSE)
+- **Tieu chuan Docstring 5 thanh phan:** Toan bo cac ham nghiep vu cua Backend deu co docstring chi tiet: Muc dich, Tham so, Tra ve, Loi (Raises) va Tac dung phu (Side effects).
+- **Phan tach kien truc ro rang:** Controller (Router API) chi tiep nhan va xac thuc du lieu dau vao; Service xu ly nghiep vu va xac thuc blockchain; Model dinh nghia cau truc thuc the.
+- **Quan ly loi nhat quan:** Xu ly loi dong thoi ca hai tang: ném `HTTPException` voi ma HTTP ro rang tai Backend va giai ma revert reason tieng Viet de hien thi than thien tren Frontend.
+- **Bao mat khoa rieng tu tuyet doi:** Khong luu tru khoa rieng tu tren may chu backend, hoan toan khong co rui ro lo Private Key tu phia he thong.
 
 ---
-<div align="center">
-  <sub>EduVault - Secure, Transparent, and Immutable Academic Equipment Lending.</sub>
-</div>
+
+EduVault - He Thong Quan Ly Va Kiem Toan Muon Tra Thiet Bi Hoc Tap Chuan Pure Web3.
