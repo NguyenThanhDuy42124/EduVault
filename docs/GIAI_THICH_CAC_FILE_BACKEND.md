@@ -1,162 +1,172 @@
-# Tài Liệu Báo Cáo: Hệ Thống Backend & Deploy Smart Contract (EduVault)
+# Tai Lieu Giai Thich Chi Tiet Cac Tep Tin Backend EduVault
 
-Tài liệu này được biên soạn cho buổi báo cáo và phản biện đồ án với Giảng viên, bao gồm hai nội dung trọng tâm:
-1. Kiến trúc, cấu trúc tệp tin và vai trò của từng thành phần trong máy chủ Backend (FastAPI).
-2. Quy trình và cơ chế triển khai tự động Hợp đồng thông minh (Smart Contract Deploy) lên mạng Ethereum Sepolia Testnet.
+Tài liệu này thuyết minh chi tiết chức năng, vai trò và cơ chế vận hành của toàn bộ các tệp tin trong hệ thống May chu Backend của dự án EduVault.
 
 ---
 
-## PHẦN 1: KIẾN TRÚC VÀ CHI TIẾT CÁC TỆP TIN BACKEND
+## 1. Tong Quan Kien Truc Backend
 
-### 1. Sơ Đồ Luồng Hoạt Động (Architecture Flow)
-
-```mermaid
-flowchart TD
-    Client["Trình duyệt Client (React + MetaMask)"] -->|1. Gửi HTTP Request kèm Bearer JWT| Main["app/main.py (FastAPI App)"]
-    Main --> Deps["app/api/deps.py (Xác thực Auth, Session DB, Phân quyền)"]
-    Deps --> Routers["Tầng Router API (/api/v1)\n- auth.py, loans.py, equipment.py"]
-    
-    Routers --> Schemas["Pydantic Schemas (Kiểm tra kiểu dữ liệu)\n- loan.py, user.py, equipment.py"]
-    Routers --> Services["Tầng Xử lý Nghiệp vụ (Services)\n- loan_service.py, equipment_service.py"]
-    
-    Services --> BlockchainService["blockchain_service.py (Web3.py)"]
-    BlockchainService -->|2. Đọc TransactionReceipt qua RPC| NodeSepolia["Node Ethereum Sepolia (Chain ID 11155111)"]
-    NodeSepolia --> SmartContract["Smart Contract (EquipmentLending.sol)"]
-    
-    Services --> Models["Tầng Thực thể ORM (SQLAlchemy Models)"]
-    Models -->|3. Ghi nhận dữ liệu đã xác thực| MySQL[("Cơ sở dữ liệu MySQL (equipment_lending_db)")]
-```
+Hệ thống Backend được phát triển bằng ngôn ngữ Python 3.11 và framework FastAPI, xây dựng theo mô hình kiến trúc Pure Web3 (Non-Custodial) kết hợp lớp lưu trữ quan hệ MySQL (thông qua SQLAlchemy ORM) và công cụ di chuyển dữ liệu Alembic:
+- Không lưu trữ khóa riêng tư (Private Key) của người dùng hoặc quản trị viên trên máy chủ.
+- Mọi thao tác làm thay đổi trạng thái mượn trả đều được người dùng ký trực tiếp từ ví MetaMask on-chain trên mạng Ethereum Sepolia Testnet.
+- Backend đóng vai trò là Bộ thẩm tra biên lai giao dịch on-chain (On-chain Transaction Receipt Verifier) và đồng bộ trạng thái vào cơ sở dữ liệu MySQL nhằm tối ưu hóa tốc độ truy vấn danh mục, tìm kiếm và phân trang.
 
 ---
 
-### 2. Bảng Tra Cứu Toàn Bộ Tệp Tin Backend
+## 2. Bang Tra Cuu Nhanh Cac Tep Tin Backend
 
-| Tên tệp tin | Vị trí thư mục | Chức năng chính |
-|---|---|---|
-| `main.py` | `backend/app/` | Điểm khởi chạy ứng dụng FastAPI, cấu hình CORS và kiểm tra kết nối khi bật server |
-| `config.py` | `backend/app/core/` | Đọc và quản lý tập trung các biến môi trường từ tệp `.env` |
-| `security.py` | `backend/app/core/` | Băm mật khẩu Bcrypt, cấp phát và giải mã JSON Web Token (JWT) |
-| `session.py` | `backend/app/db/` | Cấu hình Engine kết nối MySQL và Connection Pool chống ngắt kết nối |
-| `user.py` (Model) | `backend/app/models/` | Thực thể bảng `users`: lưu tài khoản, vai trò, địa chỉ ví và trạng thái xác minh ví |
-| `equipment.py` (Model) | `backend/app/models/` | Thực thể bảng `equipments`: lưu thông tin thiết bị, số serial, mức cọc quy định |
-| `lending_request.py` (Model) | `backend/app/models/` | Thực thể bảng `lending_requests`: lưu chi tiết đơn mượn và mã `on_chain_loan_id` |
-| `blockchain_tx.py` (Model) | `backend/app/models/` | Thực thể bảng `blockchain_transactions`: lưu lịch sử mã giao dịch `tx_hash` on-chain |
-| `audit_log.py` (Model) | `backend/app/models/` | Thực thể bảng `audit_logs`: lưu toàn bộ nhật ký kiểm toán hệ thống |
-| `loan.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra tính hợp lệ dữ liệu tạo đơn, duyệt, bàn giao, nhận trả |
-| `user.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra dữ liệu đăng nhập, đăng ký và chữ ký ví EIP-191 |
-| `equipment.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra dữ liệu thêm, sửa thiết bị phòng lab |
-| `blockchain_service.py` | `backend/app/services/` | Kết nối RPC Sepolia, thẩm tra biên lai on-chain, kiểm tra quyền hạn `hasRole` |
-| `loan_service.py` | `backend/app/services/` | Điều phối vòng đời mượn trả, chống Replay Attack, đồng bộ trạng thái CSDL |
-| `auth_service.py` | `backend/app/services/` | Kiểm tra đăng nhập, đếm số lần sai để khóa tài khoản tự động 15 phút |
-| `equipment_service.py` | `backend/app/services/` | Quản lý kho máy, áp dụng khóa dòng `SELECT ... FOR UPDATE` tránh đặt trùng |
-| `reconciliation_service.py` | `backend/app/services/` | Tiến trình tự động đối soát và sửa lệch dữ liệu giữa MySQL và Smart Contract |
-| `deps.py` | `backend/app/api/` | Dependency Injection: cấp DB session, xác thực token JWT và kiểm tra quyền RBAC |
-| `auth.py` (Endpoint) | `backend/app/api/v1/` | REST API đăng nhập (`/login`), cấp nonce và xác minh chữ ký ví EIP-191 |
-| `loans.py` (Endpoint) | `backend/app/api/v1/` | REST API vòng đời: tạo đơn, duyệt đơn, bàn giao máy, nhận trả và hủy đơn |
-| `equipment.py` (Endpoint) | `backend/app/api/v1/` | REST API danh mục thiết bị, tìm kiếm, thêm mới và đổi trạng thái bảo trì |
-| `users.py` (Endpoint) | `backend/app/api/v1/` | REST API xem thông tin cá nhân và danh sách sinh viên đã liên kết ví |
-| `blockchain.py` (Endpoint) | `backend/app/api/v1/` | REST API kiểm tra trạng thái node blockchain và tra cứu giao dịch on-chain |
-| `audit.py` (Endpoint) | `backend/app/api/v1/` | REST API xem nhật ký kiểm toán và kích hoạt đối soát dữ liệu |
-| `conftest.py` | `backend/tests/` | Cấu hình fixture SQLite in-memory và tài khoản mẫu cho bộ kiểm thử Pytest |
-| `test_loans.py` | `backend/tests/` | Kiểm thử tự động vòng đời Pure Web3, chống Replay Attack và xử lý lỗi on-chain |
-| `test_multi_user_e2e.py` | `backend/tests/` | Kiểm thử tích hợp chu trình liên ví giữa nhiều Quản trị viên và Sinh viên |
-
----
-
-### 3. Chi Tiết Các Tệp Tin Nghiệp Vụ Trọng Yếu
-
-#### A. Khởi chạy và Cấu hình
-* **`backend/app/main.py`:**
-  - Khởi tạo đối tượng `FastAPI` kèm tài liệu tương tác Swagger UI tại `/docs`.
-  - Cấu hình `CORSMiddleware` cho phép ứng dụng Frontend (React Vite port 5173) gọi API an toàn.
-  - Sử dụng sự kiện `lifespan`: Tự động kiểm tra kết nối tới MySQL và node Sepolia khi máy chủ bật, cảnh báo nếu node offline hoặc sai Chain ID.
-* **`backend/app/core/config.py`:**
-  - Đọc các biến từ tệp `.env`: chuỗi kết nối MySQL (`DATABASE_URL`), khóa bí mật JWT (`SECRET_KEY`), địa chỉ node RPC Sepolia (`BLOCKCHAIN_RPC_URL`), mã mạng (`CHAIN_ID=11155111`) và địa chỉ Smart Contract (`CONTRACT_ADDRESS`).
-* **`backend/app/core/security.py`:**
-  - `verify_password(plain, hashed)`: So khớp mật khẩu đăng nhập với chuỗi băm Bcrypt.
-  - `get_password_hash(password)`: Băm mật khẩu bằng thuật toán Bcrypt kèm salt ngẫu nhiên.
-  - `create_access_token(data, expires_delta)`: Tạo mã thông báo JWT mang thông tin ID và vai trò của người dùng.
-
-#### B. Cơ sở dữ liệu và Thực thể (Database & Models)
-* **`backend/app/db/session.py`:**
-  - Khởi tạo SQLAlchemy Engine với `pool_pre_ping=True` và `pool_recycle=3600`, tự động phục hồi kết nối bị đứt quãng trên môi trường XAMPP.
-* **`backend/app/models/user.py`:**
-  - Quản lý tài khoản: mã số sinh viên/cán bộ (`student_staff_id`), email, mật khẩu băm, vai trò (`ADMIN` hoặc `BORROWER`), địa chỉ ví MetaMask (`wallet_address`), trạng thái xác minh ví (`wallet_verified`), bộ đếm số lần đăng nhập sai (`failed_login_count`) và thời gian tạm khóa tài khoản (`locked_until`).
-* **`backend/app/models/equipment.py`:**
-  - Quản lý thiết bị: số serial định danh duy nhất, tên thiết bị, danh mục phân loại, mức tiền cọc quy định và trạng thái kho (`AVAILABLE`, `RESERVED`, `IN_USE`, `MAINTENANCE`, `RETIRED`).
-* **`backend/app/models/lending_request.py`:**
-  - Quản lý đơn mượn: liên kết người mượn và thiết bị, mã định danh trên blockchain `on_chain_loan_id` (dạng `bytes32`), trạng thái đơn (`PENDING`, `APPROVED`, `ACTIVE`, `RETURNED`, `CANCELLED`, `REJECTED`, `DISPUTED`) và trạng thái tiền cọc (`NONE`, `LOCKED`, `REFUNDED`, `FORFEITED`).
-* **`backend/app/models/blockchain_tx.py`:**
-  - Lưu toàn bộ lịch sử các giao dịch blockchain đã được thẩm tra thành công: mã băm `tx_hash`, loại hành động, địa chỉ gửi, địa chỉ nhận, số hiệu block và lượng gas tiêu thụ.
-
-#### C. Tầng Nghiệp vụ (Services)
-* **`backend/app/services/blockchain_service.py`:**
-  - `verify_transaction_receipt()`: Nhận `tx_hash` từ client gửi về, gọi RPC `eth_getTransactionReceipt` lên mạng Sepolia. Kiểm tra: `status == 1` (giao dịch thành công, không revert), gửi đúng địa chỉ hợp đồng của trường, phát đúng sự kiện (`LoanApproved`, `HandoverConfirmed`...) và khớp chính xác các tham số `loanId`, `equipmentId`.
-  - `has_role(role_name, account)`: Đọc hàm view `hasRole()` trên Smart Contract để kiểm tra ví có sở hữu quyền `ADMIN_ROLE` hay không.
-  - `get_loan(loan_id)`: Đọc trực tiếp bản ghi đơn mượn từ Smart Contract (trạng thái, mốc thời gian, tiền cọc).
-* **`backend/app/services/loan_service.py`:**
-  - Điều phối toàn bộ 6 bước mượn trả: Tiếp nhận tạo đơn, duyệt đơn, bàn giao thiết bị, nhận trả máy, từ chối và hủy đơn.
-  - Cơ chế chống Replay Attack: Hàm `_check_tx_idempotency_or_replay()` tra cứu bảng giao dịch, ngăn chặn tuyệt đối việc sử dụng lại một mã `tx_hash` cũ.
-  - Phân quyền Admin mở: Đối với Quản trị viên, backend không ép buộc tài khoản web phải xác minh ví từ trước mà thẩm tra trực tiếp quyền hạn trên biên lai on-chain thông qua modifier `onlyRole(ADMIN_ROLE)` của Smart Contract.
+| Đường dẫn tệp tin | Tầng kiến trúc | Vai trò và chức năng cốt lõi |
+| :--- | :--- | :--- |
+| `backend/app/main.py` | Entrypoint | Khởi động ứng dụng FastAPI, nạp middleware CORS, kiểm tra kết nối mạng blockchain qua sự kiện Lifespan, đăng ký API router |
+| `backend/app/core/config.py` | Cấu hình | Quản lý tập trung toàn bộ biến môi trường (Database URL, JWT Secret, RPC URL, Chain ID, Contract Address) bằng Pydantic Settings |
+| `backend/app/core/security.py` | Bảo mật | Băm mật khẩu người dùng bằng Bcrypt (xử lý giới hạn 72 byte), xác thực mật khẩu, phát hành mã thông báo truy cập JWT (HS256) |
+| `backend/app/db/session.py` | Cơ sở dữ liệu | Cấu hình SQLAlchemy Engine kết nối MySQL qua PyMySQL, thiết lập pool_pre_ping chống ngắt kết nối và tạo Session factory |
+| `backend/app/db/base.py` | Cơ sở dữ liệu | Nạp toàn bộ các model ORM để Alembic tự động phát hiện và sinh các tệp migration thay đổi cấu trúc bảng |
+| `backend/app/models/user.py` | Models (Thực thể) | Bảng `users`: Quản lý tài khoản đăng nhập, mật khẩu băm, vai trò (ADMIN/BORROWER), địa chỉ ví MetaMask, cờ xác thực ví EIP-191 và bộ đếm khóa tài khoản chống brute-force |
+| `backend/app/models/equipment.py` | Models (Thực thể) | Bảng `equipment`: Quản lý danh mục thiết bị thực tế trong phòng lab, số seri duy nhất, thể loại, mức tiền cọc quy định và trạng thái kho |
+| `backend/app/models/lending_request.py` | Models (Thực thể) | Bảng `lending_requests`: Quản lý toàn bộ vòng đời đơn mượn, liên kết khóa ngoại với người dùng, thiết bị, mã định danh on-chain loanId, trạng thái duyệt và tiền cọc |
+| `backend/app/models/blockchain_tx.py` | Models (Thực thể) | Bảng `blockchain_transactions`: Sổ cái lưu vết toàn bộ các biên lai giao dịch blockchain đã được Backend thẩm tra hợp lệ thành công trên EVM |
+| `backend/app/models/audit_log.py` | Models (Thực thể) | Bảng `audit_logs`: Nhật ký kiểm toán ghi nhận mọi thao tác thay đổi dữ liệu trong hệ thống phục vụ thanh tra và truy vết độc lập |
+| `backend/app/services/blockchain_service.py` | Nghiệp vụ cốt lõi | Thư viện Web3.py kết nối node Sepolia: đọc trạng thái on-chain, thẩm tra biên lai giao dịch (kiểm tra status, địa chỉ contract, giải mã event log, đối chiếu người gửi), kiểm tra phân quyền on-chain |
+| `backend/app/services/loan_service.py` | Nghiệp vụ cốt lõi | Điều phối toàn bộ quy trình mượn trả thiết bị, kiểm tra chống tấn công phát lại Replay Attack, đồng bộ trạng thái đơn và thiết bị |
+| `backend/app/services/auth_service.py` | Nghiệp vụ cốt lõi | Xử lý logic đăng nhập, kiểm tra mật khẩu, bộ đếm lỗi đăng nhập sai để khóa tài khoản 15 phút, sinh chuỗi thử thách nonce ký ví |
+| `backend/app/services/equipment_service.py` | Nghiệp vụ cốt lõi | Quản lý kho thiết bị, hỗ trợ tìm kiếm mờ, áp dụng cơ chế khóa bi quan (Pessimistic Locking `FOR UPDATE`) khi duyệt đơn chống race condition |
+| `backend/app/services/reconciliation_service.py` | Nghiệp vụ cốt lõi | Tiến trình đối soát tự động định kỳ: so sánh trạng thái giữa MySQL và Smart Contract, tự động khôi phục dữ liệu theo chân lý on-chain |
+| `backend/app/schemas/loan.py` | DTOs (Schemas) | Định nghĩa cấu trúc dữ liệu đầu vào và đầu ra cho đơn mượn (LoanCreateRequest, LoanApproveRequest, LoanResponse...) |
+| `backend/app/schemas/user.py` | DTOs (Schemas) | Định nghĩa cấu trúc dữ liệu đăng nhập, yêu cầu xác thực chữ ký ví EIP-191 và thông tin hồ sơ trả về cho người dùng |
+| `backend/app/schemas/equipment.py` | DTOs (Schemas) | Định nghĩa cấu trúc dữ liệu tạo mới, cập nhật và hiển thị danh mục thiết bị phòng lab |
+| `backend/app/schemas/token.py` | DTOs (Schemas) | Định nghĩa cấu trúc mã xác thực JWT trả về sau khi đăng nhập thành công |
+| `backend/app/schemas/audit.py` | DTOs (Schemas) | Định nghĩa cấu trúc bản ghi nhật ký kiểm toán hệ thống |
+| `backend/app/api/deps.py` | API Routers | Bộ tiêm phụ thuộc (Dependency Injection): tạo và đóng SQLAlchemy Session an toàn, giải mã JWT xác định người dùng, kiểm tra phân quyền vai trò |
+| `backend/app/api/v1/auth.py` | API Endpoints | Các điểm cuối đăng nhập, lấy chuỗi nonce thử thách và xác thực chữ ký số ví MetaMask (EIP-191) |
+| `backend/app/api/v1/loans.py` | API Endpoints | Các điểm cuối xử lý quy trình mượn trả: tạo đơn, duyệt đơn, bàn giao máy, nghiệm thu trả máy, từ chối và hủy đơn |
+| `backend/app/api/v1/equipment.py` | API Endpoints | Các điểm cuối xem danh mục thiết bị, thêm thiết bị mới vào kho và điều chỉnh trạng thái thiết bị |
+| `backend/app/api/v1/users.py` | API Endpoints | Các điểm cuối xem hồ sơ cá nhân và danh sách người dùng đã xác minh ví |
+| `backend/app/api/v1/blockchain.py` | API Endpoints | Các điểm cuối kiểm tra tình trạng kết nối node Sepolia và tra cứu chi tiết một biên lai giao dịch on-chain |
+| `backend/app/api/v1/audit.py` | API Endpoints | Các điểm cuối truy vấn nhật ký kiểm toán và kích hoạt tác vụ đối soát dữ liệu thủ công |
+| `backend/tests/` | Kiểm thử tự động | Bộ 80 bài kiểm thử tự động toàn diện bằng Pytest, kiểm thử độc lập trên SQLite in-memory, đạt tỷ lệ vượt qua 100% |
 
 ---
 
-## PHẦN 2: QUY TRÌNH VÀ CƠ CHẾ DEPLOY SMART CONTRACT
+## 3. Chi Tiet Tung Tang Kien Truc
 
-### 1. Thông Tin Hợp Đồng Trên Mạng Sepolia
+### 3.1. Tang Khoi Chay va Cau Hinh (Entrypoint & Core)
 
-* **Mạng thử nghiệm:** Ethereum Sepolia Testnet (Mã mạng Chain ID: `11155111`).
-* **Hợp đồng thông minh:** `EquipmentLending.sol` (kế thừa chuẩn OpenZeppelin `AccessControl`).
-* **Địa chỉ hợp đồng chính thức:** `0xA88De9B00C0F78FF9a162C4f17524ef885169ffd`
-* **Trình tra cứu Etherscan:** https://sepolia.etherscan.io/address/0xA88De9B00C0F78FF9a162C4f17524ef885169ffd
-* **Địa chỉ ví Deployer khởi tạo:** `0x6396121f971a55bc844301E039F6C6F472C5CbBB`
+#### [backend/app/main.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/main.py)
+- **Mục đích:** Khởi tạo phiên bản FastAPI ứng dụng, thiết lập middleware và điều phối tuyến đường.
+- **Các thành phần chính:**
+  * `FastAPI(title="EduVault API", ...)`: Khởi tạo ứng dụng kèm Swagger UI tại `/docs`.
+  * `CORSMiddleware`: Cho phép Frontend (cổng 5173) gửi yêu cầu tới Backend (cổng 8000) kèm Authorization header.
+  * Sự kiện `lifespan`: Khi server bật, tự động kiểm tra kết nối tới MySQL và node Blockchain Sepolia, cảnh báo nếu sai Chain ID hoặc node offline.
+  * Đăng ký toàn bộ router `/api/v1` từ thư mục `app/api/v1`.
 
----
+#### [backend/app/core/config.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/config.py)
+- **Mục đích:** Quản lý tập trung toàn bộ thông số cấu hình hệ thống bằng thư viện `pydantic-settings`.
+- **Các biến môi trường quan trọng:**
+  * `DATABASE_URL`: Chuỗi kết nối CSDL MySQL (`mysql+pymysql://root:@localhost:3306/equipment_lending_db`).
+  * `SECRET_KEY`, `ALGORITHM`: Chìa khóa ký và thuật toán sinh mã thông báo JWT (HS256).
+  * `BLOCKCHAIN_RPC_URL`: Địa chỉ node RPC mạng Sepolia (`https://ethereum-sepolia-rpc.publicnode.com`).
+  * `CHAIN_ID`: Mã mạng blockchain (`11155111` cho Sepolia Testnet).
+  * `CONTRACT_ADDRESS`: Địa chỉ Smart Contract đang triển khai (`0xA88De9B00C0F78FF9a162C4f17524ef885169ffd`).
 
-### 2. Phân Tích Kịch Bản Triển Khai Tự Động (`contracts/scripts/deploy.cjs`)
-
-Kịch bản `deploy.cjs` được xây dựng theo mô hình **Đường ống tự động đồng bộ (Auto-Sync Pipeline)**:
-
-1. **Kiểm tra số dư:** Đo lường số dư Sepolia ETH của ví Deployer (cần tối thiểu `0.01 ETH` để trả phí gas).
-2. **Khởi tạo Smart Contract:** Gọi lệnh `Factory.deploy(deployer.address)`. Constructor của hợp đồng tự động cấp quyền `DEFAULT_ADMIN_ROLE` và `ADMIN_ROLE` cho ví Deployer.
-3. **Chờ xác thực khối:** Lệnh `await contract.waitForDeployment()` bảo đảm giao dịch khởi tạo đã được đào vào khối block chính thức trên Sepolia.
-4. **Lưu vết triển khai:** Ghi lại lịch sử triển khai vào tệp `contracts/deployments/sepolia.json`.
-5. **Tự động xuất sang Backend:** Trích xuất tệp ABI và địa chỉ hợp đồng mới vào thư mục `backend/app/core/contracts/`.
-6. **Tự động xuất sang Frontend:** Trích xuất tệp ABI và địa chỉ hợp đồng mới vào thư mục `frontend/src/contracts/`.
-   - Nhờ cơ chế này, Frontend và Backend nhận diện địa chỉ hợp đồng mới ngay tức thì mà lập trình viên không phải chỉnh sửa thủ công.
-
----
-
-### 3. Lệnh Thực Thi Triển Khai
-
-* Triển khai lên mạng Sepolia Testnet:
-  ```bash
-  cd contracts
-  npx hardhat run scripts/deploy.cjs --network sepolia
-  ```
-
-* Cấu hình mạng tại `contracts/hardhat.config.cjs`:
-  Đọc biến `SEPOLIA_RPC_URL` và `SEPOLIA_PRIVATE_KEY` từ tệp `.env`.
+#### [backend/app/core/security.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/security.py)
+- **Mục đích:** Cung cấp các hàm mã hóa và bảo mật.
+- **Các hàm xử lý:**
+  * `verify_password(plain, hashed)`: Đối chiếu mật khẩu nhập với chuỗi băm Bcrypt.
+  * `get_password_hash(password)`: Băm mật khẩu bằng Bcrypt kết hợp muối ngẫu nhiên (chống lộ lọt).
+  * `create_access_token(data, expires_delta)`: Đóng gói thông tin người dùng thành chuỗi JWT Bearer token có thời hạn.
 
 ---
 
-## PHẦN 3: BỘ CÂU HỎI BÁO CÁO VÀ PHẢN BIỆN VỚI GIẢNG VIÊN
+### 3.2. Tang Co So Du Lieu va Thuc The (Database & Models)
 
-### Câu hỏi 1: Tại sao hệ thống chuyển sang mô hình Pure Web3 thay vì lưu Private Key trên Backend để ký hộ (Relayer)?
-* **Trả lời:** Mô hình Backend giữ Private Key (Relayer) rất nguy hiểm vì nếu máy chủ bị xâm nhập, kẻ tấn công sẽ có toàn quyền kiểm soát Smart Contract. Kiến trúc Pure Web3 loại bỏ hoàn toàn rủi ro này: toàn bộ giao dịch on-chain đều do người dùng và Admin tự ký trực tiếp bằng ví cá nhân MetaMask ở trình duyệt, máy chủ hoàn toàn không giữ Private Key.
+#### [backend/app/db/session.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/db/session.py)
+- Tạo `engine` kết nối MySQL với tham số `pool_pre_ping=True` (tự động thử lại nếu kết nối MySQL bị timeout do XAMPP sleep).
+- Tạo `SessionLocal` để mỗi request API có một phiên làm việc riêng biệt, tự động đóng sau khi xử lý xong.
 
-### Câu hỏi 2: Backend có vai trò gì nếu người dùng đã tự ký giao dịch lên Blockchain?
-* **Trả lời:** Backend đóng 3 vai trò then chốt:
-  1. Thẩm tra biên lai giao dịch on-chain (`verify_transaction_receipt`): Đọc trực tiếp từ node Sepolia để bảo đảm giao dịch đã thành công (`status == 1`), đúng địa chỉ hợp đồng, đúng loại sự kiện và đúng tham số trước khi cập nhật CSDL.
-  2. Chống tấn công gửi lại (Anti-Replay Attack): Đảm bảo mỗi mã `tx_hash` chỉ được chấp nhận duy nhất một lần.
-  3. Quản lý dữ liệu mở rộng: Lưu trữ thông tin cá nhân (MSSV, mật khẩu hash), hình ảnh và nhật ký kiểm toán, giúp hệ thống phản hồi cực nhanh mà không tốn chi phí gas đắt đỏ trên blockchain.
+#### [backend/app/models/user.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/user.py)
+- **Bảng `users`:**
+  * `student_staff_id`: Mã sinh viên/cán bộ (duy nhất).
+  * `role`: Vai trò trong hệ thống (`ADMIN`, `BORROWER`).
+  * `wallet_address`: Địa chỉ ví Ethereum MetaMask dạng `0x...` (42 ký tự).
+  * `wallet_verified`: Cờ đánh dấu đã xác thực chữ ký EIP-191 hay chưa.
+  * `failed_login_count`, `locked_until`: Cơ chế chống tấn công brute-force mật khẩu (khóa tạm 15 phút nếu sai quá 5 lần).
 
-### Câu hỏi 3: Cơ chế phân quyền trên Smart Contract hoạt động như thế nào?
-* **Trả lời:** Hợp đồng kế thừa chuẩn `AccessControl` của OpenZeppelin với 3 vai trò phân tầng:
-  1. `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao, có thẩm quyền thêm (`addAdmin`) hoặc bãi nhiệm (`removeAdmin`) các Admin khác.
-  2. `ADMIN_ROLE`: Dành cho Quản trị viên phòng lab, có quyền duyệt đơn (`approveLoan`), bàn giao máy (`confirmHandover`), nghiệm thu nhận trả (`confirmReturn`) và cấp quyền mượn cho sinh viên (`registerBorrower`).
-  3. `BORROWER_ROLE`: Cấp cho sinh viên đã được xác minh để được phép tạo đơn mượn (`createLoan`) trên hợp đồng.
+#### [backend/app/models/equipment.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/equipment.py)
+- **Bảng `equipment`:**
+  * Quản lý danh mục thiết bị thực tế trong phòng lab.
+  * `status`: Trạng thái kho (`AVAILABLE`, `RESERVED`, `IN_USE`, `MAINTENANCE`, `RETIRED`).
+  * `deposit_amount`: Mức tiền đặt cọc quy định (VND).
+
+#### [backend/app/models/lending_request.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/lending_request.py)
+- **Bảng `lending_requests`:**
+  * Quản lý đơn mượn của sinh viên.
+  * `on_chain_loan_id`: Mã định danh đơn mượn trên Smart Contract (chuỗi 66 ký tự dạng `bytes32` tạo bởi keccak256).
+  * `status`: Trạng thái đơn (`PENDING`, `APPROVED`, `ACTIVE`, `RETURNED`, `CANCELLED`, `REJECTED`, `DISPUTED`).
+  * `return_condition`: Tình trạng khi trả (0 = Nguyên vẹn, 1 = Hư hỏng nhẹ, 2 = Mất máy/Hư hỏng nặng).
+
+#### [backend/app/models/blockchain_tx.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/blockchain_tx.py)
+- **Bảng `blockchain_transactions`:**
+  * Lưu vết tất cả giao dịch blockchain đã được Backend xác thực thành công.
+  * `tx_hash`: Khóa chính duy nhất. Chống replay attack (không cho phép dùng lại cùng 1 hash).
+  * `action_type`: Loại hành động (`CREATE_LOAN`, `APPROVE_LOAN`, `HANDOVER`, `RETURN_LOAN`, `CANCEL_LOAN`).
 
 ---
 
-EduVault - Tài Liệu Kỹ Thuật Chuyên Sâu Dành Cho Báo Cáo & Phản Biện Đồ Án.
+### 3.3. Tang Xu Ly Nghiep Vu (Services)
+
+#### [backend/app/services/blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py)
+Module quan trọng nhất thể hiện kiến trúc Pure Web3:
+- **`verify_transaction_receipt(tx_hash, ...)`:**
+  1. Gọi RPC `eth_getTransactionReceipt(tx_hash)` lên mạng Sepolia.
+  2. Kiểm tra `receipt.status == 1` (giao dịch thành công, không bị revert trên chuỗi).
+  3. Kiểm tra `receipt.to == CONTRACT_ADDRESS` (tương tác đúng địa chỉ Smart Contract của trường).
+  4. Giải mã log sự kiện (event logs) bằng ABI để kiểm tra sự kiện mong muốn (`LoanCreated`, `LoanApproved`, `HandoverConfirmed`, `LoanReturned`).
+  5. Đối chiếu tham số trong sự kiện: `loanId`, `equipmentId`, địa chỉ ví người gửi.
+- **`has_role(role_name, address)`:** Kiểm tra địa chỉ ví có quyền ADMIN_ROLE trên Smart Contract hay không.
+- **`get_loan(loan_id)`:** Đọc trực tiếp trạng thái đơn mượn từ Smart Contract trên blockchain.
+- **`is_overdue(loan_id)`:** Kiểm tra đơn mượn đã quá hạn so với block timestamp hay chưa.
+
+#### [backend/app/services/loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py)
+Điều phối toàn bộ vòng đời đơn mượn:
+- Kiểm tra tính duy nhất của giao dịch (chống Replay Attack).
+- Cập nhật đồng bộ trạng thái giữa MySQL và Smart Contract khi có giao dịch được xác thực.
+- Tích hợp cơ chế đồng bộ mềm cho thao tác hủy/từ chối đơn nếu trên blockchain đơn đã ở trạng thái `Cancelled`.
+
+#### [backend/app/services/equipment_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/equipment_service.py)
+- Quản lý danh mục thiết bị phòng lab.
+- Sử dụng cơ chế khóa dòng bi quan `SELECT ... FOR UPDATE` khi duyệt đơn để chống tranh chấp đồng thời giữa nhiều quản trị viên.
+
+#### [backend/app/services/reconciliation_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py)
+- Quét và đối soát tự động trạng thái giữa CSDL MySQL và Smart Contract trên Sepolia, lấy Smart Contract làm chân lý tối cao để tự động sửa chữa dữ liệu bị lệch pha.
+
+---
+
+### 3.4. Tang Kiem Tra Kieu Du Lieu (Schemas - DTOs)
+
+Sử dụng Pydantic v2:
+- **`backend/app/schemas/loan.py`:** `LoanCreateRequest` (gồm `tx_hash` và `on_chain_loan_id`), `LoanApproveRequest`, `LoanReturnRequest`, `LoanResponse`...
+- **`backend/app/schemas/user.py`:** `LoginRequest`, `WalletVerifyRequest`, `UserResponse`...
+- **`backend/app/schemas/equipment.py`:** `EquipmentCreate`, `EquipmentUpdate`, `EquipmentResponse`...
+
+---
+
+### 3.5. Tang Dinh Tuyen API (API Endpoints)
+
+- **`backend/app/api/deps.py`:** Dependency injection quản lý DB Session, xác thực token JWT, kiểm tra quyền hạn (Role Guard).
+- **`backend/app/api/v1/auth.py`:** Đăng nhập, lấy nonce ngẫu nhiên, xác thực chữ ký ví MetaMask EIP-191.
+- **`backend/app/api/v1/loans.py`:** Tạo đơn, duyệt đơn, bàn giao máy, nghiệm thu trả máy, hủy/từ chối đơn.
+- **`backend/app/api/v1/equipment.py`:** Xem danh mục, thêm mới và đổi trạng thái thiết bị.
+- **`backend/app/api/v1/blockchain.py`:** Kiểm tra kết nối mạng Sepolia, tra cứu giao dịch theo hash.
+- **`backend/app/api/v1/audit.py`:** Xem lịch sử kiểm toán hệ thống, kích hoạt đối soát dữ liệu.
+
+---
+
+### 3.6. Tang Kiem Thu Tu Dong (Tests)
+
+Thư mục `backend/tests/` gồm 80 bài kiểm thử tự động bằng Pytest, kiểm thử độc lập trên SQLite in-memory:
+- `test_loans.py`: Kiểm thử các kịch bản mượn trả Pure Web3, chống replay attack, chặn giao dịch revert.
+- `test_multi_user_e2e.py`: Kiểm thử chu trình liên ví giữa nhiều Admin và Sinh viên.
+- `test_auth.py`: Kiểm thử đăng nhập, cơ chế khóa brute-force, xác thực chữ ký EIP-191.
+- `test_equipment.py`: Kiểm thử kho và khóa bi quan tranh chấp thiết bị.
+- `test_blockchain.py`, `test_users.py`, `test_audit.py`, `test_health.py`: Kiểm thử các module phụ trợ.
