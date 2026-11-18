@@ -1,263 +1,220 @@
-# Tai Lieu Giai Thich Chi Tiet Cac Tep Tin Backend EduVault
+# Tài Liệu Báo Cáo Chuyên Sâu: Backend & Deploy Smart Contract (EduVault)
 
-Tai lieu nay mo ta toan dien cau truc, vai tro va nguyen ly hoat dong cua tung tep tin trong phan May chu (Backend) cua he thong EduVault theo kien truc Pure Web3.
+Tài liệu này được biên soạn toàn diện phục vụ việc báo cáo, thuyết minh và phản biện đồ án với Giảng viên về hai phân hệ cốt lõi: **Hệ thống Máy chủ (Backend FastAPI)** và **Quy trình Triển khai Hợp đồng thông minh (Smart Contract Deploy)** theo kiến trúc Pure Web3.
 
 ---
 
-## 1. Bang Tra Cuu Nhanh Cac Tep Tin Backend
+## PHẦN 1: KIẾN TRÚC VÀ CHI TIẾT CÁC TỆP TIN BACKEND
 
-| Nhom chuc nang | Duong dan tep tin | Vai tro cot loi |
+### 1.1. Bảng Tra Cứu Toàn Bộ Các Tệp Tin Backend
+
+| Phân tầng | Tệp tin & Đường dẫn liên kết | Vai trò cốt lõi trong hệ thống |
 |---|---|---|
-| Khoi chay ung dung | [main.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/main.py) | Diem khoi dong FastAPI, dang ky router, CORS, bat dong bo khoi dong |
-| Cau hinh moi truong | [config.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/config.py) | Doc va nap cac bien moi truong tu file .env |
-| An toan & Mat khau | [security.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/security.py) | Bam mat khau Bcrypt, tao va giai ma JWT Token |
-| ABI Smart Contract | [EquipmentLending.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/EquipmentLending.json) | Dinh nghia giao dien ABI cua hop dong de Web3.py giai ma |
-| Dia chi Smart Contract | [contract_address.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/contract_address.json) | Luu tru dia chi hop dong Sepolia va Chain ID |
-| Ket noi CSDL | [session.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/db/session.py) | Khoi tao SQLAlchemy Engine va phien lam viec SessionLocal |
-| Bang nguoi dung | [user.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/user.py) | Dinh nghia bang users, luu MSSV, mat khau, vi va trang thai xac minh |
-| Bang kho thiet bi | [equipment.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/equipment.py) | Dinh nghia bang equipments, luu danh muc, serial, tien coc quy dinh |
-| Bang don muon | [lending_request.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/lending_request.py) | Dinh nghia bang lending_requests, lien ket nguoi muon, thiet bi, on_chain_loan_id |
-| Bang lich su tx | [blockchain_tx.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/blockchain_tx.py) | Dinh nghia bang blockchain_transactions, luu tx_hash, block, gas |
-| Bang nhat ky | [audit_log.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/audit_log.py) | Dinh nghia bang audit_logs, ghi vet moi thao tac cua nguoi dung |
-| DTO Don muon | [loan.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/loan.py) | Pydantic schema kiem hop le du lieu tao, duyet, ban giao, tra don |
-| DTO Nguoi dung | [user.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/user.py) | Pydantic schema dang ky, cap nhat ho so, xac minh vi EIP-191 |
-| DTO Thiet bi | [equipment.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/equipment.py) | Pydantic schema tao moi, cap nhat thong tin thiet bi phong lab |
-| Dich vu Blockchain | [blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py) | Ket noi Web3 RPC, tham tra bien lai on-chain, doc du lieu hop dong |
-| Dich vu Don muon | [loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py) | Xu ly nghiep vu vong doi muon tra, chong Replay Attack, dong bo CSDL |
-| Dich vu Xac thuc | [auth_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/auth_service.py) | Kiem tra dang nhap, dem so lan sai de khoa tai khoan 15 phut |
-| Dich vu Kho | [equipment_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/equipment_service.py) | Xu ly logic them/sua/xoa thiet bi, khoa dong SELECT FOR UPDATE |
-| Dich vu Doi soat | [reconciliation_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py) | Quet va tu phuc hoi trang thai lech giua MySQL va Smart Contract |
-| Dependency Injection | [deps.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/deps.py) | Cung cap Session DB, xac thuc JWT va phan quyen Role-based |
-| Router Xac thuc | [auth.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/auth.py) | REST API dang nhap, cap nonce va xac thuc chu ky vi EIP-191 |
-| Router Don muon | [loans.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/loans.py) | REST API tao don, duyet, ban giao, tra may, tu choi, huy don |
-| Router Thiet bi | [equipment.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/equipment.py) | REST API tra cuu, them, sua, khoa bao tri thiet bi |
-| Router Nguoi dung | [users.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/users.py) | REST API xem thong tin ca nhan, danh sach sinh vien da lien ket vi |
-| Router Blockchain | [blockchain.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/blockchain.py) | REST API kiem tra suc khoe node blockchain va tra cuu on-chain |
-| Router Kiem toan | [audit.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/audit.py) | REST API xem nhat ky kiem toan va chay worker doi soat |
-| Kiem thu Fixture | [conftest.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/conftest.py) | Cau hinh CSDL SQLite mock va tai khoan mau cho Pytest |
-| Kiem thu Don muon | [test_loans.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_loans.py) | 10 bai test vong doi Pure Web3, chong replay, revert on-chain |
-| Kiem thu Da vi | [test_multi_user_e2e.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_multi_user_e2e.py) | Kiem thu chu trinh Multi-Admin va Sinh vien tuong tac cheo |
+| Khởi chạy | [main.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/main.py) | Điểm khởi động ứng dụng FastAPI, cấu hình CORS, thiết lập middleware và kiểm tra pre-flight khi bật server |
+| Cấu hình | [config.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/config.py) | Quản lý tập trung toàn bộ biến môi trường (.env) bằng Pydantic BaseSettings |
+| Bảo mật | [security.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/security.py) | Băm mật khẩu Bcrypt, cấp phát và giải mã mã thông báo JSON Web Token (JWT HS256) |
+| Hợp đồng ABI | [EquipmentLending.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/EquipmentLending.json) | Chứa giao diện ABI để thư viện Web3.py dịch và giải mã các hàm, sự kiện của hợp đồng |
+| Địa chỉ hợp đồng | [contract_address.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/contract_address.json) | Lưu địa chỉ hợp đồng Sepolia hiện tại (0xA88De9B00C0F78FF9a162C4f17524ef885169ffd) |
+| Kết nối CSDL | [session.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/db/session.py) | Khởi tạo SQLAlchemy Engine, cấu hình Connection Pool chống ngắt kết nối trên MySQL XAMPP |
+| Bảng Người dùng | [user.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/user.py) | Định nghĩa bảng `users`: lưu MSSV, mật khẩu hash, vai trò, địa chỉ ví và trạng thái xác minh ví |
+| Bảng Thiết bị | [equipment.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/equipment.py) | Định nghĩa bảng `equipments`: lưu số serial, tên máy, danh mục, mức cọc quy định, trạng thái kho |
+| Bảng Đơn mượn | [lending_request.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/lending_request.py) | Định nghĩa bảng `lending_requests`: lưu quan hệ mượn, các mốc thời gian, mã on-chain loanId |
+| Bảng Giao dịch | [blockchain_tx.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/blockchain_tx.py) | Định nghĩa bảng `blockchain_transactions`: lưu mã băm tx_hash, block, gas, trạng thái CONFIRMED |
+| Bảng Kiểm toán | [audit_log.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/audit_log.py) | Định nghĩa bảng `audit_logs`: ghi nhật ký kiểm toán độc lập mọi thay đổi dữ liệu trong hệ thống |
+| DTO Đơn mượn | [loan.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/loan.py) | Kiểm thực tính hợp lệ dữ liệu tạo đơn, duyệt đơn, bàn giao, nhận trả máy và phản hồi API |
+| DTO Người dùng | [user.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/user.py) | Kiểm thực dữ liệu đăng nhập, đăng ký và chữ ký ví EIP-191 cá nhân |
+| DTO Thiết bị | [equipment.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/equipment.py) | Kiểm thực dữ liệu tạo mới, chỉnh sửa thông tin thiết bị và cập nhật trạng thái kho |
+| Dịch vụ Blockchain | [blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py) | Kết nối RPC Sepolia, thẩm tra biên lai on-chain, kiểm tra vai trò hasRole, đọc trạng thái đơn |
+| Dịch vụ Đơn mượn | [loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py) | Điều phối vòng đời mượn trả, chống tấn công Replay Attack, đồng bộ dữ liệu giữa MySQL và Smart Contract |
+| Dịch vụ Xác thực | [auth_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/auth_service.py) | Kiểm tra đăng nhập, đếm số lần sai liên tiếp để khóa tài khoản tự động 15 phút chống brute-force |
+| Dịch vụ Kho máy | [equipment_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/equipment_service.py) | Quản lý kho máy, áp dụng khóa dòng SELECT FOR UPDATE tránh xung đột khi nhiều người đặt cùng lúc |
+| Dịch vụ Đối soát | [reconciliation_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py) | Quét và tự phục hồi sai lệch trạng thái giữa cơ sở dữ liệu MySQL và sổ cái Smart Contract |
+| Dependency Injection | [deps.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/deps.py) | Cung cấp DB Session, xác thực token JWT và kiểm tra phân quyền RBAC cho từng API endpoint |
+| Router Xác thực | [auth.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/auth.py) | Cung cấp các API đăng nhập (/login), cấp nonce ngẫu nhiên và xác minh chữ ký ví EIP-191 (/verify-wallet) |
+| Router Đơn mượn | [loans.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/loans.py) | Cung cấp các API vòng đời: tạo đơn (/request), duyệt (/approve), bàn giao (/handover), trả máy (/return) |
+| Router Thiết bị | [equipment.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/equipment.py) | Cung cấp các API danh mục kho máy, tìm kiếm, thêm mới và chuyển trạng thái bảo trì thiết bị |
+| Router Người dùng | [users.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/users.py) | Cung cấp các API xem hồ sơ cá nhân (/me) và danh sách sinh viên đã xác minh ví Web3 |
+| Router Blockchain | [blockchain.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/blockchain.py) | Cung cấp các API kiểm tra sức khỏe mạng node RPC Sepolia và tra cứu chi tiết giao dịch |
+| Router Kiểm toán | [audit.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/audit.py) | Cung cấp các API truy xuất lịch sử đối soát và kích hoạt tiến trình tự động đối soát dữ liệu |
+| Fixture Kiểm thử | [conftest.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/conftest.py) | Cấu hình cơ sở dữ liệu SQLite in-memory độc lập và tài khoản mẫu cho bộ kiểm thử Pytest |
+| Kiểm thử Đơn mượn | [test_loans.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_loans.py) | Bộ bài kiểm thử vòng đời Pure Web3, chống tấn công Replay Attack và xử lý lỗi on-chain |
+| Kiểm thử Đa ví | [test_multi_user_e2e.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_multi_user_e2e.py) | Kiểm thử chu trình liên ví giữa nhiều Quản trị viên (Multi-Admin) và Sinh viên tương tác chéo |
 
 ---
 
-## 2. So Do Tuong Tac Giua Cac Tang Backend
+### 1.2. Sơ Đồ Luồng Tương Tác Giữa Các Tầng Backend
 
 ```mermaid
 flowchart TD
-    Client["Client (Trinh duyet / MetaMask)"] -->|HTTP Request + JWT| Main["main.py (FastAPI App)"]
-    Main --> Deps["deps.py (Auth, DB Session, Roles)"]
-    Deps --> Routers["Tuyen duong API (/api/v1)\n- auth.py\n- loans.py\n- equipment.py\n- users.py\n- audit.py"]
+    Client["Trình duyệt Client (React + MetaMask)"] -->|1. Gửi HTTP Request kèm Bearer JWT| Main["main.py (FastAPI App)"]
+    Main --> Deps["deps.py (Auth, DB Session, Role Check)"]
+    Deps --> Routers["Tầng Router API (/api/v1)\n- auth.py, loans.py, equipment.py"]
     
-    Routers --> Schemas["Pydantic Schemas (Validate du lieu vao/ra)\n- loan.py, user.py, equipment.py"]
-    Routers --> Services["Services (Xu ly nghiep vu)\n- loan_service.py\n- blockchain_service.py\n- equipment_service.py\n- auth_service.py"]
+    Routers --> Schemas["Pydantic Schemas (Kiểm thực kiểu dữ liệu)\n- loan.py, user.py, equipment.py"]
+    Routers --> Services["Tầng Xử lý Nghiệp vụ (Services)\n- loan_service.py, equipment_service.py"]
     
-    Services --> Web3RPC["blockchain_service.py\n(Ket noi Web3.py toi node Sepolia)"]
-    Web3RPC --> SmartContract["Smart Contract Sepolia\n(EquipmentLending.sol)"]
+    Services --> BlockchainService["blockchain_service.py (Web3.py)"]
+    BlockchainService -->|2. Đọc TransactionReceipt qua JSON-RPC| NodeSepolia["Node Ethereum Sepolia (Chain ID 11155111)"]
+    NodeSepolia --> SmartContract["Smart Contract (EquipmentLending.sol)"]
     
-    Services --> Models["SQLAlchemy Models\n- user.py, equipment.py\n- lending_request.py\n- blockchain_tx.py"]
-    Models --> MySQL[("Co so du lieu MySQL\n(equipment_lending_db)")]
+    Services --> Models["Tầng Thực thể ORM (SQLAlchemy Models)"]
+    Models -->|3. Ghi nhận dữ liệu đã thẩm tra| MySQL[("Cơ sở dữ liệu MySQL (equipment_lending_db)")]
 ```
 
 ---
 
-## 3. Chi Tiet Tung Tang Kien Truc
+### 1.3. Chi Tiết Vai Trò Của Từng Tệp Tin Nghiệp Vụ Trọng Yếu
 
-### 3.1. Tang Khoi Chay va Cau Hinh (Entrypoint & Core)
+#### 1. [backend/app/services/blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py)
+* **Ý nghĩa kiến trúc:** Là thành phần giao tiếp cốt lõi giữa máy chủ Python và mạng Blockchain Ethereum Sepolia qua giao thức Web3 JSON-RPC.
+* **Hàm `verify_transaction_receipt()`:**
+  - Nhận mã băm `tx_hash` từ client gửi về sau khi người dùng thực hiện giao dịch trên MetaMask.
+  - Gọi RPC `eth_getTransactionReceipt` để lấy biên lai giao dịch thực tế từ block đã được đào.
+  - Kiểm tra `receipt.status == 1`: Nếu bằng 0, nghĩa là giao dịch đã bị EVM từ chối (revert), backend ném ngoại lệ từ chối cập nhật CSDL.
+  - Kiểm tra `receipt.to`: Đảm bảo giao dịch tương tác đúng địa chỉ Smart Contract chính thức của trường.
+  - Giải mã `receipt.logs` bằng ABI của hợp đồng để kiểm tra sự kiện phát ra (ví dụ `LoanApproved`).
+  - Đối chiếu tham số: Xác minh mã đơn mượn `loanId` (dạng `bytes32`), mã thiết bị `equipmentId` và địa chỉ ví người ký khớp chính xác với dữ liệu yêu cầu.
+* **Hàm `has_role()`:** Gọi hàm view on-chain `hasRole(roleBytes, accountAddress)` để kiểm tra quyền hạn của ví Quản trị viên (`ADMIN_ROLE`) hoặc Sinh viên (`BORROWER_ROLE`).
+* **Hàm `get_loan()`:** Đọc dữ liệu nguyên bản của đơn mượn từ Smart Contract gồm: trạng thái hiện tại, thời điểm mượn, hạn trả thực tế, mức cọc và tỷ lệ phạt.
 
-#### [backend/app/main.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/main.py)
-- **Muc dich:** Khoi tao phien ban FastAPI ung dung, thiet lap middleware va dieu phoi tuyen duong.
-- **Cac thanh phan chinh:**
-  - `FastAPI(title="EduVault API", ...)`: Khoi tao ung dung kem Swagger UI tai `/docs`.
-  - `CORSMiddleware`: Cho phep Frontend (cong `5173`) gui yeu cau toi Backend (cong `8000`) kem Authorization header.
-  - Event `lifespan`: Khi server bat, tu dong kiem tra ket noi toi MySQL va node Blockchain Sepolia, canh bao neu sai Chain ID hoac node offline.
-  - Dang ky toan bo router `/api/v1` tu thu muc `app/api/v1`.
+#### 2. [backend/app/services/loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py)
+* **Ý nghĩa kiến trúc:** Bộ điều phối nghiệp vụ vòng đời đơn mượn thiết bị học tập.
+* **Cơ chế chống tấn công Replay Attack (Gửi lại giao dịch cũ):**
+  - Hàm `_check_tx_idempotency_or_replay()` tra cứu trong bảng `blockchain_transactions`.
+  - Nếu một `tx_hash` đã từng được ghi nhận thành công cho một hành động khác hoặc đơn khác, backend lập tức từ chối với lỗi HTTP 409 Conflict.
+* **Phân quyền phi tập trung (Decentralized Authorization):**
+  - Đối với Quản trị viên duyệt đơn: Backend không bắt buộc tài khoản web của Admin phải liên kết ví từ trước. Thay vào đó, Backend xác thực trực tiếp trên biên lai on-chain xem giao dịch có thực thi thành công qua hàm có modifier `onlyRole(ADMIN_ROLE)` hay không. Nếu thành công, điều đó chứng minh 100% ví thực hiện sở hữu quyền Admin hợp lệ trên blockchain.
 
-#### [backend/app/core/config.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/config.py)
-- **Muc dich:** Quan ly tap trung toan bo thong so cau hinh he thong bang thu vien `pydantic-settings`.
-- **Cac bien moi truong quan trong:**
-  - `DATABASE_URL`: Chuoi ket noi CSDL MySQL (`mysql+pymysql://root:@localhost:3306/equipment_lending_db`).
-  - `SECRET_KEY`, `ALGORITHM`: Chia khoa ky va thuat toan sinh ma thong bao JWT (HS256).
-  - `BLOCKCHAIN_RPC_URL`: Dia chi node RPC mang Sepolia (`https://ethereum-sepolia-rpc.publicnode.com`).
-  - `CHAIN_ID`: Ma mang blockchain (`11155111` cho Sepolia Testnet).
-  - `CONTRACT_ADDRESS`: Dia chi Smart Contract dang trien khai (`0xA88De9B00C0F78FF9a162C4f17524ef885169ffd`).
-
-#### [backend/app/core/security.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/security.py)
-- **Muc dich:** Cung cap cac tien ich mat ma va xac thuc an toan.
-- **Cac ham chinh:**
-  - `verify_password(plain, hashed)`: So khop mat khau nguoi dung nhap voi chuoi bam Bcrypt trong CSDL.
-  - `get_password_hash(password)`: Bam mat khau moi bang thuat toan Bcrypt kem salt ngau nhien (an toan voi chuoi toi da 72 byte).
-  - `create_access_token(data, expires_delta)`: Dong goi thong tin nguoi dung (ID, vai tro) va thoi han het han thanh chuoi JWT Bearer Token.
-
-#### [backend/app/core/contracts/](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/)
-- `EquipmentLending.json`: Tep chua ma ABI day du cua Smart Contract duoc trinh bien dich Hardhat xuat ra. Web3.py can tep nay de hieu duoc chu ky ham (`createLoan`, `approveLoan`,...) va cau truc su kien (`LoanCreated`, `LoanApproved`,...).
-- `contract_address.json`: Tep luu dia chi hop dong hien tai, ten mang va thoi diem deploy gan nhat.
+#### 3. [backend/app/api/v1/auth.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/auth.py)
+* **Ý nghĩa kiến trúc:** Triển khai cơ chế xác thực danh tính Web3 chuẩn mực quốc tế **EIP-191 Personal Sign**.
+* **Quy trình hoạt động:**
+  1. Client gọi `GET /api/v1/auth/wallet-nonce` để nhận chuỗi thử thách ngẫu nhiên kèm mốc thời gian hiệu lực (ví dụ: `Xac minh quyen so huu vi tai EduVault... Nonce: 1795000000`).
+  2. Sinh viên dùng ví MetaMask cá nhân ký chuỗi thử thách này (hoàn toàn miễn phí, không tốn gas).
+  3. Client gửi chữ ký `signature` và địa chỉ ví về `POST /api/v1/auth/verify-wallet`.
+  4. Backend sử dụng thuật toán đường cong elliptic `ecrecover` giải mã chữ ký: nếu địa chỉ phục hồi trùng khớp với địa chỉ ví của sinh viên, hệ thống đánh dấu `wallet_verified = True`.
 
 ---
 
-### 3.2. Tang Co So Du Lieu va Thuc The (Database & Models)
+## PHẦN 2: QUY TRÌNH VÀ CƠ CHẾ DEPLOY SMART CONTRACT
 
-#### [backend/app/db/session.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/db/session.py)
-- **Muc dich:** Thiet lap ket noi co so du lieu quan he MySQL bang SQLAlchemy Engine.
-- **Cac thanh phan chinh:**
-  - `engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)`: Tao connection pool, tu dong kiem tra song sot cua ket noi truoc khi thuc thi cau lenh de tranh loi timeout tren MySQL XAMPP.
-  - `SessionLocal`: Factory tao cac session doc lap cho tung HTTP Request.
-  - `Base = declarative_base()`: Lop cha cho toan bo cac model ORM.
+### 2.1. Công Cụ Phát Triển và Mạng Triển Khai
 
-#### [backend/app/models/user.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/user.py)
-- **Bang:** `users`
-- **Cac cot chinh:**
-  - `student_staff_id`: Ma so dinh danh (MSSV nhu `SV2026001` hoac Ma can bo `ADMIN001`), duy nhat (`unique=True`).
-  - `email`: Dia chi thu dien tu dung de dang nhap.
-  - `password_hash`: Chuoi mat khau da bam bang Bcrypt.
-  - `role`: Vai tro nguoi dung (`UserRole.ADMIN` hoac `UserRole.BORROWER`).
-  - `wallet_address`: Dia chi vi Ethereum MetaMask (42 ky tu `0x...`), duy nhat.
-  - `wallet_verified`: Co Boolean xac nhan vi da duoc chu ky EIP-191 xac minh hay chua.
-  - `failed_login_count`, `locked_until`: Co che chong tan cong vet can (Brute-force) - tu dong khoa tai khoan 15 phut neu go sai mat khau qua 5 lan.
-
-#### [backend/app/models/equipment.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/equipment.py)
-- **Bang:** `equipments`
-- **Cac cot chinh:**
-  - `serial_number`: So seri thiet bi phong lab (vi du `OSC-RIGOL-001`), duy nhat.
-  - `name`, `category`: Ten thiet bi va danh muc (Laptop, May do xung, Kinh hien vi, Kit nhung).
-  - `deposit_amount`: So tien ky quy mo phong quy dinh (VND).
-  - `status`: Trang thai thiet bi (`AVAILABLE`, `RESERVED`, `IN_USE`, `MAINTENANCE`, `RETIRED`).
-
-#### [backend/app/models/lending_request.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/lending_request.py)
-- **Bang:** `lending_requests`
-- **Cac cot chinh:**
-  - `user_id`, `equipment_id`: Khoa ngoai tham chieu toi nguoi muon va thiet bi.
-  - `on_chain_loan_id`: Ma băm `bytes32` (chuoi hex 66 ky tu bat dau bang `0x...`) duy nhat tren Smart Contract.
-  - `status`: Trang thai don muon trong CSDL (`PENDING`, `APPROVED`, `ACTIVE`, `RETURNED`, `CANCELLED`, `REJECTED`, `DISPUTED`).
-  - `deposit_status`: Tinh trang tien coc (`NONE`, `LOCKED`, `REFUNDED`, `FORFEITED`).
-  - `expected_handover_date`, `due_date`, `actual_handover_date`, `actual_return_date`: Cac moc thoi gian muon tra.
-
-#### [backend/app/models/blockchain_tx.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/blockchain_tx.py)
-- **Bang:** `blockchain_transactions`
-- **Muc dich:** Luu nhat ky moi giao dich on-chain ma Backend da tham tra thanh cong.
-- **Cac cot chinh:** `tx_hash` (khoa chinh, unique), `action_type` (`CREATE_LOAN`, `APPROVE_LOAN`, `HANDOVER`, `RETURN_LOAN`, `CANCEL_LOAN`), `from_address`, `to_address`, `block_number`, `gas_used`, `status` (`CONFIRMED`).
-
-#### [backend/app/models/audit_log.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/audit_log.py)
-- **Bang:** `audit_logs`
-- **Muc dich:** Ghi vet kiem toan toan dien moi hanh dong he thong (ai lam gi, luc nao, thong so truoc va sau khi sua doi).
+* **Khung phát triển hợp đồng:** **Hardhat** (Node.js).
+* **Trình biên dịch Solidity:** `solc` phiên bản `^0.8.20`.
+* **Thư viện tiêu chuẩn:** **OpenZeppelin Contracts v5.0** (module `AccessControl`).
+* **Mạng thử nghiệm:** **Ethereum Sepolia Testnet** (Chain ID: `11155111`).
+* **Hợp đồng thông minh:** [contracts/contracts/EquipmentLending.sol](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/contracts/EquipmentLending.sol) (395 dòng mã nguồn Solidity đã được kiểm thử toàn diện).
+* **Địa chỉ hợp đồng triển khai trên Sepolia:** `0xA88De9B00C0F78FF9a162C4f17524ef885169ffd` ([Tra cứu trên Sepolia Etherscan](https://sepolia.etherscan.io/address/0xA88De9B00C0F78FF9a162C4f17524ef885169ffd)).
+* **Địa chỉ ví Deployer khởi tạo:** `0x6396121f971a55bc844301E039F6C6F472C5CbBB`.
 
 ---
 
-### 3.3. Tang Xu Ly Nghiep Vu (Services)
+### 2.2. Phân Tích Kịch Bản Triển Khai Tự Động ([contracts/scripts/deploy.cjs](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/scripts/deploy.cjs))
 
-#### [backend/app/services/blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py)
-Day la trai tim cua phan ket noi Web3 tren Backend.
-- **Cac ham then chot:**
-  - `verify_transaction_receipt(tx_hash, expected_event, expected_loan_id, expected_sender, expected_args)`:
-    1. Goi RPC `eth_getTransactionReceipt(tx_hash)` len mang Sepolia.
-    2. Kiem tra `status == 1`: Neu status = 0, nem loi bao giao dich da bi revert tren chuoi.
-    3. Kiem tra `to_address`: Phai gui den dung dia chi `CONTRACT_ADDRESS` he thong.
-    4. Giai ma nhat ky su kien (`receipt.logs`) thong qua ABI de tim dung su kien yeu cau (vi du `LoanApproved`).
-    5. So sanh doi so su kien: Ma `loanId`, `equipmentId` va dia chi vi phai khop chinh xac 100%.
-  - `has_role(role_name, account_address)`: Doc ham view `hasRole()` tren hop dong de kiem tra xem dia chi vi do co nam giu `ADMIN_ROLE` hoac `DEFAULT_ADMIN_ROLE` hay khong.
-  - `get_loan(loan_id)`: Doc ban ghi truc tiep tu hop dong thong minh, tra ve dictionary gom trang thai, thoi gian, so tien coc on-chain.
-  - `is_overdue(loan_id)`: Kiem tra xem don muon da bi qua han so voi block timestamp hien tai hay chua.
-  - `calculate_penalty(loan_id, return_condition)`: Tinh truoc tien phat va trang thai coc on-chain.
+Kịch bản `deploy.cjs` được thiết kế theo mô hình **Đường ống tự động đồng bộ (Auto-Sync Deployment Pipeline)**. Khi chạy một lệnh duy nhất, toàn bộ hệ thống từ Blockchain, Backend tới Frontend đều được đồng bộ tự động.
 
-#### [backend/app/services/loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py)
-Chiu trach nhiem dieu phoi nghiep vu muon tra va dam bao tinh nhat quan giua CSDL va Blockchain.
-- **Cac ham then chot:**
-  - `_verify_and_record_lifecycle_tx()`: Ham kiem tra chung cho tat ca cac buoc vong doi. Kiem tra tinh Idempotent, dam bao mot `tx_hash` khong the bi gui lai hai lan (chong Replay Attack).
-  - `create_loan_request()`: Tao don muon moi sau khi xac thuc giao dich `createLoan` cua sinh vien.
-  - `approve_loan_request()`: Quan tri vien duyet don sau khi da ky `approveLoan` thanh cong on-chain.
-  - `handover_loan_equipment()`: Chuyen don sang `ACTIVE`, khoa tien coc sau khi Admin ky `confirmHandover`.
-  - `return_loan_equipment()`: Thu hoi thiet bi, dong bo ty le phat va giai phong Mutex sau khi Admin ky `confirmReturn`.
-  - `reject_loan_request()` / `cancel_loan_request()`: Tu choi hoac huy don, xu ly dong bo mem neu tren blockchain don da o trang thai `Cancelled` tu truoc.
+Quy trình thực thi gồm 6 bước khép kín:
 
-#### [backend/app/services/auth_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/auth_service.py)
-- **Muc dich:** Xu ly xac thuc nguoi dung, kiem tra mat khau, xu ly co che khoa tai khoan tu dong neu dang nhap sai lien tiep, sinh ma ngau nhien (Nonce) cho chu ky vi.
-
-#### [backend/app/services/equipment_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/equipment_service.py)
-- **Muc dich:** Quan ly danh muc thiet bi phong lab. Su dung co che khoa dong bi quan `SELECT ... FOR UPDATE` trong MySQL de dam bao khong xay ra xung dot khi nhieu nguoi cung xem va dat mot thiet bi.
-
-#### [backend/app/services/reconciliation_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py)
-- **Muc dich:** Tien trinh doi soat doc lap. Tu dong quet tat ca cac don muon va so sanh trang thai trong MySQL voi trang thai tren Smart Contract. Neu phat hien lech du lieu (vi du do may chu backend gap su co mang luc sinh vien dang ky), he thong se lay du lieu tren blockchain lam chan ly de sua lai CSDL MySQL.
+1. **Kiểm tra điều kiện tiên quyết (Pre-flight Checks):**
+   - Xác định mạng đích (`localhost` hoặc `sepolia`).
+   - Kết nối tới ví Deployer qua `hre.ethers.getSigners()`.
+   - Kiểm tra số dư Sepolia ETH: nếu số dư nhỏ hơn `0.01 ETH`, kịch bản tự động dừng lại và cảnh báo cần nạp thêm testnet ETH từ Faucet.
+2. **Khởi tạo và Biên dịch Hợp đồng (Contract Deployment):**
+   - Nạp Contract Factory `EquipmentLending`.
+   - Gửi giao dịch khởi tạo: `Factory.deploy(deployer.address)`.
+   - Constructor trong Solidity tự động cấp hai quyền ban đầu cho ví Deployer:
+     - `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao (có thể thêm hoặc bãi nhiệm các Admin khác).
+     - `ADMIN_ROLE`: Quyền quản trị phòng lab (có quyền duyệt đơn, bàn giao và nhận trả máy).
+3. **Chờ xác thực khối (Block Mining Confirmation):**
+   - Gọi `await contract.waitForDeployment()` để đảm bảo giao dịch khởi tạo đã được đào vào một block chính thức trên mạng blockchain Sepolia.
+   - Lấy địa chỉ hợp đồng mới vừa được tạo thông qua `await contract.getAddress()`.
+4. **Lưu trữ hồ sơ triển khai (Deployment Artifacts):**
+   - Đọc tệp ABI được Hardhat biên dịch từ `artifacts/contracts/EquipmentLending.sol/EquipmentLending.json`.
+   - Tạo bản ghi chi tiết gồm: tên hợp đồng, địa chỉ, ví deployer, mạng, Chain ID, thời gian triển khai dạng ISO 8601 và đường link Etherscan tương ứng.
+   - Ghi bản ghi vào tệp `contracts/deployments/sepolia.json` (hoặc `localhost.json`).
+5. **Tự động xuất cấu hình sang Backend:**
+   - Tạo thư mục `backend/app/core/contracts/` nếu chưa có.
+   - Xuất file ABI: `backend/app/core/contracts/EquipmentLending.json`.
+   - Xuất file địa chỉ: `backend/app/core/contracts/contract_address.json` chứa địa chỉ hợp đồng mới và Chain ID tương ứng.
+6. **Tự động xuất cấu hình sang Frontend:**
+   - Tạo thư mục `frontend/src/contracts/` nếu chưa có.
+   - Xuất file ABI: `frontend/src/contracts/EquipmentLending.json`.
+   - Xuất file địa chỉ: `frontend/src/contracts/contract_address.json`.
+   - Nhờ bước này, mã giao diện React và thư viện Ethers.js của Frontend nhận diện ngay lập tức địa chỉ Smart Contract mới mà lập trình viên không phải sao chép thủ công.
 
 ---
 
-### 3.4. Tang Dinh Nghia Du Lieu DTO (Schemas)
+### 2.3. Cấu Hình Mạng và Biến Môi Trường
 
-Su dung Pydantic v2 de kiem tra tinh hop le cua du lieu dau vao va dinh dang du lieu tra ve truoc khi gui den Client:
+* **Cấu hình Hardhat tại [contracts/hardhat.config.cjs](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/hardhat.config.cjs):**
+  ```javascript
+  require("@nomicfoundation/hardhat-toolbox");
+  require("dotenv").config({ path: "../.env" });
 
-- **[schemas/loan.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/loan.py):** Dinh nghia `LoanCreateRequest` (yeu cau tao don kem `tx_hash` va `on_chain_loan_id`), `LoanApproveRequest`, `LoanHandoverRequest`, `LoanReturnRequest` (kem tinh trang may: 0=GOOD, 1=DAMAGED, 2=LOST), va `LoanResponse`.
-- **[schemas/user.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/user.py):** Dinh nghia du lieu dang nhap `LoginRequest`, du lieu xac minh vi `WalletVerifyRequest` (dia chi vi, thong diep, chu ky EIP-191) va du lieu tra ve ho so nguoi dung.
-- **[schemas/equipment.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/equipment.py):** Dinh nghia du lieu tao moi va cap nhat thong tin thiet bi trong kho.
-- **[schemas/token.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/token.py):** Dinh nghia cau truc ma thong bao JWT tra ve cho trinh duyet sau khi dang nhap thanh cong.
-- **[schemas/audit.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/audit.py):** Dinh nghia cau truc ban ghi nhat ky doi soat.
+  module.exports = {
+    solidity: "0.8.20",
+    networks: {
+      localhost: {
+        url: "http://127.0.0.1:8545",
+        chainId: 31337,
+      },
+      sepolia: {
+        url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
+        accounts: process.env.SEPOLIA_PRIVATE_KEY ? [process.env.SEPOLIA_PRIVATE_KEY] : [],
+        chainId: 11155111,
+      },
+    },
+  };
+  ```
 
----
-
-### 3.5. Tang Dinh Tuyen REST API (Endpoints)
-
-#### [backend/app/api/deps.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/deps.py)
-- **`get_db()`:** Cung cap phien lam viec SQLAlchemy Session cho moi request va tu dong dong session sau khi phan hoi xong.
-- **`get_current_user()`:** Doc header `Authorization: Bearer <token>`, giai ma token JWT va lay thong tin nguoi dung tu CSDL.
-- **`require_role([UserRole.ADMIN])`:** Kiem tra quyen han cua nguoi dung, tra ve ma HTTP 403 neu khong du tham quyen.
-
-#### [backend/app/api/v1/auth.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/auth.py)
-- `POST /api/v1/auth/login`: Dang nhap bang email hoac ma so (MSSV) va mat khau.
-- `GET /api/v1/auth/wallet-nonce`: Lay thong diep ngau nhien chua moc thoi gian de sinh vien chuan bi ky bang MetaMask.
-- `POST /api/v1/auth/verify-wallet`: Thu vien `eth_account.messages.encode_defunct` giai ma chu ky EIP-191 cua MetaMask. Neu dia chi phuc hoi khop voi dia chi gui len, he thong se gan vi nay vao tai khoan sinh vien.
-
-#### [backend/app/api/v1/loans.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/loans.py)
-- `POST /api/v1/loans/request`: Sinh vien gui don muon kem bien lai `createLoan`.
-- `POST /api/v1/loans/{id}/approve`: Quan tri vien duyet don kem bien lai `approveLoan`.
-- `POST /api/v1/loans/{id}/handover`: Quan tri vien ban giao may kem bien lai `confirmHandover`.
-- `POST /api/v1/loans/{id}/return`: Quan tri vien nghiem thu tra may kem bien lai `confirmReturn`.
-- `POST /api/v1/loans/{id}/reject`: Tu choi don muon.
-- `POST /api/v1/loans/{id}/cancel`: Sinh vien hoac Admin huy don truoc khi ban giao.
-- `GET /api/v1/loans`: Xem danh sach don (sinh vien chi thay don cua minh, Admin xem toan truong).
-
-#### [backend/app/api/v1/equipment.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/equipment.py)
-- `GET /api/v1/equipment`: Tra cuu danh muc thiet bi phong lab ho tro loc va tim kiem.
-- `POST /api/v1/equipment`: Them thiet bi moi vao kho (yeu cau quyen ADMIN).
-- `PATCH /api/v1/equipment/{id}/status`: Chuyen trang thai thiet bi sang bao tri hoac thanh ly.
-
-#### [backend/app/api/v1/users.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/users.py)
-- `GET /api/v1/users/me`: Xem thong tin ho so ca nhan va trang thai vi da lien ket.
-- `GET /api/v1/users/verified-borrowers`: Danh sach sinh vien da xac minh vi de Admin cap quyen on-chain.
-
-#### [backend/app/api/v1/blockchain.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/blockchain.py)
-- `GET /api/v1/blockchain/status`: Kiem tra tinh trang song/chet cua node Sepolia, so hieu block moi nhat.
-- `GET /api/v1/blockchain/tx/{tx_hash}`: Tra cuu chi tiet bien lai giao dich tu mang blockchain.
-
-#### [backend/app/api/v1/audit.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/audit.py)
-- `GET /api/v1/audit/logs`: Truy van nhat ky thao tac nguoi dung phuc vu thanh tra.
-- `POST /api/v1/audit/reconcile`: Kich hoat tien trinh tu dong doi soat giua MySQL va Smart Contract.
+* **Lệnh thực thi triển khai:**
+  - Triển khai lên mạng Sepolia công khai:
+    ```bash
+    cd contracts
+    npx hardhat run scripts/deploy.cjs --network sepolia
+    ```
+  - Triển khai lên mạng Hardhat cục bộ:
+    ```bash
+    cd contracts
+    npx hardhat run scripts/deploy.cjs --network localhost
+    ```
 
 ---
 
-### 3.6. Tang Kiem Thu Tu Dong (Automated Tests)
+## PHẦN 3: KỊCH BẢN THUYẾT MINH & TRẢ LỜI PHẢN BIỆN VỚI GIẢNG VIÊN
 
-Thu muc `backend/tests/` chua **78 bai kiem thu tu dong** dat ty le vuot qua 100%:
+Dưới đây là 4 câu hỏi trọng tâm mà Hội đồng giảng viên thường đặt ra cho các đồ án tích hợp Blockchain, kèm câu trả lời chuẩn xác:
 
-- **[conftest.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/conftest.py):** Tao phien CSDL SQLite ao trong bo nho RAM, tao tai khoan quan tri vien va sinh vien mau cho moi phien test de khong anh huong den du lieu MySQL that.
-- **[test_loans.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_loans.py):** Kiem thu toan bo cac tinh huong muon tra Pure Web3: xac thuc chu ky vi hop le, chan vi chua xac minh, kiem tra giao dich bi revert on-chain thi backend tu choi, kiem tra chan dung tan cong Replay Attack.
-- **[test_multi_user_e2e.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_multi_user_e2e.py):** Kiem thu chu trinh lien vi da nguoi dung: Sinh vien tao don -> Admin 2 duyet tren vi rieng -> Admin 3 ban giao -> Admin 1 thu hoi may tren vi cua minh.
-- **[test_auth.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_auth.py):** Kiem thu co che dang nhap, khoa tai khoan 15 phut khi nhap sai 5 lan, va giai ma chu ky EIP-191.
-- **[test_blockchain.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_blockchain.py):** Kiem thu cac ham doc so cai, tinh toan phat, va bat loi mat ket noi node RPC.
-- **[test_equipment.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_equipment.py):** Kiem thu quan ly danh muc thiet bi va co che khoa dong tranh dat trung.
+### Câu hỏi 1: Tại sao nhóm không lưu Private Key của Quản trị viên trên Backend để tự động ký giao dịch cho tiện, mà lại yêu cầu kết nối ví MetaMask (Pure Web3)?
+* **Trả lời:**
+  - Mô hình lưu Private Key trên máy chủ backend được gọi là **Custodial (Ủy thác)**. Mô hình này tồn tại lỗ hổng bảo mật chí mạng: nếu máy chủ web hoặc cơ sở dữ liệu bị tấn công (SQL Injection, lộ file `.env`), kẻ tấn công sẽ chiếm đoạt được Private Key của Quản trị viên và có toàn quyền rút tiền, xóa quyền hoặc thao túng Smart Contract.
+  - Dự án EduVault áp dụng kiến trúc **Pure Web3 (Non-Custodial)**: Toàn bộ giao dịch ghi dữ liệu lên blockchain đều do chính chủ thể (Sinh viên, Quản trị viên) trực tiếp ký qua ví cá nhân MetaMask ở trình duyệt. Máy chủ Backend hoàn toàn không lưu giữ bất kỳ Private Key nào, triệt tiêu 100% rủi ro lộ khóa bí mật từ phía hệ thống.
 
 ---
 
-## 4. Quy Trinh Xu Ly Mot Giao Dich Mau (Vi du: Duyet Don)
-
-1. Quản trị viên bấm nút **Duyệt** trên giao diện `/admin/loans`.
-2. Trình duyệt gọi MetaMask, yêu cầu Quản trị viên ký thực thi hàm `approveLoan(loanId)` trên Smart Contract Sepolia.
-3. MetaMask phát giao dịch lên mạng Ethereum Sepolia Testnet. Sau khi giao dịch được đào vào khối (Mined), MetaMask trả về biên lai giao dịch có chứa mã băm `receipt.hash`.
-4. Frontend gửi yêu cầu HTTP: `POST /api/v1/loans/5/approve` kèm body `{"tx_hash": receipt.hash}` về Backend.
-5. `loans.py` chuyển yêu cầu tới `loan_service.py`.
-6. `loan_service.py` gọi `blockchain_service.verify_transaction_receipt(receipt.hash)`:
-   - Web3.py kết nối tới node Sepolia đọc biên lai giao dịch.
-   - Kiểm tra `receipt.status == 1` (giao dịch thành công, không bị revert do thiếu quyền).
-   - Kiểm tra phát đúng sự kiện `LoanApproved` với đúng mã `loanId`.
-7. `loan_service.py` kiểm tra mã băm chưa từng được dùng (chống Replay Attack), sau đó cập nhật bản ghi trong bảng `lending_requests` thành `APPROVED`, lưu lịch sử vào `blockchain_transactions` và ghi nhật ký vào `audit_logs`.
-8. Backend trả về mã HTTP 200 OK kèm dữ liệu đơn mượn đã cập nhật cho Frontend.
+### Câu hỏi 2: Vai trò thực sự của Backend trong hệ thống này là gì nếu người dùng đã tự ký giao dịch trực tiếp lên Blockchain?
+* **Trả lời:**
+  Backend đóng 3 vai trò chiến lược:
+  1. **Thẩm tra biên lai giao dịch on-chain (On-chain Receipt Verifier):** Khi người dùng ký xong, frontend gửi mã giao dịch `tx_hash` về backend. Backend dùng thư viện `Web3.py` đọc trực tiếp biên lai từ mạng Sepolia để kiểm tra: giao dịch đã thành công (`status == 1`), đúng địa chỉ hợp đồng của trường, phát đúng sự kiện và tham số trước khi cập nhật dữ liệu vào MySQL.
+  2. **Chống tấn công gửi lại (Anti-Replay Attack):** Backend kiểm soát chặt chẽ tính Idempotent, đảm bảo mỗi mã `tx_hash` chỉ được chấp nhận duy nhất một lần, ngăn chặn việc sử dụng lại biên lai cũ.
+  3. **Lưu trữ dữ liệu mở rộng (Off-chain Metadata):** Lưu trữ thông tin cá nhân (MSSV, mật khẩu), hình ảnh thiết bị và nhật ký kiểm toán. Việc này giúp hệ thống đạt tốc độ phản hồi tính bằng mili-giây và tiết kiệm chi phí gas đắt đỏ nếu lưu toàn bộ dữ liệu lên blockchain.
 
 ---
 
-EduVault - Tai Lieu Huong Dan Va Giai Thich Ma Nguon Backend.
+### Câu hỏi 3: Quy trình Deploy tự động giải quyết bài toán gì trong quá trình phát triển dự án?
+* **Trả lời:**
+  - Trong các dự án Blockchain thông thường, mỗi khi chỉnh sửa Smart Contract và deploy lại, lập trình viên thường phải thực hiện thủ công việc sao chép file ABI và cập nhật từng địa chỉ hợp đồng mới vào file cấu hình của Backend và Frontend. Việc này rất dễ gây ra sai sót, lệch phiên bản ABI hoặc gọi nhầm vào địa chỉ hợp đồng cũ.
+  - Kịch bản `deploy.cjs` của EduVault xây dựng một **Pipeline tự động hóa**: Ngay sau khi hợp đồng được đào thành công trên mạng Sepolia, kịch bản tự động trích xuất file ABI chuẩn và cập nhật đồng thời địa chỉ hợp đồng mới vào cả thư mục lõi của Backend (`backend/app/core/contracts/`) và Frontend (`frontend/src/contracts/`). Nhờ đó, toàn bộ hệ thống được đồng bộ hóa tức thì chỉ với một câu lệnh deploy duy nhất.
+
+---
+
+### Câu hỏi 4: Cơ chế phân quyền trên Smart Contract được thiết kế như thế nào?
+* **Trả lời:**
+  Hợp đồng sử dụng chuẩn `AccessControl` của OpenZeppelin với 3 cấp độ phân quyền phân tầng rõ rệt:
+  1. `DEFAULT_ADMIN_ROLE`: Quyền cao nhất, do ví Deployer ban đầu nắm giữ. Chỉ quyền này mới có thể thêm (`addAdmin`) hoặc bãi nhiệm (`removeAdmin`) các tài khoản quản trị khác.
+  2. `ADMIN_ROLE`: Dành cho các Quản trị viên phòng lab của các khoa, có quyền duyệt đơn (`approveLoan`), bàn giao máy (`confirmHandover`), nghiệm thu trả máy (`confirmReturn`) và cấp quyền mượn cho sinh viên (`registerBorrower`).
+  3. `BORROWER_ROLE`: Cấp cho sinh viên đã được hệ thống xác minh danh tính và kiểm tra thẻ sinh viên để được phép gọi hàm tạo đơn mượn (`createLoan`) trên Smart Contract.
+
+---
+
+EduVault - Tài Liệu Kỹ Thuật Chuyên Sâu Dành Cho Báo Cáo & Phản Biện Đồ Án.
