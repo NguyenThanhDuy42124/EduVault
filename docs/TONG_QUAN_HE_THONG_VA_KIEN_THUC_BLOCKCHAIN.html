@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduVault: Kiến thức Blockchain cơ bản, kiến trúc hệ thống và giải thích route</title>
+  <style>
+    :root {
+      --paper: #f8fafc;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --border-soft: #e2e8f0;
+      --accent: #3730a3;
+      --accent-tint: #eef2ff;
+      --emerald: #047857;
+      --emerald-tint: #ecfdf5;
+      --amber: #92400e;
+      --amber-tint: #fffbeb;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      color-scheme: light;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--ink);
+      background-color: var(--paper);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 12px;
+      padding: 8px 14px;
+      background: var(--ink);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      z-index: 100;
+    }
+
+    .skip-link:focus {
+      left: 12px;
+    }
+
+    /* Header bar */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px 24px;
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .topbar-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 20px;
+      font-size: 13px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* Two-column editorial layout */
+    .shell {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 24px 72px;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 48px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 24px;
+      padding: 16px 0;
+      border-top: 2px solid var(--ink);
+    }
+
+    .toc-heading {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0 0 12px;
+    }
+
+    .toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .toc a:hover,
+    .toc a[aria-current="true"] {
+      background: var(--accent-tint);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    main:focus {
+      outline: none;
+    }
+
+    section {
+      padding-bottom: 44px;
+      margin-bottom: 44px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    section:last-of-type {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 3.6vw, 38px);
+      line-height: 1.2;
+      letter-spacing: -0.025em;
+      margin: 0 0 16px;
+      max-width: 24ch;
+    }
+
+    h2 {
+      font-size: 24px;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+      margin: 0 0 16px;
+      scroll-margin-top: 24px;
+    }
+
+    h3 {
+      font-size: 18px;
+      line-height: 1.4;
+      margin: 28px 0 10px;
+    }
+
+    p {
+      margin: 0 0 14px;
+      max-width: 68ch;
+      color: #1e293b;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.875em;
+      background: #f1f5f9;
+      color: var(--ink);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-soft);
+      overflow-wrap: break-word;
+    }
+
+    tbody td:first-child code {
+      white-space: nowrap;
+    }
+
+    /* Hero fact strip */
+    .facts-strip {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .fact-cell {
+      padding: 14px 16px;
+      border-right: 1px solid var(--border-soft);
+    }
+
+    .fact-cell:last-child {
+      border-right: none;
+    }
+
+    .fact-label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .fact-value {
+      font-size: 14px;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    /* Callout note */
+    .note-box {
+      margin: 20px 0;
+      padding: 16px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      max-width: 72ch;
+    }
+
+    .note-box h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+
+    .note-box p {
+      font-size: 14.5px;
+      color: var(--muted);
+    }
+
+    /* Knowledge definition entries */
+    .glossary {
+      display: grid;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .glossary-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+
+    .glossary-item h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      color: var(--ink);
+    }
+
+    .glossary-example {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-soft);
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* Tables */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    thead th {
+      background: #f1f5f9;
+      color: var(--ink);
+      font-weight: 700;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: top;
+      color: #1e293b;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .badge-public {
+      background: var(--emerald-tint);
+      color: var(--emerald);
+      border-color: #a7f3d0;
+    }
+
+    .badge-borrower {
+      background: var(--accent-tint);
+      color: var(--accent);
+      border-color: #c7d2fe;
+    }
+
+    .badge-admin {
+      background: var(--amber-tint);
+      color: var(--amber);
+      border-color: #fde68a;
+    }
+
+    .badge-auth {
+      background: #f1f5f9;
+      color: var(--ink);
+      border-color: var(--border);
+    }
+
+    .method {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: var(--ink);
+      display: inline-block;
+      min-width: 58px;
+      text-align: center;
+    }
+
+    /* Interactive Tabs for Routes */
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0 12px;
+    }
+
+    .tab-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      padding: 9px 15px;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 40px;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--ink);
+      background: #f1f5f9;
+    }
+
+    .tab-btn[aria-selected="true"] {
+      background: var(--ink);
+      color: #ffffff;
+      border-color: var(--ink);
+    }
+
+    .tab-panel[hidden] {
+      display: none;
+    }
+
+    /* Interactive Lifecycle Explorer */
+    .stepper {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .step-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 8px 13px;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 40px;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .step-btn:hover {
+      background: #f1f5f9;
+    }
+
+    .step-btn[aria-pressed="true"] {
+      background: var(--accent-tint);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .step-detail {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .step-col h4 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .step-col p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    /* Diagrams */
+    .diagram-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 18px 0;
+      overflow-x: auto;
+    }
+
+    .diagram-box svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .diagram-caption {
+      margin-top: 10px;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    ul.clean-list {
+      margin: 8px 0 16px;
+      padding-left: 20px;
+      max-width: 68ch;
+      color: #1e293b;
+    }
+
+    ul.clean-list li {
+      margin-bottom: 8px;
+    }
+
+    footer {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 960px) {
+      .shell {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        padding-top: 24px;
+      }
+
+      .toc {
+        position: static;
+        padding: 14px 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .toc ul {
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      }
+
+      .facts-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .fact-cell:nth-child(2n) {
+        border-right: none;
+      }
+
+      .fact-cell:nth-child(-n+2) {
+        border-bottom: 1px solid var(--border-soft);
+      }
+
+      .step-detail {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .topbar-inner,
+      .shell,
+      footer {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .facts-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .fact-cell {
+        border-right: none;
+        border-bottom: 1px solid var(--border-soft);
+      }
+
+      .fact-cell:last-child {
+        border-bottom: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Chuyển đến nội dung chính</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <p class="brand-title">EduVault: Tài liệu hệ thống và kiến thức Blockchain</p>
+      <div class="topbar-meta">
+        <span>Cập nhật: 2026-11-18</span>
+        <span>Kiến trúc: Pure Web3</span>
+        <span>Mạng: Sepolia (11155111)</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="toc" aria-label="Mục lục tài liệu">
+      <p class="toc-heading">Mục lục</p>
+      <ul>
+        <li><a href="#gioi-thieu">Tổng quan EduVault</a></li>
+        <li><a href="#blockchain-co-ban">Kiến thức Blockchain cơ bản</a></li>
+        <li><a href="#kien-truc">Kiến trúc hiện tại</a></li>
+        <li><a href="#vong-doi">Vòng đời đơn và tính phạt</a></li>
+        <li><a href="#routes">Giải thích các route</a></li>
+        <li><a href="#nang-cap">Nội dung đã hoàn thiện</a></li>
+      </ul>
+    </nav>
+
+    <main id="main-content" tabindex="-1">
+      <!-- Section 1 -->
+      <section id="gioi-thieu">
+        <h1>Hệ thống quản lý mượn trả thiết bị EduVault</h1>
+        <p>
+          EduVault là hệ thống quản lý việc mượn và trả thiết bị học tập cho phòng lab của Trường Đại học Kỹ thuật - Công nghệ Cần Thơ. Hệ thống kết hợp giao diện web cho sinh viên và cán bộ phòng lab với một hợp đồng thông minh chạy trên Ethereum Sepolia Testnet để lưu lại các mốc bàn giao, khóa giữ chỗ thiết bị và tỷ lệ phạt mà không ai tự sửa được.
+        </p>
+
+        <div class="facts-strip">
+          <div class="fact-cell">
+            <span class="fact-label">Mạng mặc định</span>
+            <span class="fact-value">Sepolia #11155111</span>
+          </div>
+          <div class="fact-cell">
+            <span class="fact-label">Smart Contract</span>
+            <span class="fact-value">0xA88De9...85169ffd</span>
+          </div>
+          <div class="fact-cell">
+            <span class="fact-label">Dữ liệu MySQL</span>
+            <span class="fact-value">16 thiết bị / 5 nhóm</span>
+          </div>
+          <div class="fact-cell">
+            <span class="fact-label">Kiểm thử Backend</span>
+            <span class="fact-value">81 pytest passed</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2 -->
+      <section id="blockchain-co-ban">
+        <h2>Kiến thức Blockchain cơ bản gắn với EduVault</h2>
+        <p>
+          Phần này giải thích ngắn gọn các khái niệm Blockchain xuất hiện trong mã nguồn EduVault để người mới tiếp cận dễ hình dung cách từng thành phần phối hợp với nhau.
+        </p>
+
+        <div class="glossary">
+          <article class="glossary-item">
+            <h3>Blockchain là gì</h3>
+            <p>
+              Blockchain là một cuốn sổ cái dùng chung trên nhiều máy tính. Dữ liệu mới được gom thành từng khối (block), mỗi khối gắn với khối trước đó bằng mã băm mật mã. Khi một giao dịch đã được mạng lưới xác nhận và ghi vào khối, không một cá nhân hay quản trị viên nào có thể âm thầm sửa ngược hoặc xóa bỏ lịch sử cũ.
+            </p>
+            <p class="glossary-example">
+              Trong EduVault: lịch sử tạo đơn, duyệt, bàn giao và trả máy đều được ghi thành sự kiện trên Sepolia Testnet, có thể kiểm tra công khai trên trang <code>/audit</code> hoặc trên Etherscan.
+            </p>
+          </article>
+
+          <article class="glossary-item">
+            <h3>Smart Contract (Hợp đồng thông minh) là gì</h3>
+            <p>
+              Smart Contract là một đoạn chương trình được đưa lên chạy trực tiếp trên Blockchain. Các điều kiện xử lý được viết sẵn bằng mã lệnh (ngôn ngữ Solidity trong dự án này). Khi người dùng gửi giao dịch gọi vào hợp đồng, mọi máy chủ tham gia mạng lưới đều chạy đúng đoạn mã đó và cho ra cùng một kết quả.
+            </p>
+            <p class="glossary-example">
+              Trong EduVault: file <code>contracts/contracts/EquipmentLending.sol</code> là Smart Contract quy định ai được duyệt đơn, chặn hai người mượn trùng một máy bằng biến khóa <code>activeEquipmentLoan</code>, và tự tính mức phạt 0%, 10%, 50% hoặc 100% khi trả máy.
+            </p>
+          </article>
+
+          <article class="glossary-item">
+            <h3>Ví MetaMask, Private Key và xác thực EIP-191</h3>
+            <p>
+              Ví MetaMask giữ khóa bí mật (Private Key) ngay trên trình duyệt của từng người dùng. Khi cần thực hiện một hành động thay đổi dữ liệu trên chuỗi, trình duyệt mở cửa sổ yêu cầu người dùng bấm ký giao dịch. Private Key nằm yên trong ví người dùng, máy chủ web không bao giờ chạm vào khóa đó.
+            </p>
+            <p class="glossary-example">
+              Trong EduVault: sinh viên dùng chuẩn ký thông điệp miễn phí EIP-191 (Personal Sign) để gắn địa chỉ ví MetaMask vào mã số sinh viên trong MySQL trước khi gửi đơn mượn.
+            </p>
+          </article>
+
+          <article class="glossary-item">
+            <h3>Transaction, Transaction Hash, Block và phí Gas</h3>
+            <p>
+              Mỗi lần ghi mới hoặc cập nhật trạng thái vào Smart Contract tạo ra một giao dịch (Transaction) mang mã định danh duy nhất gọi là <code>tx_hash</code>. Để ngăn người dùng gửi rác làm nghẽn mạng, người ký giao dịch phải trả một khoản phí nhỏ tính bằng ETH thử nghiệm (SepETH), gọi là phí Gas. Các hàm chỉ đọc dữ liệu (<code>view</code>) thì miễn phí Gas.
+            </p>
+            <p class="glossary-example">
+              Trong EduVault: nút <code>createLoan</code>, <code>approveLoan</code>, <code>confirmHandover</code>, <code>confirmReturn</code>, <code>cancelLoan</code> tốn Gas và sinh ra <code>tx_hash</code>; còn hàm <code>getLoan</code> và đối soát trên <code>/audit</code> chỉ đọc dữ liệu nên miễn phí.
+            </p>
+          </article>
+
+          <article class="glossary-item">
+            <h3>On-chain và Off-chain: vì sao dùng cả MySQL lẫn Blockchain</h3>
+            <p>
+              Lưu hình ảnh, thông số cấu hình chi tiết hoặc tìm kiếm lọc danh sách trực tiếp trên Blockchain vừa chậm vừa tốn phí Gas. Vì vậy hệ thống tách dữ liệu theo hai nơi: MySQL (Off-chain) giữ thông tin phục vụ tra cứu nhanh, đăng nhập JWT và mô tả thiết bị; Smart Contract (On-chain) giữ danh tính ví, trạng thái đơn, khóa thiết bị và kết quả phạt.
+            </p>
+            <p class="glossary-example">
+              Trong EduVault: mức tiền cọc bằng VNĐ là giá trị tham chiếu (<code>depositAmount</code>) để phòng lab quản lý nội bộ, còn Smart Contract ghi nhận con số này và đánh dấu trạng thái khóa hoặc hoàn cọc minh bạch.
+            </p>
+          </article>
+
+          <article class="glossary-item">
+            <h3>Kiến trúc Pure Web3 (Non-Custodial)</h3>
+            <p>
+              Ở thiết kế cũ (Web2.5), máy chủ backend giữ sẵn một Private Key quản trị để ký hộ giao dịch cho mọi người. Cách đó tiềm ẩn rủi ro nếu file cấu hình máy chủ bị lộ. Mô hình Pure Web3 hiện tại của EduVault bỏ hẳn khóa ký khỏi máy chủ: cả sinh viên lẫn cán bộ phòng lab tự ký trên MetaMask của mình, còn Backend FastAPI chuyển thành bộ kiểm tra biên lai (Receipt Verifier).
+            </p>
+            <p class="glossary-example">
+              Khi frontend gửi <code>tx_hash</code> lên API, <code>blockchain_service.py</code> tự gọi RPC lên Sepolia kiểm tra xem giao dịch có thành công (<code>status == 1</code>), có đúng địa chỉ hợp đồng EduVault, đúng người ký và chưa bị gửi lặp lại hay không rồi mới cập nhật vào MySQL.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Section 3 -->
+      <section id="kien-truc">
+        <h2>Tổng quan kiến trúc hiện tại</h2>
+        <p>
+          Mã nguồn EduVault chia làm bốn tầng tách biệt nằm trong cùng kho lưu trữ <code>d:\BaiThucHanh\PythonFile\BLockChain</code>. Luồng thay đổi dữ liệu luôn đi từ chữ ký ví người dùng lên Smart Contract trước, rồi mới đồng bộ về MySQL.
+        </p>
+
+        <div class="diagram-box">
+          <svg viewBox="0 0 900 272" role="img" aria-label="Sơ đồ 4 tầng kiến trúc Pure Web3 của EduVault">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#3730a3" />
+              </marker>
+              <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569" />
+              </marker>
+            </defs>
+
+            <!-- Box 1: Frontend -->
+            <rect x="16" y="28" width="215" height="190" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+            <text x="32" y="54" font-size="14" font-weight="700" fill="#0f172a">1. Frontend (React + Vite)</text>
+            <text x="32" y="78" font-size="12" fill="#475569">Giao diện web &amp; form thao tác</text>
+            <rect x="32" y="96" width="183" height="44" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
+            <text x="42" y="115" font-size="12" font-weight="600" fill="#3730a3">Ethers.js v6 + MetaMask</text>
+            <text x="42" y="131" font-size="11" fill="#475569">Ký tx từ ví trình duyệt</text>
+            <text x="32" y="164" font-size="12" fill="#475569">AuthContext (JWT Web2)</text>
+            <text x="32" y="184" font-size="12" fill="#475569">Web3Context (đọc Role chuỗi)</text>
+            <text x="32" y="204" font-size="11" fill="#475569">localhost:5173</text>
+
+            <!-- Box 2: Smart Contract -->
+            <rect x="348" y="20" width="235" height="106" rx="8" fill="#ecfdf5" stroke="#047857" stroke-width="1.5" />
+            <text x="364" y="46" font-size="14" font-weight="700" fill="#0f172a">2. Smart Contract (Sepolia)</text>
+            <text x="364" y="67" font-size="12" fill="#047857" font-weight="600">EquipmentLending.sol</text>
+            <text x="364" y="87" font-size="11.5" fill="#1e293b">AccessControl, Mutex giữ máy,</text>
+            <text x="364" y="104" font-size="11.5" fill="#1e293b">tự tính phạt 0 / 10 / 50 / 100%</text>
+
+            <!-- Box 3: Backend -->
+            <rect x="348" y="148" width="235" height="104" rx="8" fill="#ffffff" stroke="#3730a3" stroke-width="1.5" />
+            <text x="364" y="174" font-size="14" font-weight="700" fill="#0f172a">3. Backend (FastAPI)</text>
+            <text x="364" y="195" font-size="11.5" fill="#3730a3" font-weight="600">Read-Only Receipt Verifier</text>
+            <text x="364" y="214" font-size="11.5" fill="#475569">Không chứa Private Key</text>
+            <text x="364" y="232" font-size="11.5" fill="#475569">Chống Replay 409, đồng bộ DB</text>
+
+            <!-- Box 4: MySQL -->
+            <rect x="668" y="148" width="216" height="104" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+            <text x="684" y="174" font-size="14" font-weight="700" fill="#0f172a">4. MySQL 8.x</text>
+            <text x="684" y="195" font-size="11.5" fill="#475569">5 bảng: users, equipment,</text>
+            <text x="684" y="212" font-size="11.5" fill="#475569">lending_requests, audit_logs,</text>
+            <text x="684" y="229" font-size="11.5" fill="#475569">blockchain_transactions</text>
+
+            <!-- Arrows -->
+            <path d="M 231 100 L 344 72" stroke="#3730a3" stroke-width="1.8" fill="none" marker-end="url(#arrow)" />
+            <text x="242" y="68" font-size="11" fill="#3730a3" font-weight="600">1. Ký giao dịch</text>
+
+            <path d="M 231 190 L 344 196" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arrow-muted)" />
+            <text x="246" y="180" font-size="11" fill="#475569">2. Gửi tx_hash</text>
+
+            <path d="M 465 148 L 465 130" stroke="#3730a3" stroke-width="1.5" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow)" />
+            <text x="474" y="142" font-size="11" fill="#3730a3">3. Kiểm biên lai RPC</text>
+
+            <path d="M 583 200 L 664 200" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arrow-muted)" />
+            <text x="596" y="190" font-size="11" fill="#475569">4. Lưu DB</text>
+          </svg>
+          <p class="diagram-caption">
+            Trình tự thực thi một nghiệp vụ có ghi chuỗi: ví người dùng ký giao dịch lên Smart Contract trước, nhận <code>tx_hash</code> rồi gửi cho FastAPI xác minh biên lai từ RPC Sepolia trước khi lưu trạng thái mới vào MySQL.
+          </p>
+        </div>
+
+        <h3>Phân cấp ba vai trò trên Smart Contract</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Vai trò (Role)</th>
+                <th>Người nắm giữ</th>
+                <th>Quyền thực thi trên chuỗi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>DEFAULT_ADMIN_ROLE</code></td>
+                <td>Ví Deployer gốc</td>
+                <td>Thêm hoặc gỡ ví Admin thông qua <code>addAdmin</code> và <code>removeAdmin</code>.</td>
+              </tr>
+              <tr>
+                <td><code>ADMIN_ROLE</code></td>
+                <td>Nhóm cán bộ phòng lab</td>
+                <td>Cấp/thu hồi quyền sinh viên (<code>registerBorrower</code> / <code>revokeBorrower</code>), duyệt đơn, bàn giao và nghiệm thu trả thiết bị.</td>
+              </tr>
+              <tr>
+                <td><code>BORROWER_ROLE</code></td>
+                <td>Sinh viên đã gắn ví</td>
+                <td>Tạo đơn mới (<code>createLoan</code>) bằng chính ví của mình và tự hủy đơn khi thiết bị chưa bàn giao.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Section 4 -->
+      <section id="vong-doi">
+        <h2>Vòng đời đơn mượn và quy tắc tính phạt</h2>
+        <p>
+          Bấm vào từng bước bên dưới để xem trạng thái thay đổi trên Smart Contract, thao tác của người dùng và phản hồi tại MySQL.
+        </p>
+
+        <div class="stepper" role="group" aria-label="Các giai đoạn vòng đời đơn mượn">
+          <button type="button" class="step-btn" data-step="submitted" aria-pressed="true">1. Submitted (Gửi đơn)</button>
+          <button type="button" class="step-btn" data-step="approved" aria-pressed="false">2. Approved (Duyệt giữ máy)</button>
+          <button type="button" class="step-btn" data-step="active" aria-pressed="false">3. Active (Đã bàn giao)</button>
+          <button type="button" class="step-btn" data-step="returned" aria-pressed="false">4. Returned / Disputed</button>
+          <button type="button" class="step-btn" data-step="cancelled" aria-pressed="false">5. Cancelled (Hủy đơn)</button>
+        </div>
+
+        <div class="step-detail" id="step-detail" aria-live="polite">
+          <div class="step-col">
+            <h4>Hành động &amp; Quyền ký</h4>
+            <p id="step-actor">Sinh viên có BORROWER_ROLE chọn máy trên /equipment và ký createLoan qua MetaMask.</p>
+          </div>
+          <div class="step-col">
+            <h4>Thay đổi trên Smart Contract</h4>
+            <p id="step-chain">Tạo LoanRecord mới với state = Submitted, depositState = None, phát event LoanCreated.</p>
+          </div>
+          <div class="step-col">
+            <h4>Đồng bộ tại Backend / MySQL</h4>
+            <p id="step-db">POST /api/v1/loans/request kiểm tra receipt LoanCreated, lưu đơn PENDING và ghi blockchain_transactions.</p>
+          </div>
+        </div>
+
+        <h3>Mức phạt tự động trong hàm calculatePenalty</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tình trạng khi trả</th>
+                <th>Thời điểm trả (<code>block.timestamp</code>)</th>
+                <th>Tỷ lệ phạt</th>
+                <th>Trạng thái cọc &amp; đơn</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Nguyên vẹn (<code>0 - GOOD</code>)</td>
+                <td>Đúng hạn (<code>&lt;= dueDate</code>)</td>
+                <td><code>0%</code></td>
+                <td><code>Refunded</code> / <code>Returned</code></td>
+              </tr>
+              <tr>
+                <td>Nguyên vẹn (<code>0 - GOOD</code>)</td>
+                <td>Trễ tối đa 24 giờ (<code>&lt;= dueDate + 1 days</code>)</td>
+                <td><code>10%</code></td>
+                <td><code>Refunded</code> / <code>Returned</code></td>
+              </tr>
+              <tr>
+                <td>Nguyên vẹn (<code>0 - GOOD</code>)</td>
+                <td>Trễ trên 24 giờ (<code>&gt; dueDate + 1 days</code>)</td>
+                <td><code>50%</code></td>
+                <td><code>Refunded</code> / <code>Returned</code></td>
+              </tr>
+              <tr>
+                <td>Hỏng hoặc Mất (<code>1</code> hoặc <code>2</code>)</td>
+                <td>Bất kỳ lúc nào</td>
+                <td><code>100%</code></td>
+                <td><code>Forfeited</code> / <code>Disputed</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Section 5 -->
+      <section id="routes">
+        <h2>Giải thích ngắn gọn các route trong hệ thống</h2>
+        <p>
+          Chọn một nhóm bên dưới để xem toàn bộ route của giao diện web (React Router), API Backend (FastAPI <code>/api/v1</code>) và các hàm công khai của Smart Contract.
+        </p>
+
+        <div class="tab-bar" role="tablist" aria-label="Nhóm route hệ thống">
+          <button type="button" class="tab-btn" role="tab" id="tab-fe" aria-controls="panel-fe" aria-selected="true">Giao diện Frontend (9 trang)</button>
+          <button type="button" class="tab-btn" role="tab" id="tab-be" aria-controls="panel-be" aria-selected="false">Backend REST API (34 endpoints)</button>
+          <button type="button" class="tab-btn" role="tab" id="tab-sc" aria-controls="panel-sc" aria-selected="false">Smart Contract (12 hàm chính)</button>
+        </div>
+
+        <!-- Tab 1: Frontend -->
+        <div class="tab-panel" id="panel-fe" role="tabpanel" aria-labelledby="tab-fe">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Đường dẫn</th>
+                  <th>Quyền truy cập</th>
+                  <th>Chức năng chính</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>/</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Trang chủ Storefront: banner trượt, 5 nhóm danh mục, 3 hàng máy nổi bật, 5 giao dịch blockchain gần nhất và bản đồ CTUT.</td>
+                </tr>
+                <tr>
+                  <td><code>/equipment</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Danh mục toàn bộ 16 thiết bị có tìm kiếm, lọc nhóm/trạng thái và phân trang 6 máy/trang. Sinh viên đăng nhập mở form mượn máy từ đây.</td>
+                </tr>
+                <tr>
+                  <td><code>/login</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Đăng nhập bằng Email hoặc mã SV/cán bộ; giữ tham số <code>?borrow=&lt;id&gt;</code> để quay lại đúng thiết bị sau khi đăng nhập.</td>
+                </tr>
+                <tr>
+                  <td><code>/register</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Cổng tự đăng ký tài khoản sinh viên mới (<code>BORROWER</code>), kiểm tra mật khẩu tối thiểu 8 ký tự và chuyển về trang đăng nhập.</td>
+                </tr>
+                <tr>
+                  <td><code>/audit</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Trang tra cứu minh bạch: kiểm tra mạng Sepolia, nhập ID đơn để mở bảng đối soát MySQL với Smart Contract, xem nhật ký giao dịch.</td>
+                </tr>
+                <tr>
+                  <td><code>/my-loans</code></td>
+                  <td><span class="badge badge-borrower">BORROWER</span></td>
+                  <td>Danh sách đơn mượn của sinh viên đang đăng nhập; cho phép ký hủy đơn (khi chưa bàn giao) và mở đối soát on-chain.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin/loans</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Bảng điều phối đơn mượn cho cán bộ phòng lab: ký duyệt đơn, bàn giao, nghiệm thu trả máy (kèm chọn tình trạng) hoặc từ chối.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin/inventory</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Quản lý kho thiết bị (phân trang 8 dòng/trang), thêm/sửa/xóa máy, chọn danh mục sẵn có hoặc tạo danh mục mới, tải ảnh lên máy chủ.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin/roles</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Phân quyền Smart Contract trực tiếp bằng MetaMask: Deployer thêm/gỡ Admin; Admin cấp/thu hồi <code>BORROWER_ROLE</code> cho sinh viên.</td>
+                </tr>
+                <tr>
+                  <td><code>/overview</code>, <code>*</code></td>
+                  <td><span class="badge badge-public">Điều hướng</span></td>
+                  <td>Tự động chuyển về trang chủ <code>/</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Backend API -->
+        <div class="tab-panel" id="panel-be" role="tabpanel" aria-labelledby="tab-be" hidden>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Method &amp; Route</th>
+                  <th>Quyền</th>
+                  <th>Giải thích ngắn gọn</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="method">GET</span> <code>/</code>, <code>/api/v1/health</code>, <code>/api/v1/health/db</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Kiểm tra máy chủ API còn phản hồi và kết nối MySQL thông suốt.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/auth/login</code>, <code>/token</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Xác thực Email hoặc mã định danh, trả về JWT access token (chặn tạm thời nếu sai quá 5 lần).</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/auth/register</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Đăng ký tài khoản mới, máy chủ ép cứng vai trò <code>BORROWER</code> và trả HTTP 409 nếu trùng email/MSSV.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/users/me</code></td>
+                  <td><span class="badge badge-auth">Đăng nhập</span></td>
+                  <td>Lấy thông tin tài khoản hiện tại từ JWT.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/users/wallet/challenge</code>, <code>/wallet/verify</code>, <code>/wallet</code></td>
+                  <td><span class="badge badge-auth">Đăng nhập</span></td>
+                  <td>Cấp nonce 5 phút và kiểm tra chữ ký EIP-191 để gắn chặt một ví MetaMask vào tài khoản.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/admin/users</code>, <code>/pending-borrowers</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Xem danh sách người dùng và lọc sinh viên đã xác minh ví nhưng chưa có <code>BORROWER_ROLE</code> trên chuỗi.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/admin/users</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Admin tạo nhanh tài khoản sinh viên hoặc cán bộ mới.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/equipment</code>, <code>/{equipment_id}</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Trả danh sách thiết bị (lọc theo từ khóa, nhóm, trạng thái) và chi tiết từng máy.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST/PUT/DEL</span> <code>/api/v1/equipment</code>, <code>/{id}</code>, <code>/upload-image</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Tạo máy mới (<code>POST /equipment</code>), sửa (<code>PUT /equipment/{id}</code>), ngừng cấp phát (<code>DELETE /equipment/{id}</code>) và tải ảnh sản phẩm.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/loans/request</code></td>
+                  <td><span class="badge badge-borrower">BORROWER</span></td>
+                  <td>Nhận <code>on_chain_loan_id</code> và <code>tx_hash</code>, kiểm chứng event <code>LoanCreated</code> rồi tạo đơn trong MySQL.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/loans</code>, <code>/my-loans</code>, <code>/{loan_id}</code></td>
+                  <td><span class="badge badge-auth">Đăng nhập</span></td>
+                  <td>Xem toàn bộ đơn (Admin), đơn cá nhân (Sinh viên) hoặc chi tiết một đơn cụ thể.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/loans/{id}/approve</code>, <code>/reject</code>, <code>/handover</code>, <code>/return</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Kiểm tra biên lai <code>LoanApproved</code>, <code>HandoverConfirmed</code>, <code>LoanReturned</code> từ Sepolia rồi đồng bộ kết quả về DB.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">POST</span> <code>/api/v1/loans/{id}/cancel</code></td>
+                  <td><span class="badge badge-auth">Chủ đơn / ADMIN</span></td>
+                  <td>Xác minh receipt <code>LoanCancelled</code> và hủy đơn khi máy chưa bàn giao.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/blockchain/status</code>, <code>/contract-info</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Kiểm tra kết nối RPC Sepolia, số block mới nhất, địa chỉ hợp đồng và ABI đang chạy.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/audit/loans/{id}/verify</code>, <code>/transactions</code></td>
+                  <td><span class="badge badge-public">Công khai</span></td>
+                  <td>Đối chiếu từng trường giữa MySQL và Smart Contract (<code>SYNCED</code> / <code>MISMATCH</code>) và liệt kê lịch sử tx on-chain.</td>
+                </tr>
+                <tr>
+                  <td><span class="method">GET</span> <code>/api/v1/audit/logs</code> &amp; <span class="method">POST</span> <code>/reconcile</code></td>
+                  <td><span class="badge badge-admin">ADMIN</span></td>
+                  <td>Xem nhật ký kiểm toán nội bộ và chạy đồng bộ sửa sai lệch từ trạng thái on-chain về MySQL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: Smart Contract -->
+        <div class="tab-panel" id="panel-sc" role="tabpanel" aria-labelledby="tab-sc" hidden>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hàm Solidity (<code>EquipmentLending.sol</code>)</th>
+                  <th>Loại / Quyền</th>
+                  <th>Chức năng</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>addAdmin(address)</code>, <code>removeAdmin(address)</code></td>
+                  <td><span class="badge badge-admin">DEFAULT_ADMIN</span></td>
+                  <td>Quản lý danh sách ví cán bộ phòng lab sở hữu <code>ADMIN_ROLE</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>registerBorrower(address)</code>, <code>revokeBorrower(address)</code></td>
+                  <td><span class="badge badge-admin">ADMIN_ROLE</span></td>
+                  <td>Cấp hoặc thu hồi quyền <code>BORROWER_ROLE</code> cho ví sinh viên.</td>
+                </tr>
+                <tr>
+                  <td><code>createLoan(loanId, equipmentId, studentId, borrower, ...)</code></td>
+                  <td><span class="badge badge-borrower">BORROWER_ROLE</span></td>
+                  <td>Khởi tạo bản ghi đơn mượn mới trên chuỗi ở trạng thái <code>Submitted</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>approveLoan(loanId)</code></td>
+                  <td><span class="badge badge-admin">ADMIN_ROLE</span></td>
+                  <td>Chuyển đơn sang <code>Approved</code> và khóa Mutex <code>activeEquipmentLoan[equipmentId]</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>confirmHandover(loanId)</code></td>
+                  <td><span class="badge badge-admin">ADMIN_ROLE</span></td>
+                  <td>Xác nhận đã giao máy ngoài phòng lab, chuyển đơn sang <code>Active</code> và khóa cọc.</td>
+                </tr>
+                <tr>
+                  <td><code>confirmReturn(loanId, returnCondition)</code></td>
+                  <td><span class="badge badge-admin">ADMIN_ROLE</span></td>
+                  <td>Tự gọi <code>calculatePenalty</code> tính phạt 0/10/50/100%, chốt hoàn/thu cọc và giải phóng Mutex thiết bị.</td>
+                </tr>
+                <tr>
+                  <td><code>cancelLoan(loanId, reason)</code></td>
+                  <td><span class="badge badge-auth">Chủ đơn / ADMIN</span></td>
+                  <td>Hủy đơn trước lúc giao máy và giải phóng Mutex nếu đơn đã từng duyệt.</td>
+                </tr>
+                <tr>
+                  <td><code>getLoan(loanId)</code>, <code>isOverdue(loanId)</code>, <code>calculatePenalty(loanId, cond)</code></td>
+                  <td><span class="badge badge-public">View (Miễn phí)</span></td>
+                  <td>Đọc dữ liệu đơn trên chuỗi, kiểm tra quá hạn và xem trước tỷ lệ phạt không tốn Gas.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 6 -->
+      <section id="nang-cap">
+        <h2>Các phần đã rà soát và hoàn thiện (2026-11-18)</h2>
+        <ul class="clean-list">
+          <li>Đồng bộ cấu hình Ethereum Sepolia Testnet (<code>11155111</code>, contract <code>0xA88De9B00C0F78FF9a162C4f17524ef885169ffd</code>) và sửa bảng <code>LoanVerifyPanel</code> hiển thị qua React Portal để người dùng so sánh MySQL với on-chain trực tiếp không gây xô lệch trang.</li>
+          <li>Hoàn thiện trang chủ Storefront gồm thanh trượt 3 banner, 5 ô danh mục, 3 hàng sản phẩm mẫu, phân trang trên <code>/equipment</code> (6 máy/trang) và <code>/admin/inventory</code> (8 máy/trang), kèm bộ chọn danh mục cho phép nhập thêm nhóm mới.</li>
+          <li>Nạp và đồng bộ đủ 16 thiết bị mẫu kèm ảnh thật trong migration Alembic <code>d4e8f9a1b203</code> và <code>scripts/seed.py</code>, dọn sạch các đoạn mô tả thừa, chuẩn hóa nhãn tiền cọc và bổ sung bản đồ CTUT dưới chân trang.</li>
+          <li>Chuẩn hóa CSS tokens, bảng màu Slate/Indigo, độ tương phản chữ đạt WCAG AA, thêm Skip-link, nút ẩn/hiện mật khẩu tại <code>/login</code> và <code>/register</code>, nhãn <code>aria-label</code> và <code>htmlFor</code> cho toàn bộ biểu mẫu.</li>
+          <li>Xử lý độ trễ giữa các node RPC Sepolia trong <code>blockchain_service.py</code> bằng cách ghim <code>block_identifier</code> của biên lai và retry ngắn khi gọi <code>getLoan</code>, đồng thời giữ lại bản nháp <code>tx_hash</code> trong <code>localStorage</code> trên <code>EquipmentPage.tsx</code> khi node chưa kịp đồng bộ.</li>
+          <li>Hoàn thiện <code>README.md</code> kèm 4 ảnh giao diện mẫu thực tế tại <code>docs/images/screenshots/</code> và đạt 81/81 Pytest backend, 31/31 Hardhat tests, <code>vite build</code> thoát mã 0.</li>
+        </ul>
+
+        <div class="note-box">
+          <h3>Vị trí lưu file và dữ liệu mẫu</h3>
+          <p>
+            Tài liệu này nằm tại <code>docs/TONG_QUAN_HE_THONG_VA_KIEN_THUC_BLOCKCHAIN.html</code>. Khi chạy <code>seed_data.bat</code> ở máy mới, script tự chạy <code>alembic upgrade head</code> (tới bản <code>d4e8f9a1b203</code>) rồi chạy <code>scripts/seed.py</code> để nạp đồng bộ đủ tài khoản mẫu và 16 thiết bị vào MySQL.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    EduVault Documentation, Trường Đại học Kỹ thuật - Công nghệ Cần Thơ. Mở trực tiếp file HTML trên trình duyệt để tra cứu ngoại tuyến.
+  </footer>
+
+  <script>
+    (function () {
+      // 1. Tabs for Route Explorer
+      const tabButtons = document.querySelectorAll('[role="tab"]');
+      const tabPanels = document.querySelectorAll('[role="tabpanel"]');
+
+      tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.getAttribute('aria-controls');
+          tabButtons.forEach((b) => b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+          tabPanels.forEach((panel) => {
+            if (panel.id === targetId) {
+              panel.removeAttribute('hidden');
+            } else {
+              panel.setAttribute('hidden', '');
+            }
+          });
+        });
+      });
+
+      // 2. Interactive Loan Lifecycle Stepper
+      const steps = {
+        submitted: {
+          actor: 'Sinh viên có BORROWER_ROLE chọn máy trên /equipment và ký createLoan qua MetaMask.',
+          chain: 'Tạo LoanRecord mới với state = Submitted, depositState = None, phát event LoanCreated.',
+          db: 'POST /api/v1/loans/request kiểm tra receipt LoanCreated, lưu đơn PENDING và ghi blockchain_transactions.',
+        },
+        approved: {
+          actor: 'Cán bộ phòng lab (ADMIN_ROLE) bấm Duyệt đơn trên /admin/loans và ký approveLoan.',
+          chain: 'Chuyển state = Approved và khóa activeEquipmentLoan[equipmentId] để chặn đơn trùng.',
+          db: 'POST /api/v1/loans/{id}/approve xác minh receipt LoanApproved, chuyển trạng thái thiết bị sang RESERVED.',
+        },
+        active: {
+          actor: 'Khi sinh viên tới nhận máy tại phòng lab, Admin bấm Bàn giao và ký confirmHandover.',
+          chain: 'Ghi nhận actualHandover = block.timestamp, đặt state = Active và khóa cọc (DepositState.Locked).',
+          db: 'POST /api/v1/loans/{id}/handover xác minh receipt HandoverConfirmed, chuyển đơn ACTIVE và máy IN_USE.',
+        },
+        returned: {
+          actor: 'Khi sinh viên trả máy, Admin chọn tình trạng GOOD, DAMAGED hoặc LOST và ký confirmReturn.',
+          chain: 'Hợp đồng tự chạy calculatePenalty (0/10/50/100%), cập nhật cọc Refunded hoặc Forfeited và mở khóa Mutex.',
+          db: 'POST /api/v1/loans/{id}/return đọc tỷ lệ phạt thật từ event LoanReturned trên Sepolia rồi lưu kết quả DB.',
+        },
+        cancelled: {
+          actor: 'Chủ đơn hoặc Admin hủy đơn trước khi bàn giao bằng cách ký cancelLoan kèm lý do.',
+          chain: 'Đặt state = Cancelled, giải phóng Mutex nếu đơn từng ở trạng thái Approved và phát event LoanCancelled.',
+          db: 'POST /api/v1/loans/{id}/cancel kiểm chứng receipt LoanCancelled, cập nhật đơn CANCELLED và máy về AVAILABLE.',
+        },
+      };
+
+      const stepBtns = document.querySelectorAll('.step-btn');
+      const actorEl = document.getElementById('step-actor');
+      const chainEl = document.getElementById('step-chain');
+      const dbEl = document.getElementById('step-db');
+
+      stepBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-step');
+          const info = steps[key];
+          if (!info) return;
+          stepBtns.forEach((b) => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+          actorEl.textContent = info.actor;
+          chainEl.textContent = info.chain;
+          dbEl.textContent = info.db;
+        });
+      });
+
+      // 3. Highlight active TOC link while scrolling
+      const tocLinks = document.querySelectorAll('.toc a');
+      const sections = document.querySelectorAll('main section[id]');
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                const id = entry.target.getAttribute('id');
+                tocLinks.forEach((link) => {
+                  if (link.getAttribute('href') === '#' + id) {
+                    link.setAttribute('aria-current', 'true');
+                  } else {
+                    link.removeAttribute('aria-current');
+                  }
+                });
+              }
+            });
+          },
+          { rootMargin: '-20% 0px -65% 0px' }
+        );
+        sections.forEach((sec) => observer.observe(sec));
+      }
+    })();
+  </script>
+</body>
+</html>

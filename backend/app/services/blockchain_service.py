@@ -6,6 +6,7 @@ Mục đích: Kết nối mạng Blockchain EVM (Hardhat local / Sepolia) theo k
 """
 import json
 import os
+import time
 from typing import Any, Dict, Optional, Tuple, Union
 from web3 import Web3
 from web3.contract import Contract
@@ -18,6 +19,7 @@ CONTRACTS_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "c
 ARTIFACT_PATH: str = os.path.join(CONTRACTS_DIR, "EquipmentLending.json")
 ADDRESS_PATH: str = os.path.join(CONTRACTS_DIR, "contract_address.json")
 ZERO_BYTES32_HEX: str = "0x" + ("0" * 64)
+RPC_STATE_SYNC_DELAYS: Tuple[float, ...] = (0.6, 1.0, 1.5, 2.0, 2.5)
 
 
 def normalize_hex_bytes32(value: Union[bytes, bytearray, str], expected_bytes_len: int = 32) -> str:
@@ -296,10 +298,23 @@ class BlockchainService:
                     f"Không tìm thấy giao dịch {tx_hash_hex} trên blockchain hoặc chưa được khai thác."
                 ) from exc
 
-        try:
-            tx = self.web3.eth.get_transaction(tx_hash_hex)
-        except TransactionNotFound as exc:
-            raise ValueError(f"Không truy vấn được chi tiết giao dịch {tx_hash_hex}.") from exc
+        tx = None
+        last_tx_exc: Optional[Exception] = None
+        for attempt, delay in enumerate((0.0, *RPC_STATE_SYNC_DELAYS[:3])):
+            if delay > 0:
+                time.sleep(delay)
+            try:
+                tx = self.web3.eth.get_transaction(tx_hash_hex)
+                break
+            except TransactionNotFound as exc:
+                last_tx_exc = exc
+                if attempt >= len(RPC_STATE_SYNC_DELAYS[:3]):
+                    break
+
+        if tx is None:
+            raise ConnectionError(
+                f"Biên lai {tx_hash_hex} đã tồn tại nhưng node RPC chưa đồng bộ kịp chi tiết giao dịch."
+            ) from last_tx_exc
 
         receipt_status = receipt.get("status") if isinstance(receipt, dict) else getattr(receipt, "status", 0)
         if receipt_status != 1:
@@ -411,9 +426,35 @@ class BlockchainService:
             },
         )
 
-        on_chain = self.get_loan(expected_loan_id_hex)
+        receipt_block = verified.get("block_number")
+        on_chain: Optional[Dict[str, Any]] = None
+        last_state_exc: Optional[Exception] = None
+
+        for attempt, delay in enumerate((0.0, *RPC_STATE_SYNC_DELAYS)):
+            if delay > 0:
+                time.sleep(delay)
+            # Ưu tiên đọc đúng block của biên lai trước để tránh trễ "latest" giữa các node RPC cân bằng tải
+            target_block = receipt_block if (receipt_block is not None and attempt % 2 == 0) else None
+            try:
+                candidate = self._read_loan_at_block(expected_loan_id_hex, block_identifier=target_block)
+            except Exception as exc:
+                last_state_exc = exc
+                continue
+
+            if candidate["loan_id"] != ZERO_BYTES32_HEX and int(candidate["request_time"]) != 0:
+                on_chain = candidate
+                break
+            on_chain = candidate
+
+        if on_chain is None:
+            raise ConnectionError(
+                "Biên lai giao dịch đã xác nhận nhưng node RPC chưa đồng bộ kịp trạng thái hợp đồng. Vui lòng bấm Gửi lại sau vài giây."
+            ) from last_state_exc
+
         if on_chain["loan_id"] == ZERO_BYTES32_HEX or int(on_chain["request_time"]) == 0:
-            raise ValueError("Bản ghi đơn mượn không tồn tại trên Smart Contract sau giao dịch.")
+            raise ConnectionError(
+                "Giao dịch đã có biên lai trên Blockchain nhưng node RPC đang trễ đồng bộ trạng thái đơn mượn. Vui lòng thử lại sau vài giây."
+            )
         if (
             on_chain["loan_id"] != expected_loan_id_hex
             or int(on_chain["equipment_id"]) != int(expected_equipment_id)
@@ -453,11 +494,28 @@ class BlockchainService:
         )
         return bool(self.contract.functions.hasRole(role_bytes, checksum_account).call())
 
-    def get_loan(self, loan_id: Union[bytes, str]) -> Dict[str, Any]:
+    def _read_loan_at_block(
+        self,
+        loan_id: Union[bytes, str],
+        block_identifier: Optional[Union[int, str]] = None,
+    ) -> Dict[str, Any]:
+        if block_identifier is not None:
+            try:
+                return self.get_loan(loan_id, block_identifier=block_identifier)
+            except TypeError:
+                return self.get_loan(loan_id)
+        return self.get_loan(loan_id)
+
+    def get_loan(
+        self,
+        loan_id: Union[bytes, str],
+        block_identifier: Optional[Union[int, str]] = None,
+    ) -> Dict[str, Any]:
         """
         Mục đích: Đọc trực tiếp bản ghi LoanRecord từ Smart Contract.
         Tham số:
             - loan_id (Union[bytes, str]): ID đơn mượn (dạng bytes32 hoặc hex string 0x...).
+            - block_identifier (Optional[Union[int, str]]): Block cần truy vấn (mặc định dùng trạng thái mới nhất).
         Trả về:
             - Dict[str, Any]: Dictionary ánh xạ các trường của LoanRecord.
         Lỗi:
@@ -468,7 +526,12 @@ class BlockchainService:
         self.ensure_ready()
 
         loan_id_bytes: bytes = self._to_bytes32(loan_id)
-        record = self.contract.functions.getLoan(loan_id_bytes).call()
+        call_fn = self.contract.functions.getLoan(loan_id_bytes)
+        record = (
+            call_fn.call(block_identifier=block_identifier)
+            if block_identifier is not None
+            else call_fn.call()
+        )
 
         return {
             "loan_id": normalize_hex_bytes32(record[0], 32),

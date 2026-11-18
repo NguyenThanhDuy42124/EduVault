@@ -401,9 +401,17 @@ export const EquipmentPage: React.FC = () => {
       console.error('Error submitting loan:', err);
       const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } };
       if (axiosErr.response?.status && [400, 409].includes(axiosErr.response.status)) {
-        // Nếu API từ chối vĩnh viễn do dữ liệu/replay, dọn draft cũ nếu có
         const detail = axiosErr.response.data?.detail || '';
-        if (detail.includes('không hợp lệ') || detail.includes('đã được sử dụng')) {
+        const isTransientSyncIssue =
+          detail.includes('trễ đồng bộ') || detail.includes('chưa đồng bộ') || detail.includes('không tồn tại trên Smart Contract');
+        const isPermanentReject =
+          detail.includes('đã được sử dụng') ||
+          detail.includes('đã được gắn') ||
+          detail.includes('không khớp') ||
+          detail.includes('revert') ||
+          detail.includes('EquipmentLending') ||
+          detail.includes('Chain ID');
+        if (!isTransientSyncIssue && (isPermanentReject || axiosErr.response.status === 400)) {
           localStorage.removeItem(draftStorageKey);
         }
       }

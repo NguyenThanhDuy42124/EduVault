@@ -270,3 +270,114 @@ def test_has_role_uses_keccak_role_hash(monkeypatch):
     assert svc.has_role("DEFAULT_ADMIN_ROLE", addr) is True
     assert captured["role_bytes"] == b"\x00" * 32
 
+
+def test_verify_create_loan_tx_retries_stale_rpc_state(monkeypatch):
+    """
+    Mục đích: Kiểm tra `verify_create_loan_tx` ghim block_identifier & retry an toàn khi node RPC trễ trạng thái `getLoan`.
+    """
+    from backend.app.services import blockchain_service as bs
+    from backend.app.services.blockchain_service import BlockchainService, ZERO_BYTES32_HEX
+
+    svc = BlockchainService.__new__(BlockchainService)
+    loan_id_hex = "0x" + "cc" * 32
+    tx_hash_hex = "0x" + "dd" * 32
+    borrower = "0x10eaD82f2b0949F4E814BD1e8F0D4279756Bd302"
+
+    monkeypatch.setattr(bs, "RPC_STATE_SYNC_DELAYS", (0.0, 0.0, 0.0))
+    monkeypatch.setattr(
+        svc,
+        "verify_transaction_receipt",
+        lambda **kwargs: {
+            "tx_hash": tx_hash_hex,
+            "block_number": 12162235,
+            "gas_used": 912717,
+            "status": "CONFIRMED",
+            "from_address": borrower,
+            "to_address": "0xA88De9B00C0F78FF9a162C4f17524ef885169ffd",
+            "event_name": "LoanCreated",
+            "event_args": {"loanId": loan_id_hex, "equipmentId": 1},
+        },
+    )
+
+    calls = []
+
+    def flaky_get_loan(lid, block_identifier=None):
+        calls.append(block_identifier)
+        if len(calls) == 1:
+            return {
+                "loan_id": ZERO_BYTES32_HEX,
+                "equipment_id": 0,
+                "borrower": "0x0000000000000000000000000000000000000000",
+                "student_id": "",
+                "request_time": 0,
+                "expected_handover": 0,
+                "due_date": 0,
+                "actual_handover": 0,
+                "actual_return": 0,
+                "deposit_amount": 0,
+                "state": 0,
+                "deposit_state": 0,
+                "penalty_percent": 0,
+            }
+        return {
+            "loan_id": loan_id_hex,
+            "equipment_id": 1,
+            "borrower": borrower,
+            "student_id": "SV2026001",
+            "request_time": 1795014468,
+            "expected_handover": 1795050000,
+            "due_date": 1795341600,
+            "actual_handover": 0,
+            "actual_return": 0,
+            "deposit_amount": 1000000,
+            "state": 0,
+            "deposit_state": 0,
+            "penalty_percent": 0,
+        }
+
+    monkeypatch.setattr(svc, "get_loan", flaky_get_loan)
+    res = svc.verify_create_loan_tx(
+        tx_hash=tx_hash_hex,
+        expected_loan_id=loan_id_hex,
+        expected_equipment_id=1,
+        expected_student_id="SV2026001",
+        expected_borrower_address=borrower,
+        expected_handover_ts=1795050000,
+        expected_due_ts=1795341600,
+        expected_deposit=1000000,
+    )
+    assert calls == [12162235, None]
+    assert res["on_chain_record"]["request_time"] == 1795014468
+
+    # Nếu node vẫn trả struct rỗng sau mọi lần retry -> nâng ConnectionError (HTTP 503) thay vì 400
+    monkeypatch.setattr(
+        svc,
+        "get_loan",
+        lambda lid, block_identifier=None: {
+            "loan_id": ZERO_BYTES32_HEX,
+            "equipment_id": 0,
+            "borrower": "0x0000000000000000000000000000000000000000",
+            "student_id": "",
+            "request_time": 0,
+            "expected_handover": 0,
+            "due_date": 0,
+            "actual_handover": 0,
+            "actual_return": 0,
+            "deposit_amount": 0,
+            "state": 0,
+            "deposit_state": 0,
+            "penalty_percent": 0,
+        },
+    )
+    with pytest.raises(ConnectionError):
+        svc.verify_create_loan_tx(
+            tx_hash=tx_hash_hex,
+            expected_loan_id=loan_id_hex,
+            expected_equipment_id=1,
+            expected_student_id="SV2026001",
+            expected_borrower_address=borrower,
+            expected_handover_ts=1795050000,
+            expected_due_ts=1795341600,
+            expected_deposit=1000000,
+        )
+
