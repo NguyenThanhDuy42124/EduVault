@@ -49,7 +49,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
         <div className="flex items-center justify-between h-16 gap-3">
           {/* Brand + Main Nav (never shrink narrower than links to avoid overlap with wallet badge) */}
           <div className="flex items-center space-x-2 sm:space-x-3 xl:space-x-5 shrink-0">
@@ -104,7 +104,7 @@ export const Navbar: React.FC = () => {
                       title={
                         user.wallet_address && user.wallet_address.toLowerCase() !== account?.toLowerCase()
                           ? `Ví MetaMask hiện tại khác ví gắn với ${user.student_staff_id}${balanceEth ? ` (${balanceEth} ETH)` : ''}`
-                          : `Đã kết nối ví ${TARGET_CHAIN_NAME}${user.wallet_verified ? ' (đã xác minh EIP-191)' : ''}${balanceEth ? ` - ${balanceEth} ETH` : ''}`
+                          : `Đã kết nối ví ${TARGET_CHAIN_NAME}${user.wallet_verified ? ' (đã xác minh chủ ví)' : ''}${balanceEth ? ` - ${balanceEth} ETH` : ''}`
                       }
                     >
                       <span

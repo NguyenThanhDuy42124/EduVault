@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
+import { LoanVerifyPanel } from '../components/LoanVerifyPanel';
 import { useWeb3 } from '../context/Web3Context';
 import { TARGET_CHAIN_NAME } from '../contracts/contractConfig';
 import {
@@ -14,6 +15,7 @@ import {
   RotateCcw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   Info,
 } from 'lucide-react';
 
@@ -22,6 +24,7 @@ export const AdminLoansPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'ACTIVE' | 'FINISHED'>('ALL');
   const [search, setSearch] = useState('');
+  const [verifyLoanId, setVerifyLoanId] = useState<number | null>(null);
 
   const { isConnected, isCorrectNetwork, isAdmin, getContract, parseWeb3Error } = useWeb3();
 
@@ -250,15 +253,10 @@ export const AdminLoansPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Điều phối & Quản lý Mượn trả
-          </h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
-            Duyệt đơn, bàn giao và nghiệm thu thiết bị ký trực tiếp qua ví MetaMask Admin.
-          </p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          Điều phối & Quản lý Mượn trả
+        </h1>
 
         {/* Global Action Error Alert */}
         {actionError && (
@@ -388,7 +386,7 @@ export const AdminLoansPage: React.FC = () => {
                                 onClick={() => handleApprove(loan)}
                                 disabled={actionLoading}
                                 className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-2xs disabled:opacity-50"
-                                title="Duyệt đơn và kích hoạt Mutex thiết bị qua MetaMask"
+                                title="Duyệt đơn và giữ chỗ thiết bị qua ví MetaMask"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
                                 <span>Duyệt</span>
@@ -429,8 +427,19 @@ export const AdminLoansPage: React.FC = () => {
                             </button>
                           )}
 
-                          {['RETURNED', 'DISPUTED', 'CANCELLED', 'REJECTED'].includes(loan.status) && (
-                            <span className="text-xs text-slate-400 font-mono">--</span>
+                          {['RETURNED', 'DISPUTED', 'CANCELLED', 'REJECTED'].includes(loan.status) && !loan.on_chain_loan_id && (
+                            <span className="text-xs text-slate-500 font-mono">--</span>
+                          )}
+                          {loan.on_chain_loan_id && (
+                            <button
+                              type="button"
+                              onClick={() => setVerifyLoanId(loan.id)}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer"
+                              title="Đối soát đơn này trên Blockchain"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Đối soát</span>
+                            </button>
                           )}
                         </div>
                       </td>
@@ -492,38 +501,39 @@ export const AdminLoansPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="return-inspection-notes" className="block text-xs font-semibold text-slate-700 mb-1">
               Ghi chú biên bản kiểm tra
             </label>
             <textarea
+              id="return-inspection-notes"
               rows={2}
               value={inspectionNotes}
               onChange={(e) => setInspectionNotes(e.target.value)}
               placeholder="Nhập tình trạng phụ kiện, cáp nguồn, bề mặt máy..."
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
-            <Info className="w-4 h-4 flex-shrink-0 text-slate-700 mt-0.5" />
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
+            <Info className="w-4 h-4 flex-shrink-0 text-slate-700 mt-0.5" aria-hidden="true" />
             <p>
-              Smart Contract sẽ tự động tính phạt và hoàn/thu hồi tiền cọc mô phỏng khi Admin ký xác nhận qua MetaMask.
+              Smart Contract sẽ tự động tính phạt và hoàn/thu hồi tiền cọc khi Admin ký xác nhận qua MetaMask.
             </p>
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setReturnModalOpen(false)}
               disabled={actionLoading}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={actionLoading}
-              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {actionLoading ? 'Đang ký MetaMask...' : 'Xác nhận ký on-chain'}
             </button>
@@ -544,37 +554,40 @@ export const AdminLoansPage: React.FC = () => {
       >
         <form onSubmit={handleRejectSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="reject-reason" className="block text-xs font-semibold text-slate-700 mb-1">
               Lý do từ chối
             </label>
             <textarea
+              id="reject-reason"
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               required
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setRejectModalOpen(false)}
               disabled={actionLoading}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={actionLoading}
-              className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-xl hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-lg hover:bg-rose-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {actionLoading ? 'Đang xử lý...' : 'Xác nhận từ chối'}
             </button>
           </div>
         </form>
       </Modal>
+
+      <LoanVerifyPanel loanId={verifyLoanId} onClose={() => setVerifyLoanId(null)} />
     </div>
   );
 };

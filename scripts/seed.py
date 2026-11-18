@@ -4,7 +4,7 @@ Mục đích: Script nạp dữ liệu mẫu ban đầu (Seed Data) vào CSDL My
 Dữ liệu mẫu:
   - 1 Tài khoản Quản trị viên (ADMIN)
   - 3 Tài khoản Sinh viên (BORROWER)
-  - 8 Thiết bị học tập đa dạng (LAPTOP, TABLET, PROJECTOR, LAB_TOOL, EMBEDDED_KIT)
+  - 15 Thiết bị học tập đa dạng (LAPTOP, TABLET, PROJECTOR, LAB_TOOL, EMBEDDED_KIT)
   - 1 Bản ghi đơn mượn mẫu để kiểm tra dữ liệu
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
@@ -99,7 +99,7 @@ def seed_users(db) -> dict:
 
 def seed_equipment(db) -> dict:
     """
-    Mục đích: Nạp 8 thiết bị học tập mẫu đa dạng chủng loại vào bảng equipment.
+    Mục đích: Nạp 15 thiết bị học tập mẫu đa dạng chủng loại vào bảng equipment.
     Tham số:
         - db (Session): Phiên làm việc CSDL SQLAlchemy.
     Trả về:
@@ -181,6 +181,78 @@ def seed_equipment(db) -> dict:
             "deposit_amount": Decimal("150000.00"),
             "status": EquipmentStatus.AVAILABLE,
             "image_url": "/images/equipment/arduino-kit.jpg"
+        },
+        {
+            "serial_number": "LAPTOP-TP-003",
+            "name": "Lenovo ThinkPad X1 Carbon Gen 11",
+            "category": "LAPTOP",
+            "specifications": "Intel Core i7-1365U, 16GB LPDDR5, 512GB NVMe SSD, 14 inch IPS chống chói",
+            "deposit_amount": Decimal("850000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/thinkpad-x1.jpg"
+        },
+        {
+            "serial_number": "LAPTOP-ROG-004",
+            "name": "ASUS ROG Zephyrus G14 AI",
+            "category": "LAPTOP",
+            "specifications": "AMD Ryzen 9 7940HS, RTX 4060 8GB, 16GB RAM, 1TB SSD - Phục vụ AI & Đồ họa",
+            "deposit_amount": Decimal("900000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/asus-rog-g14.jpg"
+        },
+        {
+            "serial_number": "TABLET-S9-002",
+            "name": "Samsung Galaxy Tab S9 FE 10.9\"",
+            "category": "TABLET",
+            "specifications": "Exynos 1380, RAM 6GB, ROM 128GB, Kèm bút S Pen cảm ứng thực hành",
+            "deposit_amount": Decimal("400000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/galaxy-tab-s9.jpg"
+        },
+        {
+            "serial_number": "TABLET-AIR-003",
+            "name": "iPad Air M2 11\" Wifi 256GB",
+            "category": "TABLET",
+            "specifications": "Chip Apple M2 8-core, Màn hình Liquid Retina 11 inch, Hỗ trợ Apple Pencil",
+            "deposit_amount": Decimal("450000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/ipad-air.jpg"
+        },
+        {
+            "serial_number": "TABLET-PAD6-004",
+            "name": "Xiaomi Pad 6 Pro 11\" 144Hz",
+            "category": "TABLET",
+            "specifications": "Snapdragon 8+ Gen 1, RAM 8GB, 256GB, Màn hình 2.8K kiểm thử App Mobile",
+            "deposit_amount": Decimal("350000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/xiaomi-pad-6.jpg"
+        },
+        {
+            "serial_number": "PROJ-EPSON-002",
+            "name": "Máy Chiếu Epson EB-E01 XGA",
+            "category": "PROJECTOR",
+            "specifications": "Công nghệ 3LCD 3.300 Lumens, Kết nối HDMI/VGA, Kèm remote & cáp HDMI 5m",
+            "deposit_amount": Decimal("550000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/epson-eb-e01.jpg"
+        },
+        {
+            "serial_number": "PROJ-VIEW-003",
+            "name": "Máy Chiếu ViewSonic PA503W HD",
+            "category": "PROJECTOR",
+            "specifications": "Độ sáng 3.800 ANSI Lumens, Độ phân giải WXGA, Thuyết trình giảng đường",
+            "deposit_amount": Decimal("500000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/viewsonic-pa503w.jpg"
+        },
+        {
+            "serial_number": "EQ-105810",
+            "name": "Máy Chiếu 36 Chiều",
+            "category": "PROJECTOR",
+            "specifications": "Siêu Cấp Vip Pro",
+            "deposit_amount": Decimal("500000.00"),
+            "status": EquipmentStatus.AVAILABLE,
+            "image_url": "/images/equipment/sony-projector.jpg"
         },
     ]
 

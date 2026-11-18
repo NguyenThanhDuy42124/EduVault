@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { auditService } from '../services/auditService';
 import { blockchainService } from '../services/blockchainService';
-import { BlockchainTx, BlockchainStatus, ContractInfo, LoanVerification, ReconcileResult } from '../types';
+import { loanService } from '../services/loanService';
+import { LoanVerifyPanel } from '../components/LoanVerifyPanel';
+import { BlockchainTx, BlockchainStatus, ContractInfo, Loan, ReconcileResult } from '../types';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import {
   getExplorerAddressUrl,
@@ -14,10 +16,8 @@ import {
   Activity,
   ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
   RefreshCw,
   Search,
-  Database,
   ExternalLink,
   Cpu,
   Layers,
@@ -26,20 +26,18 @@ import {
 } from 'lucide-react';
 
 export const AuditPage: React.FC = () => {
-  const { role } = useAuth();
+  const { role, isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const verifySectionRef = useRef<HTMLDivElement>(null);
   const handledLoanParamRef = useRef<string | null>(null);
   const [transactions, setTransactions] = useState<BlockchainTx[]>([]);
+  const [myLoans, setMyLoans] = useState<Loan[]>([]);
   const [chainStatus, setChainStatus] = useState<BlockchainStatus | null>(null);
   const [contractInfo, setContractInfo] = useState<ContractInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Verification tool state
+  // Verification panel state
   const [verifyLoanId, setVerifyLoanId] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<LoanVerification | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [activeVerifyLoanId, setActiveVerifyLoanId] = useState<number | null>(null);
 
   // Reconcile state
   const [reconciling, setReconciling] = useState(false);
@@ -52,11 +50,10 @@ export const AuditPage: React.FC = () => {
       .getTransactions(30)
       .then((txs) => {
         setTransactions(txs);
-        setVerifyLoanId((prev) => {
-          if (prev) return prev;
-          const firstReq = txs.find((t) => t.request_id)?.request_id;
-          return firstReq ? String(firstReq) : '';
-        });
+        const ids = Array.from(
+          new Set(txs.map((t) => t.request_id).filter((id): id is number => Boolean(id)))
+        ).sort((a, b) => b - a);
+        setVerifyLoanId((prev) => prev || (ids[0] ? String(ids[0]) : ''));
       })
       .catch(() => {})
       .finally(() => {
@@ -75,21 +72,23 @@ export const AuditPage: React.FC = () => {
     fetchData();
   }, []);
 
-  const runVerifyById = useCallback(async (id: number) => {
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setMyLoans([]);
+      return;
+    }
+    loanService
+      .getMyLoans()
+      .then((list) => {
+        setMyLoans(list.filter((l) => Boolean(l.on_chain_loan_id)));
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  const openVerifyPanel = useCallback((id: number) => {
     if (!id || isNaN(id)) return;
     setVerifyLoanId(String(id));
-    setVerifying(true);
-    setVerifyError(null);
-    setVerifyResult(null);
-    try {
-      const res = await auditService.verifyLoan(id);
-      setVerifyResult(res);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setVerifyError(axiosErr.response?.data?.detail || 'Không thể đối soát đơn mượn này.');
-    } finally {
-      setVerifying(false);
-    }
+    setActiveVerifyLoanId(id);
   }, []);
 
   useEffect(() => {
@@ -98,7 +97,7 @@ export const AuditPage: React.FC = () => {
     const parsedId = parseInt(loanParam, 10);
     if (!isNaN(parsedId) && parsedId > 0) {
       handledLoanParamRef.current = loanParam;
-      runVerifyById(parsedId);
+      openVerifyPanel(parsedId);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -108,7 +107,7 @@ export const AuditPage: React.FC = () => {
         { replace: true }
       );
     }
-  }, [searchParams, runVerifyById, setSearchParams]);
+  }, [searchParams, openVerifyPanel, setSearchParams]);
 
   const recentLoanIds = useMemo(() => {
     const uniqueIds: number[] = [];
@@ -117,13 +116,13 @@ export const AuditPage: React.FC = () => {
         uniqueIds.push(tx.request_id);
       }
     }
-    return uniqueIds.slice(0, 6);
+    return uniqueIds.sort((a, b) => b - a).slice(0, 6);
   }, [transactions]);
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
     const id = parseInt(verifyLoanId, 10);
-    await runVerifyById(id);
+    openVerifyPanel(id);
   };
 
   const handleRunReconcile = async () => {
@@ -151,15 +150,10 @@ export const AuditPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Kiểm toán Blockchain & Đối soát
-          </h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
-            Đối soát tính toàn vẹn giữa CSDL MySQL và sổ cái Blockchain.
-          </p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          Tra cứu lịch sử Blockchain
+        </h1>
 
         {role === 'ADMIN' && (
           <button
@@ -265,145 +259,85 @@ export const AuditPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Independent Verification Tool */}
-      <div
-        ref={verifySectionRef}
-        className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4"
-      >
-        <div>
-          <div className="flex items-center space-x-2">
-            <Search className="w-4 h-4 text-slate-700" />
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Đối soát dữ liệu đơn mượn
-            </h2>
-          </div>
-          <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            Nhập <strong>ID Đơn mượn</strong> (ví dụ <code>1</code>, <code>2</code>, <code>3</code>... xem ở cột <strong>Đơn mượn</strong> bên dưới, không phải số Block #) để so khớp MySQL và Smart Contract.
-          </p>
+      {/* Verification Tool (Opens Side Panel without layout shift) */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center space-x-2">
+          <Search className="w-4 h-4 text-slate-700" />
+          <h2 className="text-base font-bold text-slate-900 tracking-tight">
+            Kiểm tra đơn mượn
+          </h2>
         </div>
 
         <form onSubmit={handleVerify} className="flex items-center gap-3 max-w-md">
           <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold text-slate-500">
+            <label htmlFor="verify-loan-id" className="sr-only">
+              Mã số đơn mượn
+            </label>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold text-slate-600">
               Đơn #
             </span>
             <input
+              id="verify-loan-id"
               type="number"
               min="1"
               value={verifyLoanId}
               onChange={(e) => setVerifyLoanId(e.target.value)}
-              placeholder="VD: 2, 3, 4..."
+              placeholder="VD: 5, 4, 3..."
               required
-              className="w-full pl-14 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
+              className="w-full pl-14 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono tabular-nums"
             />
           </div>
           <button
             type="submit"
-            disabled={verifying}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
           >
-            <span>{verifying ? 'Đang so khớp...' : 'Đối soát ngay'}</span>
+            <span>Kiểm tra</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        {recentLoanIds.length > 0 && (
+        {myLoans.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-slate-500 font-medium mr-1">Chọn nhanh đơn có giao dịch:</span>
-            {recentLoanIds.map((loanId) => (
-              <button
-                key={loanId}
-                type="button"
-                onClick={() => runVerifyById(loanId)}
-                className={`px-2.5 py-1 rounded-md font-mono font-semibold border transition-colors cursor-pointer ${
-                  verifyResult?.loan_id === loanId || verifyLoanId === String(loanId)
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Đơn #{loanId}
-              </button>
-            ))}
+            <span className="text-slate-600 font-medium mr-1">Chọn nhanh:</span>
+            {myLoans.slice(0, 6).map((loan) => {
+              const isSelected = activeVerifyLoanId === loan.id;
+              return (
+                <button
+                  key={loan.id}
+                  type="button"
+                  onClick={() => openVerifyPanel(loan.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-mono font-bold">#{loan.id}</span> ·{' '}
+                  {loan.equipment?.name || `Thiết bị #${loan.equipment_id}`}
+                </button>
+              );
+            })}
           </div>
-        )}
-
-        {verifyError && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
-            {verifyError}
-          </div>
-        )}
-
-        {/* Verification Result Card */}
-        {verifyResult && (
-          <div
-            className={`p-4 rounded-xl border ${
-              verifyResult.is_synced
-                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900'
-                : 'bg-rose-50/60 border-rose-200 text-rose-900'
-            }`}
-          >
-            <div className="flex items-start space-x-3">
-              {verifyResult.is_synced ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-              ) : (
-                <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm">
-                    {verifyResult.is_synced
-                      ? 'ĐỒNG BỘ 100% - DỮ LIỆU TOÀN VẸN TUYỆT ĐỐI'
-                      : verifyResult.sync_status === 'NOT_ON_CHAIN'
-                      ? 'ĐƠN CHƯA GHI NHẬN TRÊN BLOCKCHAIN'
-                      : verifyResult.sync_status === 'MISSING_ON_CHAIN'
-                      ? 'CHƯA TÌM THẤY BẢN GHI ON-CHAIN'
-                      : verifyResult.sync_status === 'RPC_OFFLINE'
-                      ? 'NODE BLOCKCHAIN OFFLINE / SAI MẠNG'
-                      : 'PHÁT HIỆN SAI LỆCH DỮ LIỆU GIỮA MYSQL VÀ BLOCKCHAIN'}
-                  </h3>
-                  <span className="text-xs font-mono opacity-80">
-                    {verifyResult.on_chain_loan_id
-                      ? `Hash: ${formatShortAddress(verifyResult.on_chain_loan_id)}`
-                      : verifyResult.sync_status || 'NOT_ON_CHAIN'}
-                  </span>
-                </div>
-
-                {!verifyResult.is_synced && (
-                  <div className="p-2.5 bg-white/80 rounded-lg border border-rose-200 text-xs">
-                    <p className="font-semibold text-rose-700">Các trường sai lệch:</p>
-                    <ul className="list-disc list-inside mt-1 font-mono text-xs">
-                      {verifyResult.mismatches.map((m, i) => (
-                        <li key={i}>{m}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Side by side state viewer */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
-                  <div className="p-3 bg-white/90 rounded-lg border border-slate-200 shadow-xs">
-                    <div className="flex items-center space-x-1.5 font-bold text-slate-800 border-b border-slate-100 pb-1 mb-2">
-                      <Database className="w-3.5 h-3.5 text-slate-700" />
-                      <span>Dữ liệu MySQL (Off-chain)</span>
-                    </div>
-                    <pre className="text-xs font-mono text-slate-700 overflow-x-auto leading-relaxed">
-                      {JSON.stringify(verifyResult.mysql_state, null, 2)}
-                    </pre>
-                  </div>
-
-                  <div className="p-3 bg-white/90 rounded-lg border border-slate-200 shadow-xs">
-                    <div className="flex items-center space-x-1.5 font-bold text-slate-800 border-b border-slate-100 pb-1 mb-2">
-                      <Activity className="w-3.5 h-3.5 text-slate-700" />
-                      <span>Dữ liệu trên Smart Contract</span>
-                    </div>
-                    <pre className="text-xs font-mono text-slate-700 overflow-x-auto leading-relaxed">
-                      {JSON.stringify(verifyResult.blockchain_state, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </div>
+        ) : (
+          recentLoanIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-slate-600 font-medium mr-1">Chọn nhanh:</span>
+              {recentLoanIds.map((loanId) => (
+                <button
+                  key={loanId}
+                  type="button"
+                  onClick={() => openVerifyPanel(loanId)}
+                  className={`px-2.5 py-1 rounded-md font-mono font-semibold border transition-colors cursor-pointer ${
+                    activeVerifyLoanId === loanId
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Đơn #{loanId}
+                </button>
+              ))}
             </div>
-          </div>
+          )
         )}
       </div>
 
@@ -448,17 +382,14 @@ export const AuditPage: React.FC = () => {
                       {tx.request_id ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            runVerifyById(tx.request_id as number);
-                            verifySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }}
+                          onClick={() => openVerifyPanel(tx.request_id as number)}
                           className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-semibold text-xs cursor-pointer"
                           title={`Bấm để đối soát Đơn #${tx.request_id}`}
                         >
                           Đơn #{tx.request_id}
                         </button>
                       ) : (
-                        <span className="text-slate-400">--</span>
+                        <span className="text-slate-500">--</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-slate-900 font-semibold" title={tx.tx_hash}>
@@ -467,7 +398,7 @@ export const AuditPage: React.FC = () => {
                           href={getExplorerTxUrl(tx.tx_hash)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                          className="text-indigo-700 hover:text-indigo-900 hover:underline"
                           title="Xem trên Sepolia Etherscan"
                         >
                           {formatShortAddress(tx.tx_hash)} ↗
@@ -479,10 +410,10 @@ export const AuditPage: React.FC = () => {
                     <td className="py-3 px-4 font-sans font-semibold text-slate-900">
                       {tx.action_type}
                     </td>
-                    <td className="py-3 px-4 text-slate-700">
+                    <td className="py-3 px-4 text-slate-700 tabular-nums">
                       {tx.block_number ? `#${tx.block_number}` : '--'}
                     </td>
-                    <td className="py-3 px-4 text-slate-600">
+                    <td className="py-3 px-4 text-slate-600 tabular-nums">
                       {tx.gas_used ? tx.gas_used.toLocaleString('vi-VN') : '--'}
                     </td>
                     <td className="py-3 px-4 font-sans">
@@ -513,6 +444,12 @@ export const AuditPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <LoanVerifyPanel
+        loanId={activeVerifyLoanId}
+        onClose={() => setActiveVerifyLoanId(null)}
+        showAuditLink={false}
+      />
     </div>
   );
 };

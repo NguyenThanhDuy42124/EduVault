@@ -2,8 +2,8 @@ import React from 'react';
 
 export const CardSkeleton: React.FC = () => {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 p-5 space-y-4 animate-pulse">
-      <div className="w-full h-40 bg-slate-100 rounded-xl" />
+    <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 animate-pulse">
+      <div className="w-full aspect-[4/3] bg-slate-100 rounded-lg" />
       <div className="space-y-2">
         <div className="h-4 bg-slate-100 rounded w-3/4" />
         <div className="h-3 bg-slate-100 rounded w-1/2" />
@@ -18,8 +18,8 @@ export const CardSkeleton: React.FC = () => {
 
 export const TableSkeleton: React.FC<{ rows?: number }> = ({ rows = 4 }) => {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden animate-pulse">
-      <div className="h-12 bg-slate-50 border-b border-slate-200/60" />
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden animate-pulse">
+      <div className="h-11 bg-slate-50 border-b border-slate-200" />
       <div className="divide-y divide-slate-100">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="p-4 flex items-center justify-between space-x-4">

@@ -13,88 +13,88 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   // Equipment Statuses
   AVAILABLE: {
     label: 'Sẵn sàng',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
   RESERVED: {
     label: 'Đã giữ chỗ',
-    className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+    className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   IN_USE: {
     label: 'Đang sử dụng',
-    className: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
+    className: 'bg-indigo-50 text-indigo-800 border-indigo-200',
   },
   MAINTENANCE: {
     label: 'Bảo trì',
-    className: 'bg-rose-50 text-rose-700 border-rose-200/60',
+    className: 'bg-rose-50 text-rose-800 border-rose-200',
   },
   RETIRED: {
     label: 'Ngừng cấp phát',
-    className: 'bg-slate-100 text-slate-600 border-slate-200',
+    className: 'bg-slate-100 text-slate-700 border-slate-200',
   },
 
   // Loan Statuses
   PENDING: {
     label: 'Chờ duyệt',
-    className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+    className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   APPROVED: {
     label: 'Đã duyệt',
-    className: 'bg-sky-50 text-sky-700 border-sky-200/60',
+    className: 'bg-sky-50 text-sky-800 border-sky-200',
   },
   ACTIVE: {
     label: 'Đang mượn',
-    className: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
+    className: 'bg-indigo-50 text-indigo-800 border-indigo-200',
   },
   RETURNED: {
     label: 'Đã hoàn tất',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
   REJECTED: {
     label: 'Từ chối',
-    className: 'bg-slate-100 text-slate-600 border-slate-200',
+    className: 'bg-slate-100 text-slate-700 border-slate-200',
   },
   CANCELLED: {
     label: 'Đã hủy',
-    className: 'bg-slate-100 text-slate-600 border-slate-200',
+    className: 'bg-slate-100 text-slate-700 border-slate-200',
   },
   DISPUTED: {
     label: 'Tranh chấp / Phạt',
-    className: 'bg-rose-50 text-rose-700 border-rose-200/60',
+    className: 'bg-rose-50 text-rose-800 border-rose-200',
   },
 
   // Deposit Statuses
   LOCKED: {
     label: 'Đang khóa cọc',
-    className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+    className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   REFUNDED: {
     label: 'Đã hoàn cọc',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
   FORFEITED: {
     label: 'Thu hồi cọc',
-    className: 'bg-rose-50 text-rose-700 border-rose-200/60',
+    className: 'bg-rose-50 text-rose-800 border-rose-200',
   },
 
   // Return Conditions
   GOOD: {
     label: 'Nguyên vẹn',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
   DAMAGED: {
     label: 'Hư hỏng',
-    className: 'bg-rose-50 text-rose-700 border-rose-200/60',
+    className: 'bg-rose-50 text-rose-800 border-rose-200',
   },
   LOST: {
     label: 'Mất thiết bị',
-    className: 'bg-rose-100 text-rose-800 border-rose-300',
+    className: 'bg-rose-100 text-rose-900 border-rose-300',
   },
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', type = 'general' }) => {
   let config = statusConfig[status] || {
     label: status,
-    className: 'bg-slate-50 text-slate-700 border-slate-200',
+    className: 'bg-slate-100 text-slate-700 border-slate-200',
   };
 
   // Dedicated labels when badge is used for deposit context
@@ -102,12 +102,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', t
     if (status === 'PENDING') {
       config = {
         label: 'Chờ khóa cọc',
-        className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+        className: 'bg-amber-50 text-amber-800 border-amber-200',
       };
     } else if (status === 'CANCELLED') {
       config = {
         label: 'Đã hoàn cọc',
-        className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+        className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
       };
     }
   }

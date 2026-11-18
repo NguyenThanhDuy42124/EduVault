@@ -75,9 +75,6 @@ export const BorrowerRoleSection: React.FC<BorrowerRoleSectionProps> = ({
     <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
       <div className="border-b border-slate-100 pb-3">
         <h2 className="text-base font-bold text-slate-900">Cấp quyền mượn cho sinh viên</h2>
-        <p className="text-xs text-slate-500 mt-1">
-          Quản trị viên cấp quyền giao dịch Smart Contract cho sinh viên đã xác minh ví để tạo đơn mượn.
-        </p>
       </div>
 
       {!isAdmin && (

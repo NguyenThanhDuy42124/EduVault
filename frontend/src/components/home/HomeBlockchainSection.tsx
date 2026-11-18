@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Activity, ArrowRight, ExternalLink } from 'lucide-react';
 import { auditService } from '../../services/auditService';
 import { blockchainService } from '../../services/blockchainService';
+import { LoanVerifyPanel } from '../LoanVerifyPanel';
 import {
   CONTRACT_ADDRESS,
   getExplorerAddressUrl,
@@ -24,6 +25,7 @@ export const HomeBlockchainSection: React.FC = memo(() => {
   const [transactions, setTransactions] = useState<BlockchainTx[]>([]);
   const [txLoading, setTxLoading] = useState(true);
   const [statusLoading, setStatusLoading] = useState(true);
+  const [verifyLoanId, setVerifyLoanId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,17 +67,12 @@ export const HomeBlockchainSection: React.FC = memo(() => {
       className="space-y-4 pt-2"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2
-            id="home-blockchain-heading"
-            className="text-xl font-bold text-slate-900 tracking-tight"
-          >
-            Hoạt động Blockchain gần đây
-          </h2>
-          <p className="text-xs text-slate-600 mt-0.5">
-            5 giao dịch mới nhất từ Smart Contract. Bấm mã đơn để đối soát chi tiết giữa MySQL và Blockchain.
-          </p>
-        </div>
+        <h2
+          id="home-blockchain-heading"
+          className="text-xl font-bold text-slate-900 tracking-tight"
+        >
+          Hoạt động Blockchain gần đây
+        </h2>
 
         <Link
           to="/audit"
@@ -166,14 +163,16 @@ export const HomeBlockchainSection: React.FC = memo(() => {
                   <tr key={tx.id} className="hover:bg-slate-50/70">
                     <td className="py-2.5 px-4">
                       {tx.request_id ? (
-                        <Link
-                          to={`/audit?loan=${tx.request_id}`}
-                          className="inline-block px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-semibold text-xs"
+                        <button
+                          type="button"
+                          onClick={() => setVerifyLoanId(tx.request_id as number)}
+                          className="inline-block px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-semibold text-xs cursor-pointer"
+                          title={`Kiểm tra Đơn #${tx.request_id}`}
                         >
                           Đơn #{tx.request_id}
-                        </Link>
+                        </button>
                       ) : (
-                        <span className="text-slate-400">--</span>
+                        <span className="text-slate-500">--</span>
                       )}
                     </td>
                     <td className="py-2.5 px-4 text-slate-800" title={tx.tx_hash}>
@@ -225,6 +224,8 @@ export const HomeBlockchainSection: React.FC = memo(() => {
           </div>
         )}
       </div>
+
+      <LoanVerifyPanel loanId={verifyLoanId} onClose={() => setVerifyLoanId(null)} />
     </section>
   );
 });

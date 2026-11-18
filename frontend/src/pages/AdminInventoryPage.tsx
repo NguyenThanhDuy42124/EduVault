@@ -4,6 +4,7 @@ import { equipmentService } from '../services/equipmentService';
 import { Equipment, EquipmentCreateRequest, EquipmentUpdateRequest, EquipmentStatus } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { TableSkeleton } from '../components/LoadingSkeleton';
+import { Pagination } from '../components/Pagination';
 import { Modal } from '../components/Modal';
 import {
   Plus,
@@ -16,11 +17,79 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 
+const DEFAULT_CATEGORY_OPTIONS = [
+  'LAPTOP',
+  'TABLET',
+  'PROJECTOR',
+  'LAB_TOOL',
+  'EMBEDDED_KIT',
+];
+
+const CUSTOM_CATEGORY_VALUE = '__CUSTOM__';
+
+interface CategorySelectorProps {
+  idPrefix: string;
+  value: string;
+  customValue: string;
+  options: string[];
+  onChange: (value: string) => void;
+  onCustomChange: (value: string) => void;
+}
+
+const CategorySelector: React.FC<CategorySelectorProps> = ({
+  idPrefix,
+  value,
+  customValue,
+  options,
+  onChange,
+  onCustomChange,
+}) => (
+  <div className="space-y-2">
+    <select
+      id={`${idPrefix}-category`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-semibold text-slate-900 cursor-pointer"
+    >
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+      <option value={CUSTOM_CATEGORY_VALUE}>+ Thêm danh mục mới...</option>
+    </select>
+
+    {value === CUSTOM_CATEGORY_VALUE && (
+      <div>
+        <label htmlFor={`${idPrefix}-custom-category`} className="sr-only">
+          Tên danh mục mới
+        </label>
+        <input
+          id={`${idPrefix}-custom-category`}
+          type="text"
+          value={customValue}
+          onChange={(e) => onCustomChange(e.target.value)}
+          placeholder="Nhập danh mục (VD: CAMERA...)"
+          required
+          className="w-full px-3 py-2 text-xs border border-indigo-300 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 uppercase placeholder:normal-case"
+        />
+      </div>
+    )}
+  </div>
+);
+
 const PRESET_EQUIPMENT_IMAGES = [
   { label: 'MacBook Pro', url: '/images/equipment/macbook-pro.jpg' },
   { label: 'Dell XPS', url: '/images/equipment/dell-xps.jpg' },
+  { label: 'ThinkPad X1', url: '/images/equipment/thinkpad-x1.jpg' },
+  { label: 'ASUS ROG G14', url: '/images/equipment/asus-rog-g14.jpg' },
   { label: 'iPad Pro', url: '/images/equipment/ipad-pro.jpg' },
+  { label: 'Galaxy Tab S9', url: '/images/equipment/galaxy-tab-s9.jpg' },
+  { label: 'iPad Air', url: '/images/equipment/ipad-air.jpg' },
+  { label: 'Xiaomi Pad 6', url: '/images/equipment/xiaomi-pad-6.jpg' },
   { label: 'Máy chiếu Sony', url: '/images/equipment/sony-projector.jpg' },
+  { label: 'Máy chiếu Epson', url: '/images/equipment/epson-eb-e01.jpg' },
+  { label: 'ViewSonic DLP', url: '/images/equipment/viewsonic-pa503w.jpg' },
   { label: 'Máy đo Rigol', url: '/images/equipment/rigol-oscilloscope.jpg' },
   { label: 'Kính hiển vi', url: '/images/equipment/andonstar-microscope.jpg' },
   { label: 'Kit STM32', url: '/images/equipment/stm32-kit.jpg' },
@@ -33,14 +102,17 @@ export const AdminInventoryPage: React.FC = () => {
   const handledEditParamRef = useRef<string | null>(null);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const ITEMS_PER_PAGE = 8;
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Add Modal State
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newSerial, setNewSerial] = useState('');
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('LAPTOP');
+  const [newCustomCategory, setNewCustomCategory] = useState('');
   const [newSpecs, setNewSpecs] = useState('');
   const [newDeposit, setNewDeposit] = useState('500000');
   const [newImageUrl, setNewImageUrl] = useState('');
@@ -48,6 +120,8 @@ export const AdminInventoryPage: React.FC = () => {
   // Edit Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Equipment | null>(null);
+  const [editCategory, setEditCategory] = useState('LAPTOP');
+  const [editCustomCategory, setEditCustomCategory] = useState('');
   const [editStatus, setEditStatus] = useState<EquipmentStatus>('AVAILABLE');
   const [editSpecs, setEditSpecs] = useState('');
   const [editDeposit, setEditDeposit] = useState('0');
@@ -62,7 +136,7 @@ export const AdminInventoryPage: React.FC = () => {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      const data = await equipmentService.getAll();
+      const data = await equipmentService.getAll({ limit: 100 });
       setEquipmentList(data);
     } catch {
       // Silently handled
@@ -113,6 +187,14 @@ export const AdminInventoryPage: React.FC = () => {
     return ['ALL', ...Array.from(set)];
   }, [equipmentList]);
 
+  const categorySelectOptions = useMemo(() => {
+    const set = new Set<string>(DEFAULT_CATEGORY_OPTIONS);
+    for (const item of equipmentList) {
+      if (item.category) set.add(item.category.toUpperCase());
+    }
+    return Array.from(set);
+  }, [equipmentList]);
+
   const filteredItems = useMemo(() => {
     return equipmentList.filter((item) => {
       const matchSearch =
@@ -125,10 +207,22 @@ export const AdminInventoryPage: React.FC = () => {
     });
   }, [equipmentList, search, selectedCategory]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCategory]);
+
+  const paginatedItems = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
   const handleOpenAdd = () => {
     setNewSerial(`EQ-${Date.now().toString().slice(-6)}`);
     setNewName('');
-    setNewCategory('LAPTOP');
+    setNewCategory(categorySelectOptions[0] || 'LAPTOP');
+    setNewCustomCategory('');
     setNewSpecs('');
     setNewDeposit('500000');
     setNewImageUrl('');
@@ -156,6 +250,17 @@ export const AdminInventoryPage: React.FC = () => {
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const resolvedCategory = (
+      newCategory === CUSTOM_CATEGORY_VALUE ? newCustomCategory : newCategory
+    )
+      .trim()
+      .toUpperCase();
+
+    if (!resolvedCategory) {
+      setActionError('Vui lòng chọn hoặc nhập tên danh mục thiết bị.');
+      return;
+    }
+
     if (!newImageUrl.trim()) {
       setActionError('Thiết bị mới bắt buộc phải có hình ảnh minh họa (chọn ảnh hoặc tải file lên).');
       return;
@@ -167,7 +272,7 @@ export const AdminInventoryPage: React.FC = () => {
       const payload: EquipmentCreateRequest = {
         serial_number: newSerial.trim(),
         name: newName.trim(),
-        category: newCategory.trim().toUpperCase(),
+        category: resolvedCategory,
         specifications: newSpecs.trim() || undefined,
         deposit_amount: parseFloat(newDeposit) || 0,
         status: 'AVAILABLE',
@@ -186,6 +291,8 @@ export const AdminInventoryPage: React.FC = () => {
 
   const handleOpenEdit = (item: Equipment) => {
     setEditingItem(item);
+    setEditCategory(item.category.toUpperCase());
+    setEditCustomCategory('');
     setEditStatus(item.status);
     setEditSpecs(item.specifications || '');
     setEditDeposit(item.deposit_amount.toString());
@@ -198,10 +305,22 @@ export const AdminInventoryPage: React.FC = () => {
     e.preventDefault();
     if (!editingItem) return;
 
+    const resolvedCategory = (
+      editCategory === CUSTOM_CATEGORY_VALUE ? editCustomCategory : editCategory
+    )
+      .trim()
+      .toUpperCase();
+
+    if (!resolvedCategory) {
+      setActionError('Vui lòng chọn hoặc nhập tên danh mục thiết bị.');
+      return;
+    }
+
     setSubmitting(true);
     setActionError(null);
     try {
       const payload: EquipmentUpdateRequest = {
+        category: resolvedCategory,
         status: editStatus,
         specifications: editSpecs.trim() || undefined,
         deposit_amount: parseFloat(editDeposit) || 0,
@@ -242,15 +361,10 @@ export const AdminInventoryPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Quản trị kho thiết bị
-          </h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Đăng ký thiết bị đào tạo mới, cập nhật định mức tiền cọc mô phỏng (VNĐ) và trạng thái bảo trì
-          </p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          Quản trị kho thiết bị
+        </h1>
 
         <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <div className="px-3.5 py-2 bg-white border border-slate-200 rounded-lg shadow-xs flex items-center space-x-2">
@@ -296,26 +410,31 @@ export const AdminInventoryPage: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <label htmlFor="inventory-search" className="sr-only">
+            Tìm kiếm thiết bị trong kho
+          </label>
           <input
+            id="inventory-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo tên máy, số serial..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-lg bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-colors"
           />
         </div>
 
-        <div className="flex items-center space-x-1 overflow-x-auto">
+        <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none">
           {categories.map((cat) => (
             <button
               key={cat}
+              type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-xl whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-slate-900 text-white'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
@@ -329,7 +448,7 @@ export const AdminInventoryPage: React.FC = () => {
       {loading ? (
         <TableSkeleton rows={5} />
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-xs tracking-wider">
@@ -338,15 +457,15 @@ export const AdminInventoryPage: React.FC = () => {
                   <th className="py-3 px-4">Serial Number</th>
                   <th className="py-3 px-4">Tên thiết bị</th>
                   <th className="py-3 px-4">Danh mục</th>
-                  <th className="py-3 px-4">Định mức tiền cọc mô phỏng (VNĐ)</th>
+                  <th className="py-3 px-4">Tiền cọc cần đóng (VNĐ)</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Tùy chọn</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredItems.map((item) => (
+                {paginatedItems.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-4 font-mono text-slate-400">#{item.id}</td>
+                    <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">#{item.id}</td>
                     <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                       {item.serial_number}
                     </td>
@@ -360,12 +479,12 @@ export const AdminInventoryPage: React.FC = () => {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <ImageIcon className="w-4 h-4 text-slate-400" />
+                            <ImageIcon className="w-4 h-4 text-slate-500" aria-hidden="true" />
                           )}
                         </div>
                         <div className="min-w-0">
                           <span className="font-semibold text-slate-900 block">{item.name}</span>
-                          <span className="text-xs text-slate-500 block truncate max-w-xs mt-0.5">
+                          <span className="text-xs text-slate-600 block truncate max-w-xs mt-0.5">
                             {item.specifications || '--'}
                           </span>
                         </div>
@@ -376,7 +495,7 @@ export const AdminInventoryPage: React.FC = () => {
                         {item.category}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900 tabular-nums">
                       {Number(item.deposit_amount).toLocaleString('vi-VN')} đ
                     </td>
                     <td className="py-3 px-4">
@@ -385,18 +504,22 @@ export const AdminInventoryPage: React.FC = () => {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1">
                         <button
+                          type="button"
                           onClick={() => handleOpenEdit(item)}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-2 text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                           title="Sửa thông số & trạng thái"
+                          aria-label={`Sửa thiết bị ${item.name}`}
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          className="p-2 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="Xóa thiết bị"
+                          aria-label={`Xóa thiết bị ${item.name}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                       </div>
                     </td>
@@ -404,6 +527,14 @@ export const AdminInventoryPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredItems.length}
+              pageSize={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+            />
           </div>
         </div>
       )}
@@ -413,87 +544,92 @@ export const AdminInventoryPage: React.FC = () => {
         isOpen={addModalOpen}
         onClose={() => !submitting && setAddModalOpen(false)}
         title="Thêm thiết bị mới vào kho"
-        subtitle="Khai báo thiết bị thực hành và thiết lập định mức tiền cọc mô phỏng (VNĐ)"
         maxWidth="lg"
       >
         <form onSubmit={handleAddSubmit} className="space-y-4">
           {actionError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
               {actionError}
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="add-serial" className="block text-xs font-semibold text-slate-700 mb-1">
                 Số Serial / Mã định danh
               </label>
               <input
+                id="add-serial"
                 type="text"
                 value={newSerial}
                 onChange={(e) => setNewSerial(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="add-category" className="block text-xs font-semibold text-slate-700 mb-1">
                 Danh mục thiết bị
               </label>
-              <input
-                type="text"
+              <CategorySelector
+                idPrefix="add"
                 value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="LAPTOP, CAMERA, PROJECTOR..."
-                required
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+                customValue={newCustomCategory}
+                options={categorySelectOptions}
+                onChange={setNewCategory}
+                onCustomChange={setNewCustomCategory}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Tên thiết bị</label>
+            <label htmlFor="add-name" className="block text-xs font-semibold text-slate-700 mb-1">
+              Tên thiết bị
+            </label>
             <input
+              id="add-name"
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Ví dụ: Laptop Dell XPS 15 (Core i7, 32GB RAM)"
               required
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Định mức tiền cọc mô phỏng (VNĐ)
+            <label htmlFor="add-deposit" className="block text-xs font-semibold text-slate-700 mb-1">
+              Tiền cọc cần đóng (VNĐ)
             </label>
             <input
+              id="add-deposit"
               type="number"
               min="0"
               step="50000"
               value={newDeposit}
               onChange={(e) => setNewDeposit(e.target.value)}
               required
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono tabular-nums"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="add-image-url" className="block text-xs font-semibold text-slate-700 mb-1">
               Hình ảnh minh họa thiết bị <span className="text-rose-600">*</span>
             </label>
             <div className="space-y-2.5">
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
+                  id="add-image-url"
                   type="text"
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
                   placeholder="/images/equipment/macbook-pro.jpg hoặc URL ảnh..."
                   required
-                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  className="flex-1 px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono"
                 />
-                <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer shrink-0">
-                  <Upload className="w-3.5 h-3.5" />
+                <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer shrink-0 transition-colors">
+                  <Upload className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{uploadingImage ? 'Đang tải...' : 'Tải ảnh từ máy'}</span>
                   <input
                     type="file"
@@ -525,7 +661,7 @@ export const AdminInventoryPage: React.FC = () => {
               </div>
 
               {newImageUrl.trim() && (
-                <div className="h-28 w-full rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                <div className="h-28 w-full rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
                   <img
                     src={newImageUrl.trim()}
                     alt="Xem trước ảnh thiết bị"
@@ -537,31 +673,32 @@ export const AdminInventoryPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="add-specs" className="block text-xs font-semibold text-slate-700 mb-1">
               Thông số kỹ thuật / Phụ kiện kèm theo
             </label>
             <textarea
+              id="add-specs"
               rows={2}
               value={newSpecs}
               onChange={(e) => setNewSpecs(e.target.value)}
               placeholder="Ghi rõ cấu hình, phụ kiện cáp sạc, adapter..."
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setAddModalOpen(false)}
               disabled={submitting}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Đang lưu...' : 'Thêm thiết bị'}
             </button>
@@ -579,19 +716,34 @@ export const AdminInventoryPage: React.FC = () => {
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           {actionError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
               {actionError}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="edit-category" className="block text-xs font-semibold text-slate-700 mb-1">
+              Danh mục thiết bị
+            </label>
+            <CategorySelector
+              idPrefix="edit"
+              value={editCategory}
+              customValue={editCustomCategory}
+              options={categorySelectOptions}
+              onChange={setEditCategory}
+              onCustomChange={setEditCustomCategory}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="edit-status" className="block text-xs font-semibold text-slate-700 mb-1">
               Trạng thái khả dụng
             </label>
             <select
+              id="edit-status"
               value={editStatus}
               onChange={(e) => setEditStatus(e.target.value as EquipmentStatus)}
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 cursor-pointer"
             >
               <option value="AVAILABLE">Sẵn sàng (AVAILABLE)</option>
               <option value="RESERVED">Đã giữ chỗ (RESERVED)</option>
@@ -602,34 +754,36 @@ export const AdminInventoryPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Định mức tiền cọc mô phỏng (VNĐ)
+            <label htmlFor="edit-deposit" className="block text-xs font-semibold text-slate-700 mb-1">
+              Tiền cọc cần đóng (VNĐ)
             </label>
             <input
+              id="edit-deposit"
               type="number"
               min="0"
               step="50000"
               value={editDeposit}
               onChange={(e) => setEditDeposit(e.target.value)}
               required
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono tabular-nums"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="edit-image-url" className="block text-xs font-semibold text-slate-700 mb-1">
               Hình ảnh minh họa
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
+                id="edit-image-url"
                 type="text"
                 value={editImageUrl}
                 onChange={(e) => setEditImageUrl(e.target.value)}
                 placeholder="/images/equipment/..."
-                className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                className="flex-1 px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono"
               />
-              <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer shrink-0">
-                <Upload className="w-3.5 h-3.5" />
+              <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer shrink-0 transition-colors">
+                <Upload className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{uploadingImage ? 'Đang tải...' : 'Đổi ảnh'}</span>
                 <input
                   type="file"
@@ -645,30 +799,31 @@ export const AdminInventoryPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="edit-specs" className="block text-xs font-semibold text-slate-700 mb-1">
               Thông số kỹ thuật
             </label>
             <textarea
+              id="edit-specs"
               rows={2}
               value={editSpecs}
               onChange={(e) => setEditSpecs(e.target.value)}
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={() => setEditModalOpen(false)}
               disabled={submitting}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Đang cập nhật...' : 'Lưu thay đổi'}
             </button>

@@ -59,7 +59,7 @@ export const AdminRolesPage: React.FC = () => {
       });
       setCreateMsg({
         type: 'success',
-        text: `Đã tạo tài khoản ${created.role} (${created.email}) thành công trong CSDL MySQL.`,
+        text: `Đã tạo tài khoản ${created.role} (${created.email}) thành công trên hệ thống.`,
       });
       setNewStudentId('');
       setNewFullName('');
@@ -79,13 +79,8 @@ export const AdminRolesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Phân quyền Smart Contract</h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-xl leading-relaxed">
-            Cấp quyền giao dịch trên Smart Contract và quản lý tài khoản quản trị viên / sinh viên.
-          </p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Phân quyền Smart Contract</h1>
 
         <button
           type="button"
@@ -99,35 +94,35 @@ export const AdminRolesPage: React.FC = () => {
       {/* Role badges overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200">
-          <span className="text-xs font-medium text-slate-500 block">Ví đang kết nối</span>
-          <span className="text-xs font-mono font-bold text-slate-900 truncate block mt-1" title={account || ''}>
+          <span className="text-xs font-medium text-slate-600 block">Ví đang kết nối</span>
+          <span className="text-xs font-mono font-bold text-slate-900 truncate block mt-1 tabular-nums" title={account || ''}>
             {account ? `${account.slice(0, 10)}...${account.slice(-8)}` : 'Chưa kết nối'}
           </span>
-          <span className="text-[11px] text-slate-400 block mt-0.5">Mạng: {TARGET_CHAIN_NAME}</span>
+          <span className="text-xs text-slate-600 block mt-0.5">Mạng: {TARGET_CHAIN_NAME}</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200">
-          <span className="text-xs font-medium text-slate-500 block">Quyền Deployer</span>
+          <span className="text-xs font-medium text-slate-600 block">Quyền Deployer</span>
           <span
             className={`text-sm font-bold block mt-1 ${
-              isDeployer ? 'text-emerald-600' : 'text-slate-400'
+              isDeployer ? 'text-emerald-700' : 'text-slate-600'
             }`}
           >
             {isDeployer ? 'Đã xác nhận (Deployer)' : 'Không phải Deployer'}
           </span>
-          <span className="text-[11px] text-slate-400 block mt-0.5">Quản lý danh sách Admin</span>
+          <span className="text-xs text-slate-600 block mt-0.5">Quản lý danh sách Admin</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200">
-          <span className="text-xs font-medium text-slate-500 block">Quyền Admin Phòng Lab</span>
+          <span className="text-xs font-medium text-slate-600 block">Quyền Admin Phòng Lab</span>
           <span
             className={`text-sm font-bold block mt-1 ${
-              isAdmin ? 'text-indigo-600' : 'text-slate-400'
+              isAdmin ? 'text-indigo-700' : 'text-slate-600'
             }`}
           >
             {isAdmin ? 'Đã có quyền Admin' : 'Chưa có quyền Admin'}
           </span>
-          <span className="text-[11px] text-slate-400 block mt-0.5">Duyệt, bàn giao & cấp quyền SV</span>
+          <span className="text-xs text-slate-600 block mt-0.5">Duyệt, bàn giao & cấp quyền SV</span>
         </div>
       </div>
 
@@ -166,9 +161,6 @@ export const AdminRolesPage: React.FC = () => {
           <h2 className="text-base font-bold text-slate-900">
             Tạo tài khoản đăng nhập mới
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Tạo tài khoản trong CSDL (kèm tùy chọn gán ví MetaMask). Nếu cấp vai trò Quản trị viên, cần thêm ví đó vào mục Quản trị viên hệ thống phía trên để duyệt đơn on-chain.
-          </p>
         </div>
 
         {createMsg && (
@@ -268,7 +260,7 @@ export const AdminRolesPage: React.FC = () => {
               disabled={creatingAccount}
               className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              {creatingAccount ? 'Đang tạo...' : 'Tạo tài khoản trong MySQL'}
+              {creatingAccount ? 'Đang tạo...' : 'Tạo tài khoản'}
             </button>
           </div>
         </form>

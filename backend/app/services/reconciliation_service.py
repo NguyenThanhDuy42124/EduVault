@@ -148,7 +148,9 @@ def verify_loan_integrity(db: Session, loan_id: int) -> Dict[str, Any]:
         chain_borrower = str(blockchain_state.get("borrower", "")).lower()
         if loan.user:
             if not (loan.user.wallet_verified and loan.user.wallet_address):
-                mismatches.append("Tài khoản người mượn trong MySQL chưa xác minh địa chỉ ví MetaMask.")
+                mismatches.append(
+                    "Chủ tài khoản mượn chưa ký xác nhận quyền sở hữu ví MetaMask (chỉ cần khi người đó tạo đơn mới; ai cũng xem đơn được)."
+                )
             elif chain_borrower != loan.user.wallet_address.lower():
                 mismatches.append(
                     f"Lệch ví borrower: MySQL={loan.user.wallet_address}, On-chain={blockchain_state.get('borrower')}"

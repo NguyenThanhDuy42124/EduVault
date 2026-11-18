@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import { CardSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
+import { Pagination } from '../components/Pagination';
 import {
   Search,
   CheckCircle2,
@@ -54,8 +55,33 @@ export const EquipmentPage: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const ITEMS_PER_PAGE = 6;
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    () => searchParams.get('category')?.trim().toUpperCase() || 'ALL'
+  );
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const paramCat = searchParams.get('category')?.trim().toUpperCase() || 'ALL';
+    setSelectedCategory(paramCat);
+    setCurrentPage(1);
+    if (searchParams.get('category')) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [searchParams]);
+
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    setCurrentPage(1);
+    const next = new URLSearchParams(searchParams);
+    if (cat === 'ALL') {
+      next.delete('category');
+    } else {
+      next.set('category', cat);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   // Borrow Modal State
   const [borrowModalOpen, setBorrowModalOpen] = useState(false);
@@ -92,7 +118,7 @@ export const EquipmentPage: React.FC = () => {
   const fetchEquipment = async () => {
     setLoading(true);
     try {
-      const data = await equipmentService.getAll();
+      const data = await equipmentService.getAll({ limit: 100 });
       setEquipmentList(data);
     } catch {
       // Handled gracefully
@@ -125,6 +151,22 @@ export const EquipmentPage: React.FC = () => {
       return matchesSearch && matchesCat && matchesStat;
     });
   }, [equipmentList, search, selectedCategory, selectedStatus]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCategory, selectedStatus]);
+
+  const paginatedItems = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleOpenBorrowModal = useCallback((item: Equipment) => {
     setSelectedEquipment(item);
@@ -203,7 +245,7 @@ export const EquipmentPage: React.FC = () => {
     }
     setVerifyingWallet(true);
     setActionError(null);
-    setWeb3StatusMsg('Đang lấy thử thách xác minh ví (EIP-191)...');
+    setWeb3StatusMsg('Đang mở yêu cầu ký xác nhận chủ ví trên MetaMask (miễn phí)...');
     try {
       const challenge = await authService.requestWalletChallenge(account);
       setWeb3StatusMsg('Vui lòng ký thông điệp xác nhận chủ sở hữu ví trên MetaMask (không tốn phí gas)...');
@@ -271,7 +313,7 @@ export const EquipmentPage: React.FC = () => {
           return;
         }
         if (!account || !user.wallet_verified || !user.wallet_address || user.wallet_address.toLowerCase() !== account.toLowerCase()) {
-          setActionError('Vui lòng bấm "Liên kết & Xác minh ví MetaMask" khớp với tài khoản hiện tại trước khi ký giao dịch on-chain.');
+          setActionError('Vui lòng bấm nút "Xác minh ví" màu xanh ở khung trạng thái bên dưới để xác nhận ví thuộc về bạn trước khi tạo đơn.');
           setSubmitting(false);
           return;
         }
@@ -393,13 +435,8 @@ export const EquipmentPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Danh mục thiết bị</h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-md leading-relaxed">
-            Tra cứu cấu hình thiết bị và định mức tiền cọc mô phỏng (VNĐ).
-          </p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Danh mục thiết bị</h1>
 
         {/* Global Summary Badges + Admin Quick Inventory Actions */}
         <div className="flex flex-wrap items-center gap-2.5 text-xs">
@@ -446,8 +483,12 @@ export const EquipmentPage: React.FC = () => {
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
         {/* Search Input */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <label htmlFor="equipment-search" className="sr-only">
+            Tìm kiếm thiết bị
+          </label>
           <input
+            id="equipment-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -461,7 +502,7 @@ export const EquipmentPage: React.FC = () => {
           {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => handleSelectCategory(cat)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-slate-900 text-white shadow-xs'
@@ -508,13 +549,14 @@ export const EquipmentPage: React.FC = () => {
           actionText="Xóa bộ lọc tìm kiếm"
           onAction={() => {
             setSearch('');
-            setSelectedCategory('ALL');
+            handleSelectCategory('ALL');
             setSelectedStatus('ALL');
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredItems.map((item) => {
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paginatedItems.map((item) => {
             const isAvailable = item.status === 'AVAILABLE';
             const depositVND = Number(item.deposit_amount).toLocaleString('vi-VN');
 
@@ -525,12 +567,12 @@ export const EquipmentPage: React.FC = () => {
               >
                 <div>
                   {/* Product Image Frame */}
-                  <div className="relative w-full aspect-[16/10] bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100">
+                  <div className="relative w-full aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100">
                     {item.image_url ? (
                       <img
                         src={item.image_url}
                         alt={item.name}
-                        loading="lazy"
+                        loading="eager"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                           const fb = e.currentTarget.parentElement?.querySelector(
@@ -578,7 +620,7 @@ export const EquipmentPage: React.FC = () => {
                 <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
                   <div>
                     <span className="text-xs font-medium text-slate-600 block">
-                      Tiền cọc mô phỏng
+                      Tiền cọc cần đóng
                     </span>
                     <span className="text-base font-bold text-slate-900 font-mono">
                       {depositVND} đ
@@ -600,7 +642,7 @@ export const EquipmentPage: React.FC = () => {
                       className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] ${
                         isAvailable
                           ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer'
-                          : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                          : 'bg-slate-100 text-slate-500 cursor-not-allowed shadow-none'
                       }`}
                     >
                       {isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
@@ -610,10 +652,10 @@ export const EquipmentPage: React.FC = () => {
                       type="button"
                       onClick={() => handleOpenBorrowModal(item)}
                       disabled={!isAvailable}
-                      className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] cursor-pointer ${
+                      className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all shadow-xs active:scale-[0.98] ${
                         isAvailable
-                          ? 'bg-slate-900 text-white hover:bg-slate-800'
-                          : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                          ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer'
+                          : 'bg-slate-100 text-slate-500 cursor-not-allowed shadow-none'
                       }`}
                     >
                       {isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
@@ -647,6 +689,14 @@ export const EquipmentPage: React.FC = () => {
               </div>
             );
           })}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredItems.length}
+            pageSize={ITEMS_PER_PAGE}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
 
@@ -677,25 +727,25 @@ export const EquipmentPage: React.FC = () => {
             <div className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
               isConnected
                 ? !isCorrectNetwork
-                  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
                   : isWalletVerifiedMatching
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  : 'bg-amber-50 border-amber-200 text-amber-800'
-                : 'bg-orange-50 border-orange-200 text-orange-800'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
             }`}>
               <div className="flex flex-col space-y-0.5">
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold">Trạng thái Web3:</span>
+                  <span className="font-semibold">Trạng thái ví:</span>
                   <span>
                     {isConnected
                       ? !isCorrectNetwork
                         ? `Sai mạng (Chuyển sang ${TARGET_CHAIN_NAME} - ID ${TARGET_CHAIN_ID})`
                         : isWalletVerifiedMatching
-                        ? 'Đã xác minh ví MetaMask (Sẵn sàng ký On-chain)'
+                        ? 'Đã xác nhận chủ ví (Sẵn sàng gửi đơn)'
                         : isWalletBoundToDifferentAccount
-                        ? `Ví MetaMask khác với ví đã liên kết (${user?.wallet_address?.slice(0, 8)}...)`
-                        : 'Ví MetaMask chưa xác minh chữ ký EIP-191'
-                      : 'Chưa kết nối ví (Cần kết nối MetaMask để ký đơn mượn)'}
+                        ? `Ví đang chọn khác ví đã gắn với tài khoản (${user?.wallet_address?.slice(0, 8)}...)`
+                        : 'Chưa ký xác nhận quyền sở hữu ví (bấm nút bên cạnh, miễn phí)'
+                      : 'Chưa kết nối ví MetaMask'}
                   </span>
                 </div>
                 {hasPendingMinedTx && (
@@ -708,7 +758,7 @@ export const EquipmentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={connectWallet}
-                  className="px-2.5 py-1 bg-orange-600 text-white rounded font-semibold text-[11px] hover:bg-orange-700 cursor-pointer shrink-0"
+                  className="px-3 py-1.5 bg-slate-900 text-white rounded-md font-semibold text-xs hover:bg-slate-800 cursor-pointer shrink-0 transition-colors"
                 >
                   Kết nối ví
                 </button>
@@ -717,7 +767,7 @@ export const EquipmentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={switchNetwork}
-                  className="px-2.5 py-1 bg-amber-600 text-white rounded font-semibold text-[11px] hover:bg-amber-700 cursor-pointer shrink-0"
+                  className="px-3 py-1.5 bg-amber-700 text-white rounded-md font-semibold text-xs hover:bg-amber-800 cursor-pointer shrink-0 transition-colors"
                 >
                   Đổi mạng ({TARGET_CHAIN_ID})
                 </button>
@@ -727,7 +777,7 @@ export const EquipmentPage: React.FC = () => {
                   type="button"
                   onClick={handleVerifyWallet}
                   disabled={verifyingWallet}
-                  className="px-2.5 py-1 bg-indigo-600 text-white rounded font-semibold text-[11px] hover:bg-indigo-700 cursor-pointer disabled:opacity-50 shrink-0"
+                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md font-semibold text-xs hover:bg-indigo-700 cursor-pointer disabled:opacity-50 shrink-0 transition-colors"
                 >
                   {verifyingWallet ? 'Đang ký...' : 'Xác minh ví'}
                 </button>
@@ -735,7 +785,7 @@ export const EquipmentPage: React.FC = () => {
             </div>
 
             {web3StatusMsg && (
-              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 animate-pulse">
+              <div role="status" className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 font-medium">
                 {web3StatusMsg}
               </div>
             )}
@@ -743,8 +793,8 @@ export const EquipmentPage: React.FC = () => {
             {selectedEquipment && (
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-600 font-medium">Định mức tiền cọc mô phỏng (VNĐ):</span>
-                  <span className="font-mono font-bold text-slate-900">
+                  <span className="text-slate-600 font-medium">Tiền cọc cần đóng (VNĐ):</span>
+                  <span className="font-mono font-bold text-slate-900 tabular-nums">
                     {Number(selectedEquipment.deposit_amount).toLocaleString('vi-VN')} đ
                   </span>
                 </div>
@@ -759,56 +809,59 @@ export const EquipmentPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Thời gian nhận máy dự kiến <span className="text-rose-500">*</span>
+                <label htmlFor="borrow-expected-handover" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Thời gian nhận máy dự kiến <span className="text-rose-600">*</span>
                 </label>
                 <div className="relative rounded-lg shadow-xs">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Calendar className="w-4 h-4" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <Calendar className="w-4 h-4" aria-hidden="true" />
                   </div>
                   <input
+                    id="borrow-expected-handover"
                     type="datetime-local"
                     value={expectedHandover}
                     onChange={(e) => setExpectedHandover(e.target.value)}
                     required
-                    className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="block w-full pl-9 pr-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Hạn trả thiết bị quy định <span className="text-rose-500">*</span>
+                <label htmlFor="borrow-due-date" className="block text-xs font-semibold text-slate-700 mb-1">
+                  Hạn trả thiết bị quy định <span className="text-rose-600">*</span>
                 </label>
                 <div className="relative rounded-lg shadow-xs">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Calendar className="w-4 h-4" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <Calendar className="w-4 h-4" aria-hidden="true" />
                   </div>
                   <input
+                    id="borrow-due-date"
                     type="datetime-local"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                     required
-                    className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="block w-full pl-9 pr-3 py-2 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="borrow-notes" className="block text-xs font-semibold text-slate-700 mb-1">
                 Ghi chú mục đích sử dụng / Đề xuất thêm
               </label>
               <div className="relative rounded-lg shadow-xs">
-                <div className="absolute top-2.5 left-3 pointer-events-none text-slate-400">
-                  <FileText className="w-4 h-4" />
+                <div className="absolute top-2.5 left-3 pointer-events-none text-slate-500">
+                  <FileText className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <textarea
+                  id="borrow-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
                   placeholder="Ví dụ: Dùng thực hành môn Hệ nhúng, cần mượn thêm dây nạp ST-Link..."
-                  className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
+                  className="block w-full pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 resize-none"
                 />
               </div>
             </div>

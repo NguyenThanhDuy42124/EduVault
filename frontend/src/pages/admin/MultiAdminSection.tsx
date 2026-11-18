@@ -95,9 +95,6 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
     <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
       <div className="border-b border-slate-100 pb-3">
         <h2 className="text-base font-bold text-slate-900">Quản trị viên hệ thống</h2>
-        <p className="text-xs text-slate-500 mt-1">
-          Ví triển khai hợp đồng (Deployer) cấp hoặc thu hồi quyền duyệt đơn cho các quản trị viên khác.
-        </p>
       </div>
 
       {!isDeployer && (

@@ -2,24 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ev-bg: #f8fafc;
+  --ev-surface: #ffffff;
+  --ev-ink: #0f172a;
+  --ev-muted: #475569;
+  --ev-accent: #4f46e5;
+  --ev-accent-hover: #4338ca;
+  --ev-border: #e2e8f0;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
+    color-scheme: light;
   }
 
   body {
     @apply bg-slate-50 text-slate-900 font-sans;
+    background-color: var(--ev-bg);
+    color: var(--ev-ink);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   :focus-visible {
-    outline: 2px solid #4f46e5;
+    outline: 2px solid var(--ev-accent);
     outline-offset: 2px;
   }
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
