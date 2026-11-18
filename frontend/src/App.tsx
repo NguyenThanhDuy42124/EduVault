@@ -23,7 +23,6 @@ const AdminRolesPage = React.lazy(() =>
   import('./pages/AdminRolesPage').then((m) => ({ default: m.AdminRolesPage }))
 );
 const AuditPage = React.lazy(() => import('./pages/AuditPage'));
-const ShowcasePage = React.lazy(() => import('./pages/ShowcasePage'));
 
 const PageLoader: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center px-4">
@@ -106,27 +105,18 @@ export const App: React.FC = () => {
                 }
               />
 
+              {/* Public Blockchain Audit Explorer */}
               <Route
                 path="/audit"
                 element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <AuditPage />
-                    </Layout>
-                  </ProtectedRoute>
+                  <Layout>
+                    <AuditPage />
+                  </Layout>
                 }
               />
 
-              <Route
-                path="/overview"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <ShowcasePage />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
+              {/* Redirect legacy /overview to integrated Homepage */}
+              <Route path="/overview" element={<Navigate to="/" replace />} />
 
               {/* Catch-All Redirect */}
               <Route path="*" element={<Navigate to="/" replace />} />

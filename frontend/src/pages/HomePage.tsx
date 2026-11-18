@@ -2,42 +2,12 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { ArrowRight, ClipboardCheck, Laptop, ShieldCheck, UserPlus } from 'lucide-react';
+import { ArrowRight, ShieldCheck, UserPlus } from 'lucide-react';
+import { HomeBlockchainSection } from '../components/home/HomeBlockchainSection';
 import { HomeEquipmentSection } from '../components/home/HomeEquipmentSection';
 import { useAuth } from '../context/AuthContext';
 
 gsap.registerPlugin(useGSAP);
-
-interface IntroPoint {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const INTRO_POINTS: IntroPoint[] = [
-  {
-    id: 'tracking',
-    title: 'Theo dõi thiết bị rõ ràng',
-    description:
-      'Tra cứu nhanh tên máy, mã thiết bị, mức cọc mô phỏng và tình trạng sẵn sàng tại phòng lab.',
-    icon: Laptop,
-  },
-  {
-    id: 'transparent-flow',
-    title: 'Quy trình mượn trả minh bạch',
-    description:
-      'Đăng ký lịch nhận và trả máy trực tuyến, giảm trùng lịch và xác nhận rõ ràng ở mỗi khâu.',
-    icon: ClipboardCheck,
-  },
-  {
-    id: 'verifiable-history',
-    title: 'Lịch sử giao dịch có thể kiểm tra',
-    description:
-      'Mỗi đơn mượn trả gắn liền tài khoản xác thực và bản ghi đối chiếu trên Blockchain.',
-    icon: ShieldCheck,
-  },
-];
 
 export const HomePage: React.FC = () => {
   const { isAuthenticated, role } = useAuth();
@@ -70,7 +40,7 @@ export const HomePage: React.FC = () => {
   const loansTarget = role === 'ADMIN' ? '/admin/loans' : '/my-loans';
 
   return (
-    <div className="space-y-12 pb-6">
+    <div className="space-y-10 pb-6">
       {/* 1. Simple Editorial Hero */}
       <section
         ref={heroRef}
@@ -102,6 +72,14 @@ export const HomePage: React.FC = () => {
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </a>
 
+            <Link
+              to="/audit"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 text-sm font-semibold rounded-lg transition-colors"
+            >
+              <ShieldCheck className="w-4 h-4 text-indigo-700" aria-hidden="true" />
+              <span>Xem sổ cái Blockchain</span>
+            </Link>
+
             {isAuthenticated ? (
               <Link
                 to={loansTarget}
@@ -125,29 +103,8 @@ export const HomePage: React.FC = () => {
       {/* 2. Isolated Equipment Catalog Section */}
       <HomeEquipmentSection />
 
-      {/* 3. Concise 3-Point Introduction */}
-      <section aria-labelledby="home-intro-heading" className="space-y-5">
-        <div>
-          <h2 id="home-intro-heading" className="text-xl font-bold text-slate-900 tracking-tight">
-            EduVault mang lại gì cho sinh viên
-          </h2>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
-          {INTRO_POINTS.map((point) => {
-            const Icon = point.icon;
-            return (
-              <div key={point.id} className="p-6 space-y-2.5">
-                <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700">
-                  <Icon className="w-4 h-4" aria-hidden="true" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-900">{point.title}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">{point.description}</p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {/* 3. Compact Public Blockchain Activity Section */}
+      <HomeBlockchainSection />
     </div>
   );
 };

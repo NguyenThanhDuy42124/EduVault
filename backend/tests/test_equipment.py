@@ -28,7 +28,7 @@ def sample_equipment(db_session) -> Equipment:
 
 def test_admin_create_equipment_success(client, admin_token_headers):
     """
-    Mục đích: Kiểm thử ADMIN thêm mới thiết bị vào kho thành công (201 Created).
+    Mục đích: Kiểm thử ADMIN thêm mới thiết bị vào kho thành công (201 Created), bắt buộc có image_url.
     """
     payload = {
         "serial_number": "SONY-PROJ-01",
@@ -36,7 +36,8 @@ def test_admin_create_equipment_success(client, admin_token_headers):
         "category": "PROJECTOR",
         "specifications": "4200 Lumens, XGA 1024x768",
         "deposit_amount": 1000000.00,
-        "status": "AVAILABLE"
+        "status": "AVAILABLE",
+        "image_url": "/images/equipment/sony-projector.jpg",
     }
     response = client.post("/api/v1/equipment", json=payload, headers=admin_token_headers)
     assert response.status_code == 201
@@ -44,6 +45,46 @@ def test_admin_create_equipment_success(client, admin_token_headers):
     assert data["serial_number"] == "SONY-PROJ-01"
     assert data["category"] == "PROJECTOR"
     assert float(data["deposit_amount"]) == 1000000.00
+    assert data["image_url"] == "/images/equipment/sony-projector.jpg"
+
+
+def test_admin_create_equipment_without_image_returns_422(client, admin_token_headers):
+    """
+    Mục đích: Kiểm thử thêm thiết bị mới thiếu image_url hoặc chuỗi rỗng bị từ chối (422 Unprocessable Entity).
+    """
+    missing_img = {
+        "serial_number": "NO-IMG-01",
+        "name": "Thiết bị thiếu ảnh",
+        "category": "LAPTOP",
+        "deposit_amount": 500000.00,
+    }
+    res1 = client.post("/api/v1/equipment", json=missing_img, headers=admin_token_headers)
+    assert res1.status_code == 422
+
+    blank_img = {
+        **missing_img,
+        "serial_number": "NO-IMG-02",
+        "image_url": "   ",
+    }
+    res2 = client.post("/api/v1/equipment", json=blank_img, headers=admin_token_headers)
+    assert res2.status_code == 422
+
+
+def test_upload_equipment_image_permissions_and_validation(client, admin_token_headers, borrower_token_headers):
+    """Kiểm thử upload ảnh thiết bị: chặn BORROWER (403) và từ chối file không phải ảnh (400)."""
+    borrower_res = client.post(
+        "/api/v1/equipment/upload-image",
+        files={"file": ("hack.png", b"fake-png-bytes", "image/png")},
+        headers=borrower_token_headers,
+    )
+    assert borrower_res.status_code == 403
+
+    bad_ext = client.post(
+        "/api/v1/equipment/upload-image",
+        files={"file": ("script.txt", b"hello", "text/plain")},
+        headers=admin_token_headers,
+    )
+    assert bad_ext.status_code == 400
 
 
 def test_borrower_cannot_create_equipment_returns_403(client, borrower_token_headers):
@@ -54,7 +95,8 @@ def test_borrower_cannot_create_equipment_returns_403(client, borrower_token_hea
         "serial_number": "ILLEGAL-01",
         "name": "Forbidden Device",
         "category": "TABLET",
-        "deposit_amount": 0
+        "deposit_amount": 0,
+        "image_url": "/images/equipment/ipad-pro.jpg",
     }
     response = client.post("/api/v1/equipment", json=payload, headers=borrower_token_headers)
     assert response.status_code == 403
@@ -68,7 +110,8 @@ def test_create_equipment_duplicate_serial_returns_409(client, admin_token_heade
         "serial_number": sample_equipment.serial_number,
         "name": "Trùng Serial Number",
         "category": "LAPTOP",
-        "deposit_amount": 200000.00
+        "deposit_amount": 200000.00,
+        "image_url": "/images/equipment/dell-xps.jpg",
     }
     response = client.post("/api/v1/equipment", json=payload, headers=admin_token_headers)
     assert response.status_code == 409

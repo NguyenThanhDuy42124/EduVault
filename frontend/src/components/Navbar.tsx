@@ -6,11 +6,9 @@ import { TARGET_CHAIN_ID, TARGET_CHAIN_NAME } from '../contracts/contractConfig'
 import {
   Activity,
   AlertTriangle,
-  Boxes,
   ClipboardList,
   Home,
   Laptop,
-  LayoutDashboard,
   LogOut,
   Menu,
   ShieldCheck,
@@ -36,23 +34,15 @@ export const Navbar: React.FC = () => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Core menu always includes Trang chủ & Thiết bị; authenticated roles add concise secondary links
+  // Core menu is visible to everyone (including Guest): Trang chủ, Thiết bị, Blockchain
   const navLinks: NavLinkItem[] = [
     { name: 'Trang chủ', path: '/', icon: Home },
     { name: 'Thiết bị', path: '/equipment', icon: Laptop },
+    { name: 'Blockchain', path: '/audit', icon: Activity },
   ];
 
-  if (user && role === 'BORROWER') {
-    navLinks.push(
-      { name: 'Tổng quan', path: '/overview', icon: LayoutDashboard },
-      { name: 'Kiểm toán', path: '/audit', icon: Activity }
-    );
-  } else if (user && role === 'ADMIN') {
-    navLinks.push(
-      { name: 'Kho máy', path: '/admin/inventory', icon: Boxes },
-      { name: 'Phân quyền', path: '/admin/roles', icon: ShieldCheck },
-      { name: 'Kiểm toán', path: '/audit', icon: Activity }
-    );
+  if (user && role === 'ADMIN') {
+    navLinks.splice(2, 0, { name: 'Phân quyền', path: '/admin/roles', icon: ShieldCheck });
   }
 
   const loansTarget = role === 'ADMIN' ? '/admin/loans' : '/my-loans';
@@ -60,9 +50,9 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-2">
-          {/* Brand + Main Nav */}
-          <div className="flex items-center space-x-2 sm:space-x-3 lg:space-x-4 min-w-0 shrink">
+        <div className="flex items-center justify-between h-16 gap-3">
+          {/* Brand + Main Nav (never shrink narrower than links to avoid overlap with wallet badge) */}
+          <div className="flex items-center space-x-2 sm:space-x-3 xl:space-x-5 shrink-0">
             <Link to="/" className="flex items-center space-x-2 shrink-0">
               <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shrink-0">
                 <ShieldCheck className="w-4 h-4 text-slate-100" aria-hidden="true" />
@@ -110,23 +100,23 @@ export const Navbar: React.FC = () => {
                     </button>
                   ) : (
                     <div
-                      className="inline-flex items-center space-x-1.5 px-2 sm:px-2.5 py-1.5 bg-slate-100 text-slate-800 rounded-lg border border-slate-200 text-xs font-mono whitespace-nowrap shrink-0"
+                      className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-800 rounded-lg border border-slate-200 text-xs font-mono whitespace-nowrap shrink-0"
                       title={
-                        user.wallet_verified && user.wallet_address?.toLowerCase() === account?.toLowerCase()
-                          ? `Ví đã xác minh EIP-191 khớp ${user.student_staff_id}`
-                          : 'Ví MetaMask đã kết nối'
+                        user.wallet_address && user.wallet_address.toLowerCase() !== account?.toLowerCase()
+                          ? `Ví MetaMask hiện tại khác ví gắn với ${user.student_staff_id}${balanceEth ? ` (${balanceEth} ETH)` : ''}`
+                          : `Đã kết nối ví ${TARGET_CHAIN_NAME}${user.wallet_verified ? ' (đã xác minh EIP-191)' : ''}${balanceEth ? ` - ${balanceEth} ETH` : ''}`
                       }
                     >
                       <span
                         className={`w-2 h-2 rounded-full shrink-0 ${
-                          user.wallet_verified && user.wallet_address?.toLowerCase() === account?.toLowerCase()
-                            ? 'bg-emerald-500'
-                            : 'bg-amber-500'
+                          user.wallet_address && user.wallet_address.toLowerCase() !== account?.toLowerCase()
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
                         }`}
                       />
                       <span>{account ? `${account.slice(0, 6)}...${account.slice(-4)}` : ''}</span>
                       {balanceEth && (
-                        <span className="hidden xl:inline text-slate-500 border-l border-slate-300 pl-1.5">
+                        <span className="hidden 2xl:inline text-slate-500 border-l border-slate-300 pl-1.5">
                           {balanceEth} ETH
                         </span>
                       )}
@@ -136,7 +126,7 @@ export const Navbar: React.FC = () => {
                   <button
                     type="button"
                     onClick={connectWallet}
-                    className="inline-flex items-center space-x-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer shrink-0"
+                    className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer shrink-0"
                     title="Kết nối ví MetaMask"
                   >
                     <Wallet className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
@@ -275,6 +265,12 @@ export const Navbar: React.FC = () => {
                     <Wallet className="w-4 h-4" aria-hidden="true" />
                     <span>Kết nối MetaMask</span>
                   </button>
+                )}
+                {isConnected && isCorrectNetwork && account && (
+                  <div className="sm:hidden px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 flex items-center justify-between">
+                    <span>Ví: {account.slice(0, 6)}...{account.slice(-4)}</span>
+                    {balanceEth && <span className="text-slate-500">{balanceEth} ETH</span>}
+                  </div>
                 )}
                 {isConnected && !isCorrectNetwork && (
                   <button

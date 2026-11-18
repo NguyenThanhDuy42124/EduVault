@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { equipmentService } from '../services/equipmentService';
 import { Equipment, EquipmentCreateRequest, EquipmentUpdateRequest, EquipmentStatus } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -10,9 +11,26 @@ import {
   Edit2,
   Trash2,
   ShieldAlert,
+  Image as ImageIcon,
+  Upload,
+  LayoutGrid,
 } from 'lucide-react';
 
+const PRESET_EQUIPMENT_IMAGES = [
+  { label: 'MacBook Pro', url: '/images/equipment/macbook-pro.jpg' },
+  { label: 'Dell XPS', url: '/images/equipment/dell-xps.jpg' },
+  { label: 'iPad Pro', url: '/images/equipment/ipad-pro.jpg' },
+  { label: 'Máy chiếu Sony', url: '/images/equipment/sony-projector.jpg' },
+  { label: 'Máy đo Rigol', url: '/images/equipment/rigol-oscilloscope.jpg' },
+  { label: 'Kính hiển vi', url: '/images/equipment/andonstar-microscope.jpg' },
+  { label: 'Kit STM32', url: '/images/equipment/stm32-kit.jpg' },
+  { label: 'Kit Arduino', url: '/images/equipment/arduino-kit.jpg' },
+];
+
 export const AdminInventoryPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledEditParamRef = useRef<string | null>(null);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -25,6 +43,7 @@ export const AdminInventoryPage: React.FC = () => {
   const [newCategory, setNewCategory] = useState('LAPTOP');
   const [newSpecs, setNewSpecs] = useState('');
   const [newDeposit, setNewDeposit] = useState('500000');
+  const [newImageUrl, setNewImageUrl] = useState('');
 
   // Edit Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -32,6 +51,8 @@ export const AdminInventoryPage: React.FC = () => {
   const [editStatus, setEditStatus] = useState<EquipmentStatus>('AVAILABLE');
   const [editSpecs, setEditSpecs] = useState('');
   const [editDeposit, setEditDeposit] = useState('0');
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Action status
   const [submitting, setSubmitting] = useState(false);
@@ -53,6 +74,39 @@ export const AdminInventoryPage: React.FC = () => {
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  useEffect(() => {
+    const addParam = searchParams.get('add');
+    if (addParam === '1' && handledEditParamRef.current !== 'add') {
+      handledEditParamRef.current = 'add';
+      handleOpenAdd();
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('add');
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+
+    const editId = searchParams.get('edit');
+    if (!editId || loading || handledEditParamRef.current === editId) return;
+    const target = equipmentList.find((item) => item.id.toString() === editId);
+    if (target) {
+      handledEditParamRef.current = editId;
+      handleOpenEdit(target);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('edit');
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, loading, equipmentList, setSearchParams]);
 
   const categories = useMemo(() => {
     const set = new Set(equipmentList.map((e) => e.category));
@@ -77,12 +131,36 @@ export const AdminInventoryPage: React.FC = () => {
     setNewCategory('LAPTOP');
     setNewSpecs('');
     setNewDeposit('500000');
+    setNewImageUrl('');
     setActionError(null);
     setAddModalOpen(true);
   };
 
+  const handleUploadImageFile = async (
+    file: File | undefined,
+    onUrlReady: (url: string) => void
+  ) => {
+    if (!file) return;
+    setUploadingImage(true);
+    setActionError(null);
+    try {
+      const res = await equipmentService.uploadImage(file);
+      onUrlReady(res.image_url);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      setActionError(axiosErr.response?.data?.detail || 'Không thể tải file ảnh lên máy chủ.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newImageUrl.trim()) {
+      setActionError('Thiết bị mới bắt buộc phải có hình ảnh minh họa (chọn ảnh hoặc tải file lên).');
+      return;
+    }
+
     setSubmitting(true);
     setActionError(null);
     try {
@@ -93,6 +171,7 @@ export const AdminInventoryPage: React.FC = () => {
         specifications: newSpecs.trim() || undefined,
         deposit_amount: parseFloat(newDeposit) || 0,
         status: 'AVAILABLE',
+        image_url: newImageUrl.trim(),
       };
       await equipmentService.create(payload);
       setAddModalOpen(false);
@@ -110,6 +189,7 @@ export const AdminInventoryPage: React.FC = () => {
     setEditStatus(item.status);
     setEditSpecs(item.specifications || '');
     setEditDeposit(item.deposit_amount.toString());
+    setEditImageUrl(item.image_url || '');
     setActionError(null);
     setEditModalOpen(true);
   };
@@ -125,6 +205,7 @@ export const AdminInventoryPage: React.FC = () => {
         status: editStatus,
         specifications: editSpecs.trim() || undefined,
         deposit_amount: parseFloat(editDeposit) || 0,
+        image_url: editImageUrl.trim() || undefined,
       };
       await equipmentService.update(editingItem.id, payload);
       setEditModalOpen(false);
@@ -167,17 +248,44 @@ export const AdminInventoryPage: React.FC = () => {
             Quản trị kho thiết bị
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Đăng ký thiết bị đào tạo mới, cập nhật định mức ký quỹ và chuyển trạng thái bảo trì
+            Đăng ký thiết bị đào tạo mới, cập nhật định mức tiền cọc mô phỏng (VNĐ) và trạng thái bảo trì
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors shadow-xs active:scale-[0.98] cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Thêm thiết bị mới</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <div className="px-3.5 py-2 bg-white border border-slate-200 rounded-lg shadow-xs flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-slate-600 font-medium">
+              Sẵn sàng:{' '}
+              <strong className="text-slate-900 font-semibold">
+                {equipmentList.filter((e) => e.status === 'AVAILABLE').length}
+              </strong>
+            </span>
+          </div>
+          <div className="px-3.5 py-2 bg-white border border-slate-200 rounded-lg shadow-xs flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+            <span className="text-slate-600 font-medium">
+              Tổng số:{' '}
+              <strong className="text-slate-900 font-semibold">{equipmentList.length}</strong>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Thêm thiết bị mới</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/equipment')}
+            className="inline-flex items-center space-x-1.5 px-3 py-2 bg-white text-slate-700 border border-slate-300 font-semibold rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Dạng danh sách</span>
+          </button>
+        </div>
       </div>
 
       {deleteError && (
@@ -230,7 +338,7 @@ export const AdminInventoryPage: React.FC = () => {
                   <th className="py-3 px-4">Serial Number</th>
                   <th className="py-3 px-4">Tên thiết bị</th>
                   <th className="py-3 px-4">Danh mục</th>
-                  <th className="py-3 px-4">Định mức cọc (VNĐ)</th>
+                  <th className="py-3 px-4">Định mức tiền cọc mô phỏng (VNĐ)</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Tùy chọn</th>
                 </tr>
@@ -243,10 +351,25 @@ export const AdminInventoryPage: React.FC = () => {
                       {item.serial_number}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-semibold text-slate-900 block">{item.name}</span>
-                      <span className="text-xs text-slate-500 block truncate max-w-xs mt-0.5">
-                        {item.specifications || '--'}
-                      </span>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-900 block">{item.name}</span>
+                          <span className="text-xs text-slate-500 block truncate max-w-xs mt-0.5">
+                            {item.specifications || '--'}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 font-mono">
@@ -290,7 +413,7 @@ export const AdminInventoryPage: React.FC = () => {
         isOpen={addModalOpen}
         onClose={() => !submitting && setAddModalOpen(false)}
         title="Thêm thiết bị mới vào kho"
-        subtitle="Khai báo thiết bị thực hành và thiết lập mức cọc quy định"
+        subtitle="Khai báo thiết bị thực hành và thiết lập định mức tiền cọc mô phỏng (VNĐ)"
         maxWidth="lg"
       >
         <form onSubmit={handleAddSubmit} className="space-y-4">
@@ -353,6 +476,64 @@ export const AdminInventoryPage: React.FC = () => {
               required
               className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Hình ảnh minh họa thiết bị <span className="text-rose-600">*</span>
+            </label>
+            <div className="space-y-2.5">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  placeholder="/images/equipment/macbook-pro.jpg hoặc URL ảnh..."
+                  required
+                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                />
+                <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer shrink-0">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{uploadingImage ? 'Đang tải...' : 'Tải ảnh từ máy'}</span>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.gif"
+                    disabled={uploadingImage}
+                    onChange={(e) =>
+                      handleUploadImageFile(e.target.files?.[0], (url) => setNewImageUrl(url))
+                    }
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {PRESET_EQUIPMENT_IMAGES.map((preset) => (
+                  <button
+                    key={preset.url}
+                    type="button"
+                    onClick={() => setNewImageUrl(preset.url)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                      newImageUrl === preset.url
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {newImageUrl.trim() && (
+                <div className="h-28 w-full rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                  <img
+                    src={newImageUrl.trim()}
+                    alt="Xem trước ảnh thiết bị"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -422,7 +603,7 @@ export const AdminInventoryPage: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Định mức ký quỹ mô phỏng (VNĐ)
+              Định mức tiền cọc mô phỏng (VNĐ)
             </label>
             <input
               type="number"
@@ -433,6 +614,34 @@ export const AdminInventoryPage: React.FC = () => {
               required
               className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Hình ảnh minh họa
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={editImageUrl}
+                onChange={(e) => setEditImageUrl(e.target.value)}
+                placeholder="/images/equipment/..."
+                className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              />
+              <label className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer shrink-0">
+                <Upload className="w-3.5 h-3.5" />
+                <span>{uploadingImage ? 'Đang tải...' : 'Đổi ảnh'}</span>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.gif"
+                  disabled={uploadingImage}
+                  onChange={(e) =>
+                    handleUploadImageFile(e.target.files?.[0], (url) => setEditImageUrl(url))
+                  }
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           <div>

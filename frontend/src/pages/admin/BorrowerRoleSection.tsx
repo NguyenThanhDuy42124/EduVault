@@ -74,15 +74,15 @@ export const BorrowerRoleSection: React.FC<BorrowerRoleSectionProps> = ({
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-base font-bold text-slate-900">Cấp quyền Sinh viên (Borrower Role)</h2>
+        <h2 className="text-base font-bold text-slate-900">Cấp quyền mượn cho sinh viên</h2>
         <p className="text-xs text-slate-500 mt-1">
-          Admin (ADMIN_ROLE) cấp quyền BORROWER_ROLE on-chain cho sinh viên đã xác minh ví để tạo đơn mượn thiết bị.
+          Quản trị viên cấp quyền giao dịch Smart Contract cho sinh viên đã xác minh ví để tạo đơn mượn.
         </p>
       </div>
 
       {!isAdmin && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-          Lưu ý: Chỉ tài khoản nắm giữ ADMIN_ROLE mới có quyền cấp hoặc thu hồi quyền mượn thiết bị của sinh viên.
+          Lưu ý: Chỉ ví có quyền quản trị viên mới được cấp hoặc thu hồi quyền mượn thiết bị của sinh viên.
         </div>
       )}
 

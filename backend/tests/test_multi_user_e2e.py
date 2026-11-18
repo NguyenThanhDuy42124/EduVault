@@ -71,6 +71,9 @@ class _MultiUserChainMock:
         rec = self.get_loan(loan_id)
         return bool(rec["request_time"] > 0 and rec["state"] == 2 and datetime.now().timestamp() > rec["due_date"])
 
+    def get_active_equipment_loan(self, equipment_id: int) -> str:
+        return self.active_mutex.get(int(equipment_id), ZERO_BYTES32_HEX)
+
     def sign_create_loan(
         self,
         sender: str,
@@ -236,6 +239,7 @@ def test_cross_wallet_multi_admin_e2e_lifecycle(client, db_session, monkeypatch)
     monkeypatch.setattr(blockchain_service, "is_connected", mock_chain.is_connected)
     monkeypatch.setattr(blockchain_service, "ensure_ready", mock_chain.ensure_ready)
     monkeypatch.setattr(blockchain_service, "get_loan", mock_chain.get_loan)
+    monkeypatch.setattr(blockchain_service, "get_active_equipment_loan", mock_chain.get_active_equipment_loan)
     monkeypatch.setattr(blockchain_service, "is_overdue", mock_chain.is_overdue)
     monkeypatch.setattr(blockchain_service, "verify_transaction_receipt", mock_chain.verify_transaction_receipt)
     monkeypatch.setattr(blockchain_service, "verify_create_loan_tx", mock_chain.verify_create_loan_tx)
@@ -302,7 +306,7 @@ def test_cross_wallet_multi_admin_e2e_lifecycle(client, db_session, monkeypatch)
     headers_admin3 = {"Authorization": f"Bearer {token_admin3}"}
 
     # Buoc 1: Sinh vien ky tao don on-chain roi gui API
-    now = datetime.utcnow()
+    now = datetime.now().replace(microsecond=0)
     exp_dt = now + timedelta(days=1)
     due_dt = now + timedelta(days=3)
     exp_ts = int(exp_dt.timestamp())

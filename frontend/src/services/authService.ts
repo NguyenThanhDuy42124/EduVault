@@ -52,6 +52,7 @@ export const authService = {
     email: string;
     password: string;
     role: 'ADMIN' | 'BORROWER';
+    wallet_address?: string;
   }): Promise<User> => {
     const res = await api.post<User>('/admin/users', payload);
     return res.data;

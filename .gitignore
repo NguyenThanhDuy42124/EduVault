@@ -42,6 +42,7 @@ lerna-debug.log*
 .pnpm-debug.log*
 frontend/dist/
 frontend/dist-ssr/
+*.tsbuildinfo
 *.local
 
 # Hardhat & Smart Contracts

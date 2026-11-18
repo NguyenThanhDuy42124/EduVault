@@ -225,7 +225,7 @@ export const MyLoansPage: React.FC = () => {
 
                   <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
                     <span className="text-slate-500 text-xs uppercase font-semibold block">
-                      Ký quỹ mô phỏng
+                      Tiền cọc mô phỏng
                     </span>
                     <div className="flex items-center space-x-1.5 mt-0.5">
                       <span className="font-mono font-bold text-slate-900">{depositVND} đ</span>

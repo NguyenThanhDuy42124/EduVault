@@ -17,7 +17,34 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
 }) => {
   const [adminAddress, setAdminAddress] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleCheckRole = async () => {
+    if (!adminAddress || !ethers.isAddress(adminAddress)) {
+      setActionMsg({ type: 'error', text: 'Địa chỉ ví Ethereum không hợp lệ.' });
+      return;
+    }
+    setCheckingRole(true);
+    setActionMsg(null);
+    try {
+      const contract = await getContract(false);
+      if (!contract) throw new Error('Không thể kết nối Smart Contract.');
+      const normalized = ethers.getAddress(adminAddress);
+      const adminRoleHash = await contract.ADMIN_ROLE();
+      const hasAdmin = Boolean(await contract.hasRole(adminRoleHash, normalized));
+      setActionMsg({
+        type: hasAdmin ? 'success' : 'error',
+        text: hasAdmin
+          ? `Ví ${normalized} ĐÃ CÓ quyền ADMIN_ROLE trên Smart Contract.`
+          : `Ví ${normalized} CHƯA CÓ quyền ADMIN_ROLE trên Smart Contract.`,
+      });
+    } catch (err) {
+      setActionMsg({ type: 'error', text: parseWeb3Error(err) });
+    } finally {
+      setCheckingRole(false);
+    }
+  };
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,15 +94,20 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-base font-bold text-slate-900">Quản trị viên Nhóm (Multi-Admin)</h2>
+        <h2 className="text-base font-bold text-slate-900">Quản trị viên hệ thống</h2>
         <p className="text-xs text-slate-500 mt-1">
-          Deployer (DEFAULT_ADMIN_ROLE) cấp quyền ADMIN_ROLE cho các thành viên trong nhóm để cùng duyệt đơn.
+          Ví triển khai hợp đồng (Deployer) cấp hoặc thu hồi quyền duyệt đơn cho các quản trị viên khác.
         </p>
       </div>
 
       {!isDeployer && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-          Lưu ý: Chỉ ví Deployer (DEFAULT_ADMIN_ROLE) mới có quyền thêm hoặc thu hồi ADMIN_ROLE trên Smart Contract.
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+          <p>
+            Chỉ ví Deployer gốc mới có quyền thêm hoặc thu hồi quyền quản trị viên trên Smart Contract.
+          </p>
+          <p className="font-mono text-[11px]">
+            Ví Deployer Sepolia hiện tại: 0x6396121f971a55bc844301E039F6C6F472C5CbBB
+          </p>
         </div>
       )}
 
@@ -106,20 +138,29 @@ export const MultiAdminSection: React.FC<MultiAdminSectionProps> = ({
           />
         </div>
 
-        <div className="flex items-center space-x-3 pt-1">
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
           <button
             type="submit"
             disabled={!isDeployer || loading || !adminAddress}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
           >
             {loading ? 'Đang xử lý...' : 'Cấp quyền Admin (addAdmin)'}
           </button>
 
           <button
             type="button"
+            onClick={handleCheckRole}
+            disabled={checkingRole || loading || !adminAddress}
+            className="px-3.5 py-2 bg-white text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            {checkingRole ? 'Đang kiểm tra...' : 'Kiểm tra quyền On-chain'}
+          </button>
+
+          <button
+            type="button"
             onClick={handleRemoveAdmin}
             disabled={!isDeployer || loading || !adminAddress}
-            className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg hover:bg-rose-100 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg hover:bg-rose-100 disabled:opacity-50 transition-colors cursor-pointer"
           >
             Thu hồi quyền Admin (removeAdmin)
           </button>

@@ -67,7 +67,7 @@ export interface EquipmentCreateRequest {
   specifications?: string;
   status?: EquipmentStatus;
   deposit_amount: number;
-  image_url?: string;
+  image_url: string;
 }
 
 export interface EquipmentUpdateRequest {

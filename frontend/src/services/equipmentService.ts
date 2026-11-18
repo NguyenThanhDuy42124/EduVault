@@ -23,6 +23,15 @@ export const equipmentService = {
     return res.data;
   },
 
+  uploadImage: async (file: File): Promise<{ image_url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post<{ image_url: string }>('/equipment/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+
   update: async (id: number, data: EquipmentUpdateRequest): Promise<Equipment> => {
     const res = await api.put<Equipment>(`/equipment/${id}`, data);
     return res.data;

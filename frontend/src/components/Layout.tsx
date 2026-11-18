@@ -26,6 +26,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <Link to="/equipment" className="hover:text-indigo-600 transition-colors">
               Thiết bị
             </Link>
+            <Link to="/audit" className="hover:text-indigo-600 transition-colors">
+              Sổ cái Blockchain
+            </Link>
             <Link to="/login" className="hover:text-indigo-600 transition-colors">
               Đăng nhập
             </Link>

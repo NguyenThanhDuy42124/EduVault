@@ -29,16 +29,15 @@ router = APIRouter(prefix="/audit", tags=["Audit & Reconciliation"])
     "/loans/{loan_id}/verify",
     response_model=LoanVerificationResponse,
     status_code=status.HTTP_200_OK,
-    summary="Đối soát tính toàn vẹn của một đơn mượn",
+    summary="Đối soát tính toàn vẹn của một đơn mượn (Public)",
     description="So sánh chi tiết từng trường dữ liệu giữa MySQL và Smart Contract (State, Equipment ID, Mutex, Cọc)."
 )
 def verify_loan_endpoint(
     loan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> LoanVerificationResponse:
     """
-    Mục đích: Cung cấp bằng chứng kiểm toán độc lập cho bất kỳ tài khoản đã đăng nhập nào.
+    Mục đích: Cung cấp bằng chứng kiểm toán độc lập công khai (kể cả Guest) để đối chiếu trạng thái MySQL và Smart Contract.
     """
     result = verify_loan_integrity(db=db, loan_id=loan_id)
     return LoanVerificationResponse(**result)
@@ -66,18 +65,17 @@ def reconcile_endpoint(
     "/transactions",
     response_model=List[BlockchainTxResponse],
     status_code=status.HTTP_200_OK,
-    summary="Xem danh sách giao dịch Blockchain",
-    description="Xem toàn bộ các Transaction Hash, block number và lượng gas tiêu thụ trên mạng EVM."
+    summary="Xem danh sách giao dịch Blockchain (Public)",
+    description="Xem toàn bộ các Transaction Hash, block number và lượng gas tiêu thụ trên mạng EVM (mở công khai cho cả Guest)."
 )
 def list_transactions_endpoint(
     status_filter: Optional[TxStatus] = Query(None, alias="status", description="Lọc theo trạng thái tx"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> List[BlockchainTxResponse]:
     """
-    Mục đích: Lấy danh sách giao dịch blockchain phục vụ trang kiểm toán của hệ thống.
+    Mục đích: Lấy danh sách giao dịch blockchain công khai phục vụ trang chủ và trang kiểm toán của hệ thống.
     """
     query = db.query(BlockchainTransaction)
     if status_filter is not None:

@@ -325,7 +325,7 @@ export const AdminLoansPage: React.FC = () => {
                   <th className="py-3 px-4">Người mượn</th>
                   <th className="py-3 px-4">Thiết bị</th>
                   <th className="py-3 px-4">Thời gian mượn / Hạn trả</th>
-                  <th className="py-3 px-4">Ký quỹ (VND)</th>
+                  <th className="py-3 px-4">Tiền cọc (VNĐ)</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Thao tác điều phối</th>
                 </tr>
@@ -507,7 +507,7 @@ export const AdminLoansPage: React.FC = () => {
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
             <Info className="w-4 h-4 flex-shrink-0 text-slate-700 mt-0.5" />
             <p>
-              Smart Contract sẽ tự động tính phạt và hoàn/khấu trừ cọc on-chain. Admin sẽ ký giao dịch trực tiếp qua popup MetaMask.
+              Smart Contract sẽ tự động tính phạt và hoàn/thu hồi tiền cọc mô phỏng khi Admin ký xác nhận qua MetaMask.
             </p>
           </div>
 

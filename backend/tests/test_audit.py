@@ -29,14 +29,14 @@ def _seed_pure_web3_loan(db_session, borrower_user, equipment, status_val=None, 
 
 
 def test_verify_loan_integrity_endpoint(
-    client, borrower_token_headers, test_borrower_user, available_equipment, db_session
+    client, test_borrower_user, available_equipment, db_session
 ):
     """
-    Mục đích: Kiểm thử API verify độc lập tính toàn vẹn của một đơn mượn.
+    Mục đích: Kiểm thử API verify độc lập tính toàn vẹn của một đơn mượn (mở công khai cho cả Guest).
     """
     loan = _seed_pure_web3_loan(db_session, test_borrower_user, available_equipment)
 
-    verify_res = client.get(f"/api/v1/audit/loans/{loan.id}/verify", headers=borrower_token_headers)
+    verify_res = client.get(f"/api/v1/audit/loans/{loan.id}/verify")
     assert verify_res.status_code == 200
     data = verify_res.json()
     assert data["loan_id"] == loan.id
@@ -46,11 +46,11 @@ def test_verify_loan_integrity_endpoint(
     assert "blockchain_state" in data
 
 
-def test_list_transactions_endpoint(client, borrower_token_headers):
+def test_list_transactions_endpoint(client):
     """
-    Mục đích: Kiểm thử xem danh sách các transaction hash trên EVM.
+    Mục đích: Kiểm thử xem danh sách các transaction hash trên EVM công khai (không cần token).
     """
-    response = client.get("/api/v1/audit/transactions", headers=borrower_token_headers)
+    response = client.get("/api/v1/audit/transactions")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 

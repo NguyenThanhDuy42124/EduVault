@@ -3,8 +3,10 @@ Module: backend.app.api.v1.equipment
 Mục đích: Router xử lý các yêu cầu CRUD thiết bị học tập trong hệ thống.
 Áp dụng: Quy định viết code và docstring tại QUY_DINH_CODE.md.
 """
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status
+from pathlib import Path
+import secrets
+from typing import Dict, List, Optional
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 from backend.app.api.deps import require_role
 from backend.app.db.session import get_db
@@ -22,9 +24,56 @@ from backend.app.services.equipment_service import (
     get_equipment_list,
     update_equipment,
 )
-from fastapi import HTTPException
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+FRONTEND_EQUIPMENT_IMAGES_DIR = (
+    Path(__file__).resolve().parents[4] / "frontend" / "public" / "images" / "equipment"
+)
 
 router = APIRouter(prefix="/equipment", tags=["Equipment"])
+
+
+@router.post(
+    "/upload-image",
+    status_code=status.HTTP_201_CREATED,
+    summary="Tải ảnh minh họa thiết bị lên kho (Chỉ ADMIN)",
+    description="Nhận file ảnh (.jpg, .jpeg, .png, .webp, .gif <= 5MB), lưu vào thư mục public/images/equipment và trả về đường dẫn image_url."
+)
+async def upload_equipment_image_endpoint(
+    file: UploadFile = File(...),
+    admin_user: User = Depends(require_role([UserRole.ADMIN]))
+) -> Dict[str, str]:
+    """
+    Mục đích: Cho phép ADMIN tải ảnh thiết bị từ máy tính lên khi thêm/cập nhật thiết bị.
+    """
+    original_name = file.filename or "equipment.jpg"
+    ext = Path(original_name).suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Định dạng ảnh không hợp lệ. Chỉ chấp nhận .jpg, .jpeg, .png, .webp, .gif."
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File ảnh tải lên bị rỗng."
+        )
+    if len(content) > MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kích thước ảnh vượt quá giới hạn 5MB."
+        )
+
+    FRONTEND_EQUIPMENT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_stem = "".join(c if c.isalnum() or c in ("-", "_") else "-" for c in Path(original_name).stem)[:40].strip("-") or "device"
+    filename = f"{safe_stem}-{secrets.token_hex(4)}{ext}"
+    target_path = FRONTEND_EQUIPMENT_IMAGES_DIR / filename
+    target_path.write_bytes(content)
+
+    return {"image_url": f"/images/equipment/{filename}"}
 
 
 @router.get(

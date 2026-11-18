@@ -37,10 +37,11 @@ const CategoryIcon: React.FC<{ category: string }> = ({ category }) => {
 
 interface EquipmentCardProps {
   item: Equipment;
-  onBorrowClick: (item: Equipment) => void;
+  isAdmin: boolean;
+  onActionClick: (item: Equipment) => void;
 }
 
-const EquipmentCard: React.FC<EquipmentCardProps> = memo(({ item, onBorrowClick }) => {
+const EquipmentCard: React.FC<EquipmentCardProps> = memo(({ item, isAdmin, onActionClick }) => {
   const [imageFailed, setImageFailed] = useState(false);
   const isAvailable = item.status === 'AVAILABLE';
   const depositVnd = Number(item.deposit_amount).toLocaleString('vi-VN');
@@ -86,15 +87,17 @@ const EquipmentCard: React.FC<EquipmentCardProps> = memo(({ item, onBorrowClick 
 
           <button
             type="button"
-            disabled={!isAvailable}
-            onClick={() => onBorrowClick(item)}
+            disabled={!isAdmin && !isAvailable}
+            onClick={() => onActionClick(item)}
             className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-              isAvailable
+              isAdmin
+                ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200 cursor-pointer'
+                : isAvailable
                 ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer'
                 : 'bg-slate-100 text-slate-500 cursor-not-allowed'
             }`}
           >
-            {isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
+            {isAdmin ? 'Sửa / Quản lý' : isAvailable ? 'Đăng ký mượn' : 'Không khả dụng'}
           </button>
         </div>
       </div>
@@ -163,7 +166,7 @@ export const HomeEquipmentSection: React.FC = memo(() => {
       }
 
       if (role === 'ADMIN') {
-        navigate('/equipment');
+        navigate(`/admin/inventory?edit=${item.id}`);
         return;
       }
 
@@ -245,7 +248,12 @@ export const HomeEquipmentSection: React.FC = memo(() => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {equipmentList.map((item) => (
-            <EquipmentCard key={item.id} item={item} onBorrowClick={handleBorrowClick} />
+            <EquipmentCard
+              key={item.id}
+              item={item}
+              isAdmin={role === 'ADMIN'}
+              onActionClick={handleBorrowClick}
+            />
           ))}
         </div>
       )}

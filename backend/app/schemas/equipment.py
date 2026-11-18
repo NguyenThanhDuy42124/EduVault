@@ -6,7 +6,7 @@ Mục đích: Định nghĩa các Schema Pydantic cho quản lý thiết bị h�
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.app.models.equipment import EquipmentStatus
 
 
@@ -22,8 +22,15 @@ class EquipmentBase(BaseModel):
 
 
 class EquipmentCreate(EquipmentBase):
-    """Schema dữ liệu đầu vào khi thêm thiết bị mới vào kho."""
-    pass
+    """Schema dữ liệu đầu vào khi thêm thiết bị mới vào kho (bắt buộc có ảnh minh họa)."""
+    image_url: str = Field(..., min_length=1, max_length=500, description="Đường dẫn ảnh minh họa bắt buộc của thiết bị")
+
+    @field_validator("image_url", mode="before")
+    @classmethod
+    def validate_required_image_url(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Thiết bị mới bắt buộc phải có hình ảnh minh họa (image_url).")
+        return value.strip()
 
 
 class EquipmentUpdate(BaseModel):
