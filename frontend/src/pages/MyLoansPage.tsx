@@ -229,7 +229,15 @@ export const MyLoansPage: React.FC = () => {
                     </span>
                     <div className="flex items-center space-x-1.5 mt-0.5">
                       <span className="font-mono font-bold text-slate-900">{depositVND} đ</span>
-                      <StatusBadge status={loan.deposit_status} size="sm" />
+                      <StatusBadge
+                        status={
+                          ['CANCELLED', 'REJECTED'].includes(loan.status)
+                            ? 'REFUNDED'
+                            : loan.deposit_status
+                        }
+                        type="deposit"
+                        size="sm"
+                      />
                     </div>
                   </div>
 

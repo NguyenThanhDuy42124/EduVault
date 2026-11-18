@@ -365,8 +365,16 @@ export const AdminLoansPage: React.FC = () => {
                         <div className="font-bold font-mono text-slate-900">
                           {Number(loan.deposit_amount).toLocaleString('vi-VN')} đ
                         </div>
-                        <div className="text-[10px] font-mono text-slate-500">
-                          {loan.deposit_status}
+                        <div className="mt-1">
+                          <StatusBadge
+                            status={
+                              ['CANCELLED', 'REJECTED'].includes(loan.status)
+                                ? 'REFUNDED'
+                                : loan.deposit_status
+                            }
+                            type="deposit"
+                            size="sm"
+                          />
                         </div>
                       </td>
                       <td className="py-3.5 px-4">

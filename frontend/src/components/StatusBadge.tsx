@@ -6,6 +6,7 @@ type BadgeType = EquipmentStatus | LoanStatus | DepositStatus | ReturnCondition 
 interface StatusBadgeProps {
   status: BadgeType;
   size?: 'sm' | 'md';
+  type?: 'general' | 'deposit';
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -90,11 +91,26 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   },
 };
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm' }) => {
-  const config = statusConfig[status] || {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', type = 'general' }) => {
+  let config = statusConfig[status] || {
     label: status,
     className: 'bg-slate-50 text-slate-700 border-slate-200',
   };
+
+  // Dedicated labels when badge is used for deposit context
+  if (type === 'deposit') {
+    if (status === 'PENDING') {
+      config = {
+        label: 'Chờ khóa cọc',
+        className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+      };
+    } else if (status === 'CANCELLED') {
+      config = {
+        label: 'Đã hoàn cọc',
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+      };
+    }
+  }
 
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
 

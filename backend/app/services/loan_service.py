@@ -631,6 +631,7 @@ def reject_loan_request(
             verified_tx_hash = verified["tx_hash"]
 
     loan.status = LoanStatus.REJECTED
+    loan.deposit_status = DepositStatus.REFUNDED
     if payload.reason:
         loan.admin_notes = f"{loan.admin_notes or ''}\n[Từ chối bởi Admin #{admin_user.id}]: {payload.reason}".strip()
 
@@ -879,6 +880,7 @@ def cancel_loan_request(
         equipment.status = EquipmentStatus.AVAILABLE
 
     loan.status = LoanStatus.CANCELLED
+    loan.deposit_status = DepositStatus.REFUNDED
     loan.admin_notes = f"{loan.admin_notes or ''}\n[Hủy bởi User #{current_user.id}]: {payload.reason}".strip()
 
     db.add(AuditLog(
