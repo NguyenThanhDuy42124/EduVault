@@ -1,164 +1,161 @@
-# Tài Liệu Báo Cáo Chuyên Sâu: Backend & Deploy Smart Contract (EduVault)
+# Tài Liệu Báo Cáo: Hệ Thống Backend & Deploy Smart Contract (EduVault)
 
-Tài liệu này được biên soạn toàn diện phục vụ việc báo cáo, thuyết minh và phản biện đồ án với Giảng viên về hai phân hệ cốt lõi: **Hệ thống Máy chủ (Backend FastAPI)** và **Quy trình Triển khai Hợp đồng thông minh (Smart Contract Deploy)** theo kiến trúc Pure Web3.
+Tài liệu này được biên soạn cho buổi báo cáo và phản biện đồ án với Giảng viên, bao gồm hai nội dung trọng tâm:
+1. Kiến trúc, cấu trúc tệp tin và vai trò của từng thành phần trong máy chủ Backend (FastAPI).
+2. Quy trình và cơ chế triển khai tự động Hợp đồng thông minh (Smart Contract Deploy) lên mạng Ethereum Sepolia Testnet.
 
 ---
 
 ## PHẦN 1: KIẾN TRÚC VÀ CHI TIẾT CÁC TỆP TIN BACKEND
 
-### 1.1. Bảng Tra Cứu Toàn Bộ Các Tệp Tin Backend
+### 1. Sơ Đồ Luồng Hoạt Động (Architecture Flow)
 
-| Phân tầng | Tệp tin & Đường dẫn liên kết | Vai trò cốt lõi trong hệ thống |
+```mermaid
+flowchart TD
+    Client["Trình duyệt Client (React + MetaMask)"] -->|1. Gửi HTTP Request kèm Bearer JWT| Main["app/main.py (FastAPI App)"]
+    Main --> Deps["app/api/deps.py (Xác thực Auth, Session DB, Phân quyền)"]
+    Deps --> Routers["Tầng Router API (/api/v1)\n- auth.py, loans.py, equipment.py"]
+    
+    Routers --> Schemas["Pydantic Schemas (Kiểm tra kiểu dữ liệu)\n- loan.py, user.py, equipment.py"]
+    Routers --> Services["Tầng Xử lý Nghiệp vụ (Services)\n- loan_service.py, equipment_service.py"]
+    
+    Services --> BlockchainService["blockchain_service.py (Web3.py)"]
+    BlockchainService -->|2. Đọc TransactionReceipt qua RPC| NodeSepolia["Node Ethereum Sepolia (Chain ID 11155111)"]
+    NodeSepolia --> SmartContract["Smart Contract (EquipmentLending.sol)"]
+    
+    Services --> Models["Tầng Thực thể ORM (SQLAlchemy Models)"]
+    Models -->|3. Ghi nhận dữ liệu đã xác thực| MySQL[("Cơ sở dữ liệu MySQL (equipment_lending_db)")]
+```
+
+---
+
+### 2. Bảng Tra Cứu Toàn Bộ Tệp Tin Backend
+
+| Tên tệp tin | Vị trí thư mục | Chức năng chính |
 |---|---|---|
-| Khởi chạy | [main.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/main.py) | Điểm khởi động ứng dụng FastAPI, cấu hình CORS, thiết lập middleware và kiểm tra pre-flight khi bật server |
-| Cấu hình | [config.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/config.py) | Quản lý tập trung toàn bộ biến môi trường (.env) bằng Pydantic BaseSettings |
-| Bảo mật | [security.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/security.py) | Băm mật khẩu Bcrypt, cấp phát và giải mã mã thông báo JSON Web Token (JWT HS256) |
-| Hợp đồng ABI | [EquipmentLending.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/EquipmentLending.json) | Chứa giao diện ABI để thư viện Web3.py dịch và giải mã các hàm, sự kiện của hợp đồng |
-| Địa chỉ hợp đồng | [contract_address.json](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/core/contracts/contract_address.json) | Lưu địa chỉ hợp đồng Sepolia hiện tại (0xA88De9B00C0F78FF9a162C4f17524ef885169ffd) |
-| Kết nối CSDL | [session.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/db/session.py) | Khởi tạo SQLAlchemy Engine, cấu hình Connection Pool chống ngắt kết nối trên MySQL XAMPP |
-| Bảng Người dùng | [user.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/user.py) | Định nghĩa bảng `users`: lưu MSSV, mật khẩu hash, vai trò, địa chỉ ví và trạng thái xác minh ví |
-| Bảng Thiết bị | [equipment.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/equipment.py) | Định nghĩa bảng `equipments`: lưu số serial, tên máy, danh mục, mức cọc quy định, trạng thái kho |
-| Bảng Đơn mượn | [lending_request.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/lending_request.py) | Định nghĩa bảng `lending_requests`: lưu quan hệ mượn, các mốc thời gian, mã on-chain loanId |
-| Bảng Giao dịch | [blockchain_tx.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/blockchain_tx.py) | Định nghĩa bảng `blockchain_transactions`: lưu mã băm tx_hash, block, gas, trạng thái CONFIRMED |
-| Bảng Kiểm toán | [audit_log.py (Model)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/models/audit_log.py) | Định nghĩa bảng `audit_logs`: ghi nhật ký kiểm toán độc lập mọi thay đổi dữ liệu trong hệ thống |
-| DTO Đơn mượn | [loan.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/loan.py) | Kiểm thực tính hợp lệ dữ liệu tạo đơn, duyệt đơn, bàn giao, nhận trả máy và phản hồi API |
-| DTO Người dùng | [user.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/user.py) | Kiểm thực dữ liệu đăng nhập, đăng ký và chữ ký ví EIP-191 cá nhân |
-| DTO Thiết bị | [equipment.py (Schema)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/schemas/equipment.py) | Kiểm thực dữ liệu tạo mới, chỉnh sửa thông tin thiết bị và cập nhật trạng thái kho |
-| Dịch vụ Blockchain | [blockchain_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/blockchain_service.py) | Kết nối RPC Sepolia, thẩm tra biên lai on-chain, kiểm tra vai trò hasRole, đọc trạng thái đơn |
-| Dịch vụ Đơn mượn | [loan_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/loan_service.py) | Điều phối vòng đời mượn trả, chống tấn công Replay Attack, đồng bộ dữ liệu giữa MySQL và Smart Contract |
-| Dịch vụ Xác thực | [auth_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/auth_service.py) | Kiểm tra đăng nhập, đếm số lần sai liên tiếp để khóa tài khoản tự động 15 phút chống brute-force |
-| Dịch vụ Kho máy | [equipment_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/equipment_service.py) | Quản lý kho máy, áp dụng khóa dòng SELECT FOR UPDATE tránh xung đột khi nhiều người đặt cùng lúc |
-| Dịch vụ Đối soát | [reconciliation_service.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/services/reconciliation_service.py) | Quét và tự phục hồi sai lệch trạng thái giữa cơ sở dữ liệu MySQL và sổ cái Smart Contract |
-| Dependency Injection | [deps.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/deps.py) | Cung cấp DB Session, xác thực token JWT và kiểm tra phân quyền RBAC cho từng API endpoint |
-| Router Xác thực | [auth.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/auth.py) | Cung cấp các API đăng nhập (/login), cấp nonce ngẫu nhiên và xác minh chữ ký ví EIP-191 (/verify-wallet) |
-| Router Đơn mượn | [loans.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/loans.py) | Cung cấp các API vòng đời: tạo đơn (/request), duyệt (/approve), bàn giao (/handover), trả máy (/return) |
-| Router Thiết bị | [equipment.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/equipment.py) | Cung cấp các API danh mục kho máy, tìm kiếm, thêm mới và chuyển trạng thái bảo trì thiết bị |
-| Router Người dùng | [users.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/users.py) | Cung cấp các API xem hồ sơ cá nhân (/me) và danh sách sinh viên đã xác minh ví Web3 |
-| Router Blockchain | [blockchain.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/blockchain.py) | Cung cấp các API kiểm tra sức khỏe mạng node RPC Sepolia và tra cứu chi tiết giao dịch |
-| Router Kiểm toán | [audit.py (Endpoint)](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/app/api/v1/audit.py) | Cung cấp các API truy xuất lịch sử đối soát và kích hoạt tiến trình tự động đối soát dữ liệu |
-| Fixture Kiểm thử | [conftest.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/conftest.py) | Cấu hình cơ sở dữ liệu SQLite in-memory độc lập và tài khoản mẫu cho bộ kiểm thử Pytest |
-| Kiểm thử Đơn mượn | [test_loans.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_loans.py) | Bộ bài kiểm thử vòng đời Pure Web3, chống tấn công Replay Attack và xử lý lỗi on-chain |
-| Kiểm thử Đa ví | [test_multi_user_e2e.py](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/backend/tests/test_multi_user_e2e.py) | Kiểm thử chu trình liên ví giữa nhiều Quản trị viên (Multi-Admin) và Sinh viên tương tác chéo |
+| `main.py` | `backend/app/` | Điểm khởi chạy ứng dụng FastAPI, cấu hình CORS và kiểm tra kết nối khi bật server |
+| `config.py` | `backend/app/core/` | Đọc và quản lý tập trung các biến môi trường từ tệp `.env` |
+| `security.py` | `backend/app/core/` | Băm mật khẩu Bcrypt, cấp phát và giải mã JSON Web Token (JWT) |
+| `session.py` | `backend/app/db/` | Cấu hình Engine kết nối MySQL và Connection Pool chống ngắt kết nối |
+| `user.py` (Model) | `backend/app/models/` | Thực thể bảng `users`: lưu tài khoản, vai trò, địa chỉ ví và trạng thái xác minh ví |
+| `equipment.py` (Model) | `backend/app/models/` | Thực thể bảng `equipments`: lưu thông tin thiết bị, số serial, mức cọc quy định |
+| `lending_request.py` (Model) | `backend/app/models/` | Thực thể bảng `lending_requests`: lưu chi tiết đơn mượn và mã `on_chain_loan_id` |
+| `blockchain_tx.py` (Model) | `backend/app/models/` | Thực thể bảng `blockchain_transactions`: lưu lịch sử mã giao dịch `tx_hash` on-chain |
+| `audit_log.py` (Model) | `backend/app/models/` | Thực thể bảng `audit_logs`: lưu toàn bộ nhật ký kiểm toán hệ thống |
+| `loan.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra tính hợp lệ dữ liệu tạo đơn, duyệt, bàn giao, nhận trả |
+| `user.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra dữ liệu đăng nhập, đăng ký và chữ ký ví EIP-191 |
+| `equipment.py` (Schema) | `backend/app/schemas/` | DTO Pydantic: kiểm tra dữ liệu thêm, sửa thiết bị phòng lab |
+| `blockchain_service.py` | `backend/app/services/` | Kết nối RPC Sepolia, thẩm tra biên lai on-chain, kiểm tra quyền hạn `hasRole` |
+| `loan_service.py` | `backend/app/services/` | Điều phối vòng đời mượn trả, chống Replay Attack, đồng bộ trạng thái CSDL |
+| `auth_service.py` | `backend/app/services/` | Kiểm tra đăng nhập, đếm số lần sai để khóa tài khoản tự động 15 phút |
+| `equipment_service.py` | `backend/app/services/` | Quản lý kho máy, áp dụng khóa dòng `SELECT ... FOR UPDATE` tránh đặt trùng |
+| `reconciliation_service.py` | `backend/app/services/` | Tiến trình tự động đối soát và sửa lệch dữ liệu giữa MySQL và Smart Contract |
+| `deps.py` | `backend/app/api/` | Dependency Injection: cấp DB session, xác thực token JWT và kiểm tra quyền RBAC |
+| `auth.py` (Endpoint) | `backend/app/api/v1/` | REST API đăng nhập (`/login`), cấp nonce và xác minh chữ ký ví EIP-191 |
+| `loans.py` (Endpoint) | `backend/app/api/v1/` | REST API vòng đời: tạo đơn, duyệt đơn, bàn giao máy, nhận trả và hủy đơn |
+| `equipment.py` (Endpoint) | `backend/app/api/v1/` | REST API danh mục thiết bị, tìm kiếm, thêm mới và đổi trạng thái bảo trì |
+| `users.py` (Endpoint) | `backend/app/api/v1/` | REST API xem thông tin cá nhân và danh sách sinh viên đã liên kết ví |
+| `blockchain.py` (Endpoint) | `backend/app/api/v1/` | REST API kiểm tra trạng thái node blockchain và tra cứu giao dịch on-chain |
+| `audit.py` (Endpoint) | `backend/app/api/v1/` | REST API xem nhật ký kiểm toán và kích hoạt đối soát dữ liệu |
+| `conftest.py` | `backend/tests/` | Cấu hình fixture SQLite in-memory và tài khoản mẫu cho bộ kiểm thử Pytest |
+| `test_loans.py` | `backend/tests/` | Kiểm thử tự động vòng đời Pure Web3, chống Replay Attack và xử lý lỗi on-chain |
+| `test_multi_user_e2e.py` | `backend/tests/` | Kiểm thử tích hợp chu trình liên ví giữa nhiều Quản trị viên và Sinh viên |
+
+---
+
+### 3. Chi Tiết Các Tệp Tin Nghiệp Vụ Trọng Yếu
+
+#### A. Khởi chạy và Cấu hình
+* **`backend/app/main.py`:**
+  - Khởi tạo đối tượng `FastAPI` kèm tài liệu tương tác Swagger UI tại `/docs`.
+  - Cấu hình `CORSMiddleware` cho phép ứng dụng Frontend (React Vite port 5173) gọi API an toàn.
+  - Sử dụng sự kiện `lifespan`: Tự động kiểm tra kết nối tới MySQL và node Sepolia khi máy chủ bật, cảnh báo nếu node offline hoặc sai Chain ID.
+* **`backend/app/core/config.py`:**
+  - Đọc các biến từ tệp `.env`: chuỗi kết nối MySQL (`DATABASE_URL`), khóa bí mật JWT (`SECRET_KEY`), địa chỉ node RPC Sepolia (`BLOCKCHAIN_RPC_URL`), mã mạng (`CHAIN_ID=11155111`) và địa chỉ Smart Contract (`CONTRACT_ADDRESS`).
+* **`backend/app/core/security.py`:**
+  - `verify_password(plain, hashed)`: So khớp mật khẩu đăng nhập với chuỗi băm Bcrypt.
+  - `get_password_hash(password)`: Băm mật khẩu bằng thuật toán Bcrypt kèm salt ngẫu nhiên.
+  - `create_access_token(data, expires_delta)`: Tạo mã thông báo JWT mang thông tin ID và vai trò của người dùng.
+
+#### B. Cơ sở dữ liệu và Thực thể (Database & Models)
+* **`backend/app/db/session.py`:**
+  - Khởi tạo SQLAlchemy Engine với `pool_pre_ping=True` và `pool_recycle=3600`, tự động phục hồi kết nối bị đứt quãng trên môi trường XAMPP.
+* **`backend/app/models/user.py`:**
+  - Quản lý tài khoản: mã số sinh viên/cán bộ (`student_staff_id`), email, mật khẩu băm, vai trò (`ADMIN` hoặc `BORROWER`), địa chỉ ví MetaMask (`wallet_address`), trạng thái xác minh ví (`wallet_verified`), bộ đếm số lần đăng nhập sai (`failed_login_count`) và thời gian tạm khóa tài khoản (`locked_until`).
+* **`backend/app/models/equipment.py`:**
+  - Quản lý thiết bị: số serial định danh duy nhất, tên thiết bị, danh mục phân loại, mức tiền cọc quy định và trạng thái kho (`AVAILABLE`, `RESERVED`, `IN_USE`, `MAINTENANCE`, `RETIRED`).
+* **`backend/app/models/lending_request.py`:**
+  - Quản lý đơn mượn: liên kết người mượn và thiết bị, mã định danh trên blockchain `on_chain_loan_id` (dạng `bytes32`), trạng thái đơn (`PENDING`, `APPROVED`, `ACTIVE`, `RETURNED`, `CANCELLED`, `REJECTED`, `DISPUTED`) và trạng thái tiền cọc (`NONE`, `LOCKED`, `REFUNDED`, `FORFEITED`).
+* **`backend/app/models/blockchain_tx.py`:**
+  - Lưu toàn bộ lịch sử các giao dịch blockchain đã được thẩm tra thành công: mã băm `tx_hash`, loại hành động, địa chỉ gửi, địa chỉ nhận, số hiệu block và lượng gas tiêu thụ.
+
+#### C. Tầng Nghiệp vụ (Services)
+* **`backend/app/services/blockchain_service.py`:**
+  - `verify_transaction_receipt()`: Nhận `tx_hash` từ client gửi về, gọi RPC `eth_getTransactionReceipt` lên mạng Sepolia. Kiểm tra: `status == 1` (giao dịch thành công, không revert), gửi đúng địa chỉ hợp đồng của trường, phát đúng sự kiện (`LoanApproved`, `HandoverConfirmed`...) và khớp chính xác các tham số `loanId`, `equipmentId`.
+  - `has_role(role_name, account)`: Đọc hàm view `hasRole()` trên Smart Contract để kiểm tra ví có sở hữu quyền `ADMIN_ROLE` hay không.
+  - `get_loan(loan_id)`: Đọc trực tiếp bản ghi đơn mượn từ Smart Contract (trạng thái, mốc thời gian, tiền cọc).
+* **`backend/app/services/loan_service.py`:**
+  - Điều phối toàn bộ 6 bước mượn trả: Tiếp nhận tạo đơn, duyệt đơn, bàn giao thiết bị, nhận trả máy, từ chối và hủy đơn.
+  - Cơ chế chống Replay Attack: Hàm `_check_tx_idempotency_or_replay()` tra cứu bảng giao dịch, ngăn chặn tuyệt đối việc sử dụng lại một mã `tx_hash` cũ.
+  - Phân quyền Admin mở: Đối với Quản trị viên, backend không ép buộc tài khoản web phải xác minh ví từ trước mà thẩm tra trực tiếp quyền hạn trên biên lai on-chain thông qua modifier `onlyRole(ADMIN_ROLE)` của Smart Contract.
 
 ---
 
 ## PHẦN 2: QUY TRÌNH VÀ CƠ CHẾ DEPLOY SMART CONTRACT
 
-### 2.1. Công Cụ Phát Triển và Mạng Triển Khai
+### 1. Thông Tin Hợp Đồng Trên Mạng Sepolia
 
-* **Khung phát triển hợp đồng:** **Hardhat** (Node.js).
-* **Trình biên dịch Solidity:** `solc` phiên bản `^0.8.20`.
-* **Thư viện tiêu chuẩn:** **OpenZeppelin Contracts v5.0** (module `AccessControl`).
-* **Mạng thử nghiệm:** **Ethereum Sepolia Testnet** (Chain ID: `11155111`).
-* **Hợp đồng thông minh:** [contracts/contracts/EquipmentLending.sol](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/contracts/EquipmentLending.sol) (395 dòng mã nguồn Solidity đã được kiểm thử toàn diện).
-* **Địa chỉ hợp đồng triển khai trên Sepolia:** `0xA88De9B00C0F78FF9a162C4f17524ef885169ffd` ([Tra cứu trên Sepolia Etherscan](https://sepolia.etherscan.io/address/0xA88De9B00C0F78FF9a162C4f17524ef885169ffd)).
-* **Địa chỉ ví Deployer khởi tạo:** `0x6396121f971a55bc844301E039F6C6F472C5CbBB`.
+* **Mạng thử nghiệm:** Ethereum Sepolia Testnet (Mã mạng Chain ID: `11155111`).
+* **Hợp đồng thông minh:** `EquipmentLending.sol` (kế thừa chuẩn OpenZeppelin `AccessControl`).
+* **Địa chỉ hợp đồng chính thức:** `0xA88De9B00C0F78FF9a162C4f17524ef885169ffd`
+* **Trình tra cứu Etherscan:** https://sepolia.etherscan.io/address/0xA88De9B00C0F78FF9a162C4f17524ef885169ffd
+* **Địa chỉ ví Deployer khởi tạo:** `0x6396121f971a55bc844301E039F6C6F472C5CbBB`
 
 ---
 
-### 2.2. Phân Tích Kịch Bản Triển Khai Tự Động ([contracts/scripts/deploy.cjs](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/scripts/deploy.cjs))
+### 2. Phân Tích Kịch Bản Triển Khai Tự Động (`contracts/scripts/deploy.cjs`)
 
-Kịch bản `deploy.cjs` được thiết kế theo mô hình **Đường ống tự động đồng bộ (Auto-Sync Deployment Pipeline)**. Khi chạy một lệnh duy nhất, toàn bộ hệ thống từ Blockchain, Backend tới Frontend đều được đồng bộ tự động.
+Kịch bản `deploy.cjs` được xây dựng theo mô hình **Đường ống tự động đồng bộ (Auto-Sync Pipeline)**:
 
-Quy trình thực thi gồm 6 bước khép kín:
-
-1. **Kiểm tra điều kiện tiên quyết (Pre-flight Checks):**
-   - Xác định mạng đích (`localhost` hoặc `sepolia`).
-   - Kết nối tới ví Deployer qua `hre.ethers.getSigners()`.
-   - Kiểm tra số dư Sepolia ETH: nếu số dư nhỏ hơn `0.01 ETH`, kịch bản tự động dừng lại và cảnh báo cần nạp thêm testnet ETH từ Faucet.
-2. **Khởi tạo và Biên dịch Hợp đồng (Contract Deployment):**
-   - Nạp Contract Factory `EquipmentLending`.
-   - Gửi giao dịch khởi tạo: `Factory.deploy(deployer.address)`.
-   - Constructor trong Solidity tự động cấp hai quyền ban đầu cho ví Deployer:
-     - `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao (có thể thêm hoặc bãi nhiệm các Admin khác).
-     - `ADMIN_ROLE`: Quyền quản trị phòng lab (có quyền duyệt đơn, bàn giao và nhận trả máy).
-3. **Chờ xác thực khối (Block Mining Confirmation):**
-   - Gọi `await contract.waitForDeployment()` để đảm bảo giao dịch khởi tạo đã được đào vào một block chính thức trên mạng blockchain Sepolia.
-   - Lấy địa chỉ hợp đồng mới vừa được tạo thông qua `await contract.getAddress()`.
-4. **Lưu trữ hồ sơ triển khai (Deployment Artifacts):**
-   - Đọc tệp ABI được Hardhat biên dịch từ `artifacts/contracts/EquipmentLending.sol/EquipmentLending.json`.
-   - Tạo bản ghi chi tiết gồm: tên hợp đồng, địa chỉ, ví deployer, mạng, Chain ID, thời gian triển khai dạng ISO 8601 và đường link Etherscan tương ứng.
-   - Ghi bản ghi vào tệp `contracts/deployments/sepolia.json` (hoặc `localhost.json`).
-5. **Tự động xuất cấu hình sang Backend:**
-   - Tạo thư mục `backend/app/core/contracts/` nếu chưa có.
-   - Xuất file ABI: `backend/app/core/contracts/EquipmentLending.json`.
-   - Xuất file địa chỉ: `backend/app/core/contracts/contract_address.json` chứa địa chỉ hợp đồng mới và Chain ID tương ứng.
-6. **Tự động xuất cấu hình sang Frontend:**
-   - Tạo thư mục `frontend/src/contracts/` nếu chưa có.
-   - Xuất file ABI: `frontend/src/contracts/EquipmentLending.json`.
-   - Xuất file địa chỉ: `frontend/src/contracts/contract_address.json`.
-   - Nhờ bước này, mã giao diện React và thư viện Ethers.js của Frontend nhận diện ngay lập tức địa chỉ Smart Contract mới mà lập trình viên không phải sao chép thủ công.
+1. **Kiểm tra số dư:** Đo lường số dư Sepolia ETH của ví Deployer (cần tối thiểu `0.01 ETH` để trả phí gas).
+2. **Khởi tạo Smart Contract:** Gọi lệnh `Factory.deploy(deployer.address)`. Constructor của hợp đồng tự động cấp quyền `DEFAULT_ADMIN_ROLE` và `ADMIN_ROLE` cho ví Deployer.
+3. **Chờ xác thực khối:** Lệnh `await contract.waitForDeployment()` bảo đảm giao dịch khởi tạo đã được đào vào khối block chính thức trên Sepolia.
+4. **Lưu vết triển khai:** Ghi lại lịch sử triển khai vào tệp `contracts/deployments/sepolia.json`.
+5. **Tự động xuất sang Backend:** Trích xuất tệp ABI và địa chỉ hợp đồng mới vào thư mục `backend/app/core/contracts/`.
+6. **Tự động xuất sang Frontend:** Trích xuất tệp ABI và địa chỉ hợp đồng mới vào thư mục `frontend/src/contracts/`.
+   - Nhờ cơ chế này, Frontend và Backend nhận diện địa chỉ hợp đồng mới ngay tức thì mà lập trình viên không phải chỉnh sửa thủ công.
 
 ---
 
-### 2.3. Cấu Hình Mạng và Biến Môi Trường
+### 3. Lệnh Thực Thi Triển Khai
 
-* **Cấu hình Hardhat tại [contracts/hardhat.config.cjs](file:///c:/Users/phucd/OneDrive/Desktop/Blockchain/EduVault/contracts/hardhat.config.cjs):**
-  ```javascript
-  require("@nomicfoundation/hardhat-toolbox");
-  require("dotenv").config({ path: "../.env" });
-
-  module.exports = {
-    solidity: "0.8.20",
-    networks: {
-      localhost: {
-        url: "http://127.0.0.1:8545",
-        chainId: 31337,
-      },
-      sepolia: {
-        url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
-        accounts: process.env.SEPOLIA_PRIVATE_KEY ? [process.env.SEPOLIA_PRIVATE_KEY] : [],
-        chainId: 11155111,
-      },
-    },
-  };
+* Triển khai lên mạng Sepolia Testnet:
+  ```bash
+  cd contracts
+  npx hardhat run scripts/deploy.cjs --network sepolia
   ```
 
-* **Lệnh thực thi triển khai:**
-  - Triển khai lên mạng Sepolia công khai:
-    ```bash
-    cd contracts
-    npx hardhat run scripts/deploy.cjs --network sepolia
-    ```
-  - Triển khai lên mạng Hardhat cục bộ:
-    ```bash
-    cd contracts
-    npx hardhat run scripts/deploy.cjs --network localhost
-    ```
+* Cấu hình mạng tại `contracts/hardhat.config.cjs`:
+  Đọc biến `SEPOLIA_RPC_URL` và `SEPOLIA_PRIVATE_KEY` từ tệp `.env`.
 
 ---
 
-## PHẦN 3: KỊCH BẢN THUYẾT MINH & TRẢ LỜI PHẢN BIỆN VỚI GIẢNG VIÊN
+## PHẦN 3: BỘ CÂU HỎI BÁO CÁO VÀ PHẢN BIỆN VỚI GIẢNG VIÊN
 
-### Câu hỏi 1: Tại sao nhóm không lưu Private Key của Quản trị viên trên Backend để tự động ký giao dịch cho tiện, mà lại yêu cầu kết nối ví MetaMask (Pure Web3)?
-* **Trả lời:**
-  - Mô hình lưu Private Key trên máy chủ backend được gọi là **Custodial (Ủy thác)**. Mô hình này tồn tại lỗ hổng bảo mật chí mạng: nếu máy chủ web hoặc cơ sở dữ liệu bị tấn công (SQL Injection, lộ file `.env`), kẻ tấn công sẽ chiếm đoạt được Private Key của Quản trị viên và có toàn quyền rút tiền, xóa quyền hoặc thao túng Smart Contract.
-  - Dự án EduVault áp dụng kiến trúc **Pure Web3 (Non-Custodial)**: Toàn bộ giao dịch ghi dữ liệu lên blockchain đều do chính chủ thể (Sinh viên, Quản trị viên) trực tiếp ký qua ví cá nhân MetaMask ở trình duyệt. Máy chủ Backend hoàn toàn không lưu giữ bất kỳ Private Key nào, triệt tiêu 100% rủi ro lộ khóa bí mật từ phía hệ thống.
+### Câu hỏi 1: Tại sao hệ thống chuyển sang mô hình Pure Web3 thay vì lưu Private Key trên Backend để ký hộ (Relayer)?
+* **Trả lời:** Mô hình Backend giữ Private Key (Relayer) rất nguy hiểm vì nếu máy chủ bị xâm nhập, kẻ tấn công sẽ có toàn quyền kiểm soát Smart Contract. Kiến trúc Pure Web3 loại bỏ hoàn toàn rủi ro này: toàn bộ giao dịch on-chain đều do người dùng và Admin tự ký trực tiếp bằng ví cá nhân MetaMask ở trình duyệt, máy chủ hoàn toàn không giữ Private Key.
 
----
+### Câu hỏi 2: Backend có vai trò gì nếu người dùng đã tự ký giao dịch lên Blockchain?
+* **Trả lời:** Backend đóng 3 vai trò then chốt:
+  1. Thẩm tra biên lai giao dịch on-chain (`verify_transaction_receipt`): Đọc trực tiếp từ node Sepolia để bảo đảm giao dịch đã thành công (`status == 1`), đúng địa chỉ hợp đồng, đúng loại sự kiện và đúng tham số trước khi cập nhật CSDL.
+  2. Chống tấn công gửi lại (Anti-Replay Attack): Đảm bảo mỗi mã `tx_hash` chỉ được chấp nhận duy nhất một lần.
+  3. Quản lý dữ liệu mở rộng: Lưu trữ thông tin cá nhân (MSSV, mật khẩu hash), hình ảnh và nhật ký kiểm toán, giúp hệ thống phản hồi cực nhanh mà không tốn chi phí gas đắt đỏ trên blockchain.
 
-### Câu hỏi 2: Vai trò thực sự của Backend trong hệ thống này là gì nếu người dùng đã tự ký giao dịch trực tiếp lên Blockchain?
-* **Trả lời:**
-  Backend đóng 3 vai trò chiến lược:
-  1. **Thẩm tra biên lai giao dịch on-chain (On-chain Receipt Verifier):** Khi người dùng ký xong, frontend gửi mã giao dịch `tx_hash` về backend. Backend dùng thư viện `Web3.py` đọc trực tiếp biên lai từ mạng Sepolia để kiểm tra: giao dịch đã thành công (`status == 1`), đúng địa chỉ hợp đồng của trường, phát đúng sự kiện và tham số trước khi cập nhật dữ liệu vào MySQL.
-  2. **Chống tấn công gửi lại (Anti-Replay Attack):** Backend kiểm soát chặt chẽ tính Idempotent, đảm bảo mỗi mã `tx_hash` chỉ được chấp nhận duy nhất một lần, ngăn chặn việc sử dụng lại biên lai cũ.
-  3. **Lưu trữ dữ liệu mở rộng (Off-chain Metadata):** Lưu trữ thông tin cá nhân (MSSV, mật khẩu), hình ảnh thiết bị và nhật ký kiểm toán. Việc này giúp hệ thống đạt tốc độ phản hồi tính bằng mili-giây và tiết kiệm chi phí gas đắt đỏ nếu lưu toàn bộ dữ liệu lên blockchain.
-
----
-
-### Câu hỏi 3: Quy trình Deploy tự động giải quyết bài toán gì trong quá trình phát triển dự án?
-* **Trả lời:**
-  - Trong các dự án Blockchain thông thường, mỗi khi chỉnh sửa Smart Contract và deploy lại, lập trình viên thường phải thực hiện thủ công việc sao chép file ABI và cập nhật từng địa chỉ hợp đồng mới vào file cấu hình của Backend và Frontend. Việc này rất dễ gây ra sai sót, lệch phiên bản ABI hoặc gọi nhầm vào địa chỉ hợp đồng cũ.
-  - Kịch bản `deploy.cjs` của EduVault xây dựng một **Pipeline tự động hóa**: Ngay sau khi hợp đồng được đào thành công trên mạng Sepolia, kịch bản tự động trích xuất file ABI chuẩn và cập nhật đồng thời địa chỉ hợp đồng mới vào cả thư mục lõi của Backend (`backend/app/core/contracts/`) và Frontend (`frontend/src/contracts/`). Nhờ đó, toàn bộ hệ thống được đồng bộ hóa tức thì chỉ với một câu lệnh deploy duy nhất.
-
----
-
-### Câu hỏi 4: Cơ chế phân quyền trên Smart Contract được thiết kế như thế nào?
-* **Trả lời:**
-  Hợp đồng sử dụng chuẩn `AccessControl` của OpenZeppelin với 3 cấp độ phân quyền phân tầng rõ rệt:
-  1. `DEFAULT_ADMIN_ROLE`: Quyền cao nhất, do ví Deployer ban đầu nắm giữ. Chỉ quyền này mới có thể thêm (`addAdmin`) hoặc bãi nhiệm (`removeAdmin`) các tài khoản quản trị khác.
-  2. `ADMIN_ROLE`: Dành cho các Quản trị viên phòng lab của các khoa, có quyền duyệt đơn (`approveLoan`), bàn giao máy (`confirmHandover`), nghiệm thu trả máy (`confirmReturn`) và cấp quyền mượn cho sinh viên (`registerBorrower`).
-  3. `BORROWER_ROLE`: Cấp cho sinh viên đã được hệ thống xác minh danh tính và kiểm tra thẻ sinh viên để được phép gọi hàm tạo đơn mượn (`createLoan`) trên Smart Contract.
+### Câu hỏi 3: Cơ chế phân quyền trên Smart Contract hoạt động như thế nào?
+* **Trả lời:** Hợp đồng kế thừa chuẩn `AccessControl` của OpenZeppelin với 3 vai trò phân tầng:
+  1. `DEFAULT_ADMIN_ROLE`: Quyền quản trị tối cao, có thẩm quyền thêm (`addAdmin`) hoặc bãi nhiệm (`removeAdmin`) các Admin khác.
+  2. `ADMIN_ROLE`: Dành cho Quản trị viên phòng lab, có quyền duyệt đơn (`approveLoan`), bàn giao máy (`confirmHandover`), nghiệm thu nhận trả (`confirmReturn`) và cấp quyền mượn cho sinh viên (`registerBorrower`).
+  3. `BORROWER_ROLE`: Cấp cho sinh viên đã được xác minh để được phép tạo đơn mượn (`createLoan`) trên hợp đồng.
 
 ---
 
